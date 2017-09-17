@@ -20,3 +20,7 @@ func OpenIndex(path string) (*Index, error) {
 
 	return &Index{Index: index}, nil
 }
+
+func (i *Index) AddToIndex(key string, val interface{}) {
+	i.Index.Index(key, val)
+}
