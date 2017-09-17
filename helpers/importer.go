@@ -34,7 +34,7 @@ func (c *Config) ImportBookmarks(f *string) {
 	}
 
 	for _, val := range b {
-		err = val.Save()
+		err = val.Insert()
 		if err != nil {
 			log.Fatal(err)
 		}

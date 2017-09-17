@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   title TEXT,
   description TEXT,
   url TEXT,
-  hash TEXT,
+  hash TEXT UNIQUE,
   alive TINYINT,
   archived TINYINT
 );

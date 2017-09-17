@@ -60,8 +60,8 @@ func (db *DB) GetAllBookmarks() (*[]Bookmark, error) {
 	return &bookmarks, nil
 }
 
-func (b *Bookmark) Save() error {
-	statement, err := dbg.Prepare("INSERT INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
+func (b *Bookmark) Insert() error {
+	statement, err := dbg.Prepare("INSERT OR IGNORE INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
