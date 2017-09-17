@@ -12,20 +12,23 @@ import (
 	"net/http"
 )
 
+var addr = flag.String("listen", ":8000", "HTTP ip/port to listen to")
+var dbPath = flag.String("db", ":memory:", "Database file to use")
+var indexPath = flag.String("index", "attic.index", "Database file to use")
 var importFromFile = flag.String("import", "", "Bookmark file to import from")
 
 func main() {
 
 	flag.Parse()
 
-	db, err := sql.Open("sqlite3", "/home/aagat/bookmarks.db")
+	db, err := sql.Open("sqlite3", *dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
 	models.DB = db
-	index, _ := search.OpenIndex("index")
+	index, _ := search.OpenIndex(*indexPath)
 	app, _ := web.NewApp(db)
 	utils, _ := helpers.Init(db, index)
 
@@ -40,6 +43,6 @@ func main() {
 
 	http.HandleFunc("/", app.Index)
 
-	log.Println("Listening and serving on port 8000")
-	http.ListenAndServe(":8000", nil)
+	log.Printf("Listening and serving on port %v\n", *addr)
+	http.ListenAndServe(*addr, nil)
 }
