@@ -15,6 +15,15 @@ import (
 	"time"
 )
 
+type App struct {
+	db *sql.DB
+}
+
+func NewApp(db *sql.DB) (*App, error) {
+	a := &App{db: db}
+	return a, nil
+}
+
 type Tag struct {
 	Id         int    `json:"-"`
 	BookmarkID int    `json:"bookmark_id"`
@@ -22,17 +31,31 @@ type Tag struct {
 }
 
 type Bookmark struct {
-	Id           int       `json:"id"`
-	Created      time.Time `json:"created"`
-	LastUpdated  time.Time `json:"last_updated"`
-	LastVerified time.Time `json:"last_verified"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description"`
-	Url          string    `json:"url"`
-	Hash         string    `json:"hash"`
-	Tags         []Tag     `json:"tags"`
-	Alive        bool      `json:"alive"`
-	Archived     bool      `json:"archived"`
+	Id          int       `json:"id"`
+	Created     time.Time `json:"created"`
+	Updated     time.Time `json:"last_updated"`
+	Verified    time.Time `json:"last_verified"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Url         string    `json:"url"`
+	Hash        string    `json:"hash"`
+	Tags        []Tag     `json:"tags"`
+	Alive       bool      `json:"alive"`
+	Archived    bool      `json:"archived"`
+}
+
+func (b *Bookmark) Save(db *sql.DB) error {
+	statement, err := db.Prepare("INSERT INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
+	if err != nil {
+		return err
+	}
+
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.Alive, b.Archived)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var importFromFile = flag.String("import", "", "Bookmark file to import from")
@@ -41,12 +64,13 @@ func main() {
 
 	flag.Parse()
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", "/home/aagat/bookmarks.db")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer db.Close()
+
+	app, _ := NewApp(db)
 
 	bootstrapTable := `
 CREATE TABLE IF NOT EXISTS bookmarks (
@@ -58,7 +82,6 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   description TEXT,
   url TEXT,
   hash TEXT,
-  tags TEXT,
   alive TINYINT,
   archived TINYINT
 );
@@ -77,7 +100,7 @@ CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);
 	}
 
 	if *importFromFile != "" {
-		ImportBookmarks(importFromFile)
+		app.ImportBookmarks(importFromFile)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -88,14 +111,21 @@ CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);
 	http.ListenAndServe(":8000", nil)
 }
 
-func ImportBookmarks(f *string) {
+func (a *App) ImportBookmarks(f *string) {
 
 	b := []Bookmark{}
 
-	err := BookmarksParser(f, &b)
+	err := a.BookmarksParser(f, &b)
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	for _, val := range b {
+		err = val.Save(a.db)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	if err != nil {
@@ -103,7 +133,7 @@ func ImportBookmarks(f *string) {
 	}
 }
 
-func BookmarksParser(f *string, b *[]Bookmark) error {
+func (a *App) BookmarksParser(f *string, b *[]Bookmark) error {
 	dat, err := os.Open(*f)
 	defer dat.Close()
 	if err != nil {
@@ -148,8 +178,8 @@ func BookmarksParser(f *string, b *[]Bookmark) error {
 
 						created := time.Unix(tm, 0)
 						bookmark.Created = created
-						bookmark.LastUpdated = created
-						bookmark.LastVerified = created
+						bookmark.Updated = created
+						bookmark.Verified = created
 					}
 				}
 
