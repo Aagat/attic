@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 	"time"
@@ -22,6 +24,13 @@ type Bookmark struct {
 }
 
 func main() {
+
+	db, err := sql.Open("sqlite3", ":memory")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer db.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello world"))
