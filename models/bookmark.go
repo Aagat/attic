@@ -1,6 +1,7 @@
 package models
 
 import (
+	"log"
 	"time"
 )
 
@@ -18,8 +19,49 @@ type Bookmark struct {
 	Archived    bool      `json:"archived"`
 }
 
+func (db *DB) GetAllBookmarks() (*[]Bookmark, error) {
+
+	bookmarks := []Bookmark{}
+
+	rows, err := db.DB.Query("select * from bookmarks")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		b := Bookmark{}
+		err := rows.Scan(
+			&b.Id,
+			&b.Created,
+			&b.Updated,
+			&b.Verified,
+			&b.Title,
+			&b.Description,
+			&b.Url,
+			&b.Hash,
+			&b.Alive,
+			&b.Archived)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		bookmarks = append(bookmarks, b)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &bookmarks, nil
+}
+
 func (b *Bookmark) Save() error {
-	statement, err := DB.Prepare("INSERT INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
+	statement, err := dbg.Prepare("INSERT INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}

@@ -27,9 +27,9 @@ func main() {
 	}
 	defer db.Close()
 
-	models.DB = db
+	models, _ := models.NewDB(db)
 	index, _ := search.OpenIndex(*indexPath)
-	app, _ := web.NewApp(db)
+	app, _ := web.NewApp(models)
 	utils, _ := helpers.Init(db, index)
 
 	err = utils.CreateTables()

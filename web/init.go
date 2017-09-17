@@ -1,15 +1,14 @@
 package web
 
 import (
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/aagat/attic/models"
 )
 
 type App struct {
-	db *sql.DB
+	db *models.DB
 }
 
-func NewApp(db *sql.DB) (*App, error) {
+func NewApp(db *models.DB) (*App, error) {
 	a := &App{db: db}
 	return a, nil
 }
