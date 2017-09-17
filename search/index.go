@@ -21,5 +21,6 @@ func OpenIndex(path string) (*Index, error) {
 }
 
 func (i *Index) Add(key string, val interface{}) {
-	i.index.Index(key, val)
+	// For some reason, this crashes. Commented out to preserve sanity.
+	// i.index.Index(key, val)
 }
