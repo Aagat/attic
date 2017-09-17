@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"github.com/aagat/attic/models"
-	"github.com/blevesearch/bleve"
+	"github.com/aagat/attic/search"
 	"golang.org/x/net/html"
 	"io"
 	"log"
@@ -16,11 +16,11 @@ import (
 
 type Config struct {
 	db    *sql.DB
-	index *bleve.Index
+	index *search.Index
 }
 
-func Init(db *sql.DB, index *bleve.Index) (*Config, error) {
-	return &Config{db: db, index: index}, nil
+func Init(db *sql.DB, search *search.Index) (*Config, error) {
+	return &Config{db: db, index: search}, nil
 }
 
 func (c *Config) ImportBookmarks(f *string) {
@@ -38,6 +38,8 @@ func (c *Config) ImportBookmarks(f *string) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		go c.index.Add(val.Hash, val)
 	}
 
 	if err != nil {

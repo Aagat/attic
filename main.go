@@ -27,7 +27,7 @@ func main() {
 	models.DB = db
 	index, _ := search.OpenIndex("index")
 	app, _ := web.NewApp(db)
-	utils, _ := helpers.Init(db, &index.Index)
+	utils, _ := helpers.Init(db, index)
 
 	err = utils.CreateTables()
 	if err != nil {

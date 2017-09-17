@@ -2,6 +2,7 @@ package search
 
 import (
 	"github.com/blevesearch/bleve"
+	"log"
 )
 
 type Index struct {
@@ -21,6 +22,6 @@ func OpenIndex(path string) (*Index, error) {
 	return &Index{Index: index}, nil
 }
 
-func (i *Index) AddToIndex(key string, val interface{}) {
+func (i *Index) Add(key string, val interface{}) {
 	i.Index.Index(key, val)
 }
