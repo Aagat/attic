@@ -73,3 +73,57 @@ func (b *Bookmark) Insert() error {
 
 	return nil
 }
+
+func (db *DB) GetBookmarkById(id int) (*Bookmark, error) {
+	b := Bookmark{}
+	statement, err := db.DB.Prepare("select * from bookmarks where id = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	err = statement.QueryRow(1).Scan(
+		&b.Id,
+		&b.Created,
+		&b.Updated,
+		&b.Verified,
+		&b.Title,
+		&b.Description,
+		&b.Url,
+		&b.Hash,
+		&b.Alive,
+		&b.Archived,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &b, nil
+}
+
+func (db *DB) GetBookmarkByHash(hash string) (*Bookmark, error) {
+	b := Bookmark{}
+	statement, err := db.DB.Prepare("select * from bookmarks where hash = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	err = statement.QueryRow(1).Scan(
+		&b.Id,
+		&b.Created,
+		&b.Updated,
+		&b.Verified,
+		&b.Title,
+		&b.Description,
+		&b.Url,
+		&b.Hash,
+		&b.Alive,
+		&b.Archived,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &b, nil
+}
