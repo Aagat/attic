@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/aagat/attic/helpers"
 	"github.com/aagat/attic/models"
+	"github.com/aagat/attic/search"
 	"github.com/aagat/attic/web"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
@@ -24,8 +25,9 @@ func main() {
 	defer db.Close()
 
 	models.DB = db
+	index, _ := search.OpenIndex("index")
 	app, _ := web.NewApp(db)
-	utils, _ := helpers.Init(db)
+	utils, _ := helpers.Init(db, &index.Index)
 
 	err = utils.CreateTables()
 	if err != nil {

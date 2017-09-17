@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"github.com/aagat/attic/models"
+	"github.com/blevesearch/bleve"
 	"golang.org/x/net/html"
 	"io"
 	"log"
@@ -14,11 +15,12 @@ import (
 )
 
 type Config struct {
-	db *sql.DB
+	db    *sql.DB
+	index *bleve.Index
 }
 
-func Init(db *sql.DB) (*Config, error) {
-	return &Config{db: db}, nil
+func Init(db *sql.DB, index *bleve.Index) (*Config, error) {
+	return &Config{db: db, index: index}, nil
 }
 
 func (c *Config) ImportBookmarks(f *string) {
