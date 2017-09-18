@@ -7,6 +7,7 @@ import (
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	"github.com/aagat/attic/web"
+	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
@@ -20,6 +21,8 @@ var importFromFile = flag.String("import", "", "Bookmark file to import from")
 func main() {
 
 	flag.Parse()
+
+	r := mux.NewRouter()
 
 	db, err := sql.Open("sqlite3", *dbPath)
 	if err != nil {
@@ -41,8 +44,10 @@ func main() {
 		utils.ImportBookmarks(importFromFile)
 	}
 
-	http.HandleFunc("/", app.Index)
+	r.HandleFunc("/", app.Index)
+	r.HandleFunc("/show/{id:[0-9]+}", app.BookmarkById)
+	r.HandleFunc("/show/{hash}", app.BookmarkByHash)
 
 	log.Printf("Listening and serving on port %v\n", *addr)
-	http.ListenAndServe(*addr, nil)
+	http.ListenAndServe(*addr, r)
 }

@@ -81,7 +81,7 @@ func (db *DB) GetBookmarkById(id int) (*Bookmark, error) {
 		return nil, err
 	}
 
-	err = statement.QueryRow(1).Scan(
+	err = statement.QueryRow(id).Scan(
 		&b.Id,
 		&b.Created,
 		&b.Updated,
@@ -108,7 +108,7 @@ func (db *DB) GetBookmarkByHash(hash string) (*Bookmark, error) {
 		return nil, err
 	}
 
-	err = statement.QueryRow(1).Scan(
+	err = statement.QueryRow(hash).Scan(
 		&b.Id,
 		&b.Created,
 		&b.Updated,
