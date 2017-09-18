@@ -13,7 +13,7 @@ type DB struct {
 	DB *sql.DB
 }
 
-func NewDB(c *config.Config) (*DB, error) {
+func Init(c *config.Config) (*DB, error) {
 	dbg = c.DB.(*sql.DB)
 	return &DB{DB: c.DB.(*sql.DB)}, nil
 }

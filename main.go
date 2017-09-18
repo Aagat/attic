@@ -36,22 +36,22 @@ func main() {
 
 	app.DB = db
 
-	app.Models, _ = models.NewDB(&app)
+	app.Models, _ = models.Init(&app)
 
-	app.Search, err = search.OpenIndex(*indexPath)
+	app.Search, err = search.Init(*indexPath)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	app.Web = web.NewApp(&app)
+	app.Web = web.Init(&app)
 	app.Helpers = helpers.Init(&app)
 
 	jobs := make(chan string, 10)
 	results := make(chan string, 10)
 	errors := make(chan string, 10)
 
-	app.Fetcher = fetcher.New(&app, jobs, results, errors)
+	app.Fetcher = fetcher.Init(&app, jobs, results, errors)
 
 	utils := app.Helpers.(*helpers.Config)
 	handler := app.Web.(*web.App)

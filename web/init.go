@@ -9,7 +9,7 @@ type App struct {
 	db *models.DB
 }
 
-func NewApp(c *config.Config) *App {
+func Init(c *config.Config) *App {
 	a := &App{db: c.Models.(*models.DB)}
 	return a
 }

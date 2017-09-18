@@ -9,7 +9,7 @@ type Index struct {
 	index bleve.Index
 }
 
-func OpenIndex(path string) (*Index, error) {
+func Init(path string) (*Index, error) {
 
 	index, err := bleve.Open(path)
 

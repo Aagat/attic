@@ -24,7 +24,7 @@ type PageInfo struct {
 	Type        string `meta:"og:type"`
 }
 
-func New(c *config.Config, jobs <-chan string, results chan<- string, errors chan<- string) *App {
+func Init(c *config.Config, jobs <-chan string, results chan<- string, errors chan<- string) *App {
 	return &App{
 		DB:      c.DB.(*sql.DB),
 		index:   c.Search.(*search.Index),
