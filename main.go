@@ -48,6 +48,8 @@ func main() {
 	r.HandleFunc("/show/{id:[0-9]+}", app.BookmarkById).Methods("GET")
 	r.HandleFunc("/show/{hash}", app.BookmarkByHash).Methods("GET")
 	r.HandleFunc("/add", app.NewBookmark).Methods("POST")
+	r.HandleFunc("/update/{id:[0-9]+}", app.UpdateBookmarkById).Methods("POST")
+	r.HandleFunc("/update/{hash}", app.UpdateBookmarkByHash).Methods("POST")
 
 	log.Printf("Listening and serving on port %v\n", *addr)
 	http.ListenAndServe(*addr, r)
