@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"flag"
 	"github.com/aagat/attic/config"
+	"github.com/aagat/attic/fetcher"
 	"github.com/aagat/attic/helpers"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
@@ -44,9 +45,16 @@ func main() {
 	}
 
 	app.Web = web.NewApp(&app)
-	handler := app.Web.(*web.App)
 	app.Helpers = helpers.Init(&app)
+
+	jobs := make(chan string, 10)
+	results := make(chan string, 10)
+	errors := make(chan string, 10)
+
+	app.Fetcher = fetcher.New(&app, jobs, results, errors)
+
 	utils := app.Helpers.(*helpers.Config)
+	handler := app.Web.(*web.App)
 
 	err = utils.CreateTables()
 	if err != nil {
