@@ -54,6 +54,7 @@ func main() {
 	errors := make(chan string, 10)
 
 	app.Fetcher = fetcher.Init(&app, jobs, results, errors)
+	app.Fetcher.(*fetcher.Fetcher).Boot(1)
 
 	utils := app.Helpers.(*helpers.Helpers)
 	handler := app.Web.(*web.Handler)

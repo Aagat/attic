@@ -34,13 +34,14 @@ func Init(c *config.Config, jobs <-chan string, results chan<- string, errors ch
 	}
 }
 
-func Boot(num int, jobs <-chan string, results chan<- string, errors chan<- string) {
+func (f *Fetcher) Boot(num int) {
 	for w := 1; w <= num; w++ {
-		go Worker(jobs, results)
+		go Worker(w, f.jobs, f.results, f.errors)
 	}
 }
 
-func Worker(jobs <-chan string, result chan<- string) {
+func Worker(id int, jobs <-chan string, result chan<- string, errors chan<- string) {
+	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
 		log.Println(url)
 		resp, err := http.Get(url)
