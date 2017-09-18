@@ -1,6 +1,8 @@
 package models
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"log"
 	"time"
 )
@@ -72,6 +74,18 @@ func (b *Bookmark) Insert() error {
 	}
 
 	return nil
+}
+
+func (b *Bookmark) FillMissing() {
+	hash := sha1.New()
+	hash.Write([]byte(b.Url))
+	b.Hash = hex.EncodeToString(hash.Sum(nil))
+
+	b.Created = time.Now()
+	b.Updated = time.Now()
+	b.Verified = time.Now()
+	b.Alive = true
+	b.Archived = false
 }
 
 func (db *DB) GetBookmarkById(id int) (*Bookmark, error) {

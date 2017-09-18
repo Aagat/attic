@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/aagat/attic/models"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -46,4 +47,35 @@ func (a *App) BookmarkByHash(w http.ResponseWriter, r *http.Request) {
 	resp := json.NewEncoder(w)
 	resp.SetIndent("", "\t")
 	err = resp.Encode(bookmark)
+}
+
+func (a *App) NewBookmark(w http.ResponseWriter, r *http.Request) {
+
+	decoder := json.NewDecoder(r.Body)
+
+	var b models.Bookmark
+	err := decoder.Decode(&b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer r.Body.Close()
+
+	if b.Url != "" {
+		b.FillMissing()
+		err = b.Insert()
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	persisted, err := a.db.GetBookmarkByHash(b.Hash)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp := json.NewEncoder(w)
+	resp.SetIndent("", "\t")
+	err = resp.Encode(persisted)
 }
