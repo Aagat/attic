@@ -37,8 +37,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app, _ := web.NewApp(models)
-	utils, _ := helpers.Init(db, index)
+	app := web.NewApp(models)
+	utils := helpers.Init(db, index)
 
 	err = utils.CreateTables()
 	if err != nil {

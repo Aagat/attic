@@ -8,7 +8,7 @@ type App struct {
 	db *models.DB
 }
 
-func NewApp(db *models.DB) (*App, error) {
+func NewApp(db *models.DB) *App {
 	a := &App{db: db}
-	return a, nil
+	return a
 }

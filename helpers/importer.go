@@ -19,8 +19,8 @@ type Config struct {
 	index *search.Index
 }
 
-func Init(db *sql.DB, search *search.Index) (*Config, error) {
-	return &Config{db: db, index: search}, nil
+func Init(db *sql.DB, search *search.Index) *Config {
+	return &Config{db: db, index: search}
 }
 
 func (c *Config) ImportBookmarks(f *string) {
