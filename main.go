@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/helpers"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
@@ -22,6 +23,8 @@ func main() {
 
 	flag.Parse()
 
+	var c config.Config
+
 	r := mux.NewRouter()
 
 	db, err := sql.Open("sqlite3", *dbPath)
@@ -30,23 +33,27 @@ func main() {
 	}
 	defer db.Close()
 
-	models, _ := models.NewDB(db)
-	index, err := search.OpenIndex(*indexPath)
+	c.DB = db
+
+	c.Models, _ = models.NewDB(&c)
+
+	c.Search, err = search.OpenIndex(*indexPath)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	app := web.NewApp(models)
-	utils := helpers.Init(db, index)
+	c.Web = web.NewApp(&c)
+	app := c.Web.(*web.App)
+	c.Helpers = helpers.Init(&c)
 
-	err = utils.CreateTables()
+	err = c.Helpers.(*helpers.Config).CreateTables()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if *importFromFile != "" {
-		utils.ImportBookmarks(importFromFile)
+		c.Helpers.(*helpers.Config).ImportBookmarks(importFromFile)
 	}
 
 	r.HandleFunc("/", app.Index)

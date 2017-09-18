@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"github.com/aagat/attic/config"
 	"log"
 )
 
@@ -12,9 +13,9 @@ type DB struct {
 	DB *sql.DB
 }
 
-func NewDB(db *sql.DB) (*DB, error) {
-	dbg = db
-	return &DB{DB: db}, nil
+func NewDB(c *config.Config) (*DB, error) {
+	dbg = c.DB.(*sql.DB)
+	return &DB{DB: c.DB.(*sql.DB)}, nil
 }
 
 func (db *DB) GetAllBookmarks() (*[]Bookmark, error) {

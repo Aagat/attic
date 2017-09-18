@@ -1,10 +1,19 @@
 package fetcher
 
 import (
+	"database/sql"
+	"github.com/aagat/attic/search"
 	m "github.com/keighl/metabolize"
 	"log"
 	"net/http"
 )
+
+type FetcherConfig struct {
+	jobs    <-chan string
+	results chan<- string
+	DB      *sql.DB
+	index   *search.Index
+}
 
 type PageInfo struct {
 	Title       string `meta:"og:title,title"`

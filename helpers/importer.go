@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
+	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	"golang.org/x/net/html"
@@ -19,8 +20,10 @@ type Config struct {
 	index *search.Index
 }
 
-func Init(db *sql.DB, search *search.Index) *Config {
-	return &Config{db: db, index: search}
+//func Init(db *sql.DB, search *search.Index) *Config {
+
+func Init(c *config.Config) *Config {
+	return &Config{db: c.DB.(*sql.DB), index: c.Search.(*search.Index)}
 }
 
 func (c *Config) ImportBookmarks(f *string) {

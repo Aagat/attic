@@ -20,6 +20,15 @@ type Bookmark struct {
 	Archived    bool      `json:"archived"`
 }
 
+type BookmarkMeta struct {
+	Id          int    `json:"id"`
+	BookmarkId  string `json:"bookmark"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Keywords    string `json:"keywords"`
+	Type        string `json:"type"`
+}
+
 func (b *Bookmark) Insert() error {
 	statement, err := dbg.Prepare("INSERT OR IGNORE INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
 	if err != nil {
