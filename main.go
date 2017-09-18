@@ -31,7 +31,12 @@ func main() {
 	defer db.Close()
 
 	models, _ := models.NewDB(db)
-	index, _ := search.OpenIndex(*indexPath)
+	index, err := search.OpenIndex(*indexPath)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app, _ := web.NewApp(models)
 	utils, _ := helpers.Init(db, index)
 

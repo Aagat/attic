@@ -2,6 +2,7 @@ package search
 
 import (
 	"github.com/blevesearch/bleve"
+	"log"
 )
 
 type Index struct {
@@ -10,17 +11,25 @@ type Index struct {
 
 func OpenIndex(path string) (*Index, error) {
 
-	mapping := buildMapping()
-	index, err := bleve.New(path, mapping)
+	index, err := bleve.Open(path)
 
-	if err != bleve.ErrorIndexPathExists && err != nil {
+	if err != nil && err != bleve.ErrorIndexPathDoesNotExist {
 		return nil, err
+	}
+
+	if err == bleve.ErrorIndexPathDoesNotExist {
+		log.Println("No index found, creating index.")
+		mapping := buildMapping()
+		index, err = bleve.New(path, mapping)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Index{index: index}, nil
 }
 
 func (i *Index) Add(key string, val interface{}) {
-	// For some reason, this crashes. Commented out to preserve sanity.
-	// i.index.Index(key, val)
+	i.index.Index(key, val)
 }
