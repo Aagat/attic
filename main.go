@@ -17,7 +17,7 @@ import (
 
 var addr = flag.String("listen", ":8000", "HTTP ip/port to listen to")
 var dbPath = flag.String("db", ":memory:", "Database file to use")
-var indexPath = flag.String("index", "attic.index", "Database file to use")
+var indexPath = flag.String("index", "attic.index", "Index location to use")
 var importFromFile = flag.String("import", "", "Bookmark file to import from")
 
 func main() {
