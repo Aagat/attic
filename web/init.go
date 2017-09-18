@@ -10,6 +10,8 @@ type Handler struct {
 }
 
 func Init(c *config.Config) *Handler {
-	a := &Handler{db: c.Models.(*models.Models)}
+	a := &Handler{
+		db: c.Models.(*models.Models),
+	}
 	return a
 }

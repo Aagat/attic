@@ -30,6 +30,6 @@ func Init(path string) (*Search, error) {
 	return &Search{index: index}, nil
 }
 
-func (s *Search) Add(key string, val interface{}) {
+func (s *Search) Index(key string, val interface{}) {
 	s.index.Index(key, val)
 }

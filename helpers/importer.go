@@ -16,14 +16,14 @@ import (
 )
 
 type Helpers struct {
-	db    *sql.DB
-	index *search.Search
+	db     *sql.DB
+	search *search.Search
 }
 
 func Init(c *config.Config) *Helpers {
 	return &Helpers{
-		db:    c.DB.(*sql.DB),
-		index: c.Search.(*search.Search),
+		db:     c.DB.(*sql.DB),
+		search: c.Search.(*search.Search),
 	}
 }
 
@@ -43,7 +43,7 @@ func (h *Helpers) ImportBookmarks(f *string) {
 			log.Fatal(err)
 		}
 
-		go h.index.Add(val.Hash, val)
+		go h.search.Index(val.Hash, val)
 	}
 
 	if err != nil {
