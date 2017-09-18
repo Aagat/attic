@@ -53,8 +53,8 @@ func main() {
 
 	app.Fetcher = fetcher.Init(&app, jobs, results, errors)
 
-	utils := app.Helpers.(*helpers.Config)
-	handler := app.Web.(*web.App)
+	utils := app.Helpers.(*helpers.Helpers)
+	handler := app.Web.(*web.Handler)
 
 	err = utils.CreateTables()
 	if err != nil {

@@ -9,9 +9,9 @@ import (
 	"strconv"
 )
 
-func (a *App) Index(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 
-	bookmarks, err := a.db.GetAllBookmarks()
+	bookmarks, err := h.db.GetAllBookmarks()
 
 	if err != nil {
 		log.Fatal(err)
@@ -22,10 +22,10 @@ func (a *App) Index(w http.ResponseWriter, r *http.Request) {
 	err = resp.Encode(bookmarks)
 }
 
-func (a *App) BookmarkById(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) BookmarkById(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := strconv.Atoi(mux.Vars(r)["id"])
-	bookmark, err := a.db.GetBookmarkById(id)
+	bookmark, err := h.db.GetBookmarkById(id)
 
 	if err != nil {
 		log.Fatal(err)
@@ -36,9 +36,9 @@ func (a *App) BookmarkById(w http.ResponseWriter, r *http.Request) {
 	err = resp.Encode(bookmark)
 }
 
-func (a *App) BookmarkByHash(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) BookmarkByHash(w http.ResponseWriter, r *http.Request) {
 
-	bookmark, err := a.db.GetBookmarkByHash(mux.Vars(r)["hash"])
+	bookmark, err := h.db.GetBookmarkByHash(mux.Vars(r)["hash"])
 
 	if err != nil {
 		log.Fatal(err)
@@ -49,7 +49,7 @@ func (a *App) BookmarkByHash(w http.ResponseWriter, r *http.Request) {
 	err = resp.Encode(bookmark)
 }
 
-func (a *App) NewBookmark(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) NewBookmark(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 
@@ -72,7 +72,7 @@ func (a *App) NewBookmark(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	persisted, err := a.db.GetBookmarkByHash(b.Hash)
+	persisted, err := h.db.GetBookmarkByHash(b.Hash)
 
 	if err != nil {
 		log.Fatal(err)
@@ -83,7 +83,7 @@ func (a *App) NewBookmark(w http.ResponseWriter, r *http.Request) {
 	err = resp.Encode(persisted)
 }
 
-func (a *App) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 
@@ -95,7 +95,7 @@ func (a *App) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	id, _ := strconv.Atoi(mux.Vars(r)["id"])
-	stored, err := a.db.GetBookmarkById(id)
+	stored, err := h.db.GetBookmarkById(id)
 
 	if err != nil {
 		// Proper assertion required
@@ -109,7 +109,7 @@ func (a *App) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 		b.CalculateHash()
 	}
 
-	err = a.db.UpdateBookmarkById(&b)
+	err = h.db.UpdateBookmarkById(&b)
 
 	if err != nil {
 		// Proper assertion required
@@ -118,7 +118,7 @@ func (a *App) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	persisted, err := a.db.GetBookmarkById(b.Id)
+	persisted, err := h.db.GetBookmarkById(b.Id)
 
 	if err != nil {
 		log.Fatal(err)
@@ -129,7 +129,7 @@ func (a *App) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 	err = resp.Encode(persisted)
 }
 
-func (a *App) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 
@@ -140,7 +140,7 @@ func (a *App) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	stored, err := a.db.GetBookmarkByHash(mux.Vars(r)["hash"])
+	stored, err := h.db.GetBookmarkByHash(mux.Vars(r)["hash"])
 
 	if err != nil {
 		http.Error(w, "404", http.StatusNotFound)
@@ -156,7 +156,7 @@ func (a *App) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.db.UpdateBookmarkByHash(&b)
+	err = h.db.UpdateBookmarkByHash(&b)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -164,7 +164,7 @@ func (a *App) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	persisted, err := a.db.GetBookmarkByHash(b.Hash)
+	persisted, err := h.db.GetBookmarkByHash(b.Hash)
 
 	if err != nil {
 		log.Fatal(err)

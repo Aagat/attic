@@ -15,20 +15,23 @@ import (
 	"time"
 )
 
-type Config struct {
+type Helpers struct {
 	db    *sql.DB
-	index *search.Index
+	index *search.Search
 }
 
-func Init(c *config.Config) *Config {
-	return &Config{db: c.DB.(*sql.DB), index: c.Search.(*search.Index)}
+func Init(c *config.Config) *Helpers {
+	return &Helpers{
+		db:    c.DB.(*sql.DB),
+		index: c.Search.(*search.Search),
+	}
 }
 
-func (c *Config) ImportBookmarks(f *string) {
+func (h *Helpers) ImportBookmarks(f *string) {
 
 	b := []models.Bookmark{}
 
-	err := c.BookmarksParser(f, &b)
+	err := h.BookmarksParser(f, &b)
 
 	if err != nil {
 		log.Fatal(err)
@@ -40,7 +43,7 @@ func (c *Config) ImportBookmarks(f *string) {
 			log.Fatal(err)
 		}
 
-		go c.index.Add(val.Hash, val)
+		go h.index.Add(val.Hash, val)
 	}
 
 	if err != nil {
@@ -48,7 +51,7 @@ func (c *Config) ImportBookmarks(f *string) {
 	}
 }
 
-func (c *Config) BookmarksParser(f *string, b *[]models.Bookmark) error {
+func (h *Helpers) BookmarksParser(f *string, b *[]models.Bookmark) error {
 	dat, err := os.Open(*f)
 	defer dat.Close()
 	if err != nil {

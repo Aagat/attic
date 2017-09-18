@@ -9,20 +9,20 @@ import (
 // Global reference for use within the package.
 var dbg *sql.DB
 
-type DB struct {
+type Models struct {
 	DB *sql.DB
 }
 
-func Init(c *config.Config) (*DB, error) {
+func Init(c *config.Config) (*Models, error) {
 	dbg = c.DB.(*sql.DB)
-	return &DB{DB: c.DB.(*sql.DB)}, nil
+	return &Models{DB: c.DB.(*sql.DB)}, nil
 }
 
-func (db *DB) GetAllBookmarks() (*[]Bookmark, error) {
+func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 
 	bookmarks := []Bookmark{}
 
-	rows, err := db.DB.Query("select * from bookmarks")
+	rows, err := m.DB.Query("select * from bookmarks")
 
 	if err != nil {
 		log.Fatal(err)
@@ -59,9 +59,9 @@ func (db *DB) GetAllBookmarks() (*[]Bookmark, error) {
 	return &bookmarks, nil
 }
 
-func (db *DB) GetBookmarkById(id int) (*Bookmark, error) {
+func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 	b := Bookmark{}
-	statement, err := db.DB.Prepare("select * from bookmarks where id = ?")
+	statement, err := m.DB.Prepare("select * from bookmarks where id = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +86,9 @@ func (db *DB) GetBookmarkById(id int) (*Bookmark, error) {
 	return &b, nil
 }
 
-func (db *DB) GetBookmarkByHash(hash string) (*Bookmark, error) {
+func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 	b := Bookmark{}
-	statement, err := db.DB.Prepare("select * from bookmarks where hash = ?")
+	statement, err := m.DB.Prepare("select * from bookmarks where hash = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +113,8 @@ func (db *DB) GetBookmarkByHash(hash string) (*Bookmark, error) {
 	return &b, nil
 }
 
-func (db *DB) UpdateBookmarkById(b *Bookmark) error {
-	statement, err := db.DB.Prepare(`UPDATE bookmarks SET created=?,
+func (m *Models) UpdateBookmarkById(b *Bookmark) error {
+	statement, err := m.DB.Prepare(`UPDATE bookmarks SET created=?,
 updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archived=? WHERE id=?;`)
 	if err != nil {
 		return err
@@ -128,8 +128,8 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archive
 	return nil
 }
 
-func (db *DB) UpdateBookmarkByHash(b *Bookmark) error {
-	statement, err := db.DB.Prepare(`UPDATE bookmarks SET created=?,
+func (m *Models) UpdateBookmarkByHash(b *Bookmark) error {
+	statement, err := m.DB.Prepare(`UPDATE bookmarks SET created=?,
 updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archived=? WHERE hash=?;`)
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 package helpers
 
-func (c *Config) CreateTables() error {
+func (h *Helpers) CreateTables() error {
 	bootstrapTable := `
 CREATE TABLE IF NOT EXISTS bookmarks (
   id INTEGER PRIMARY KEY,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);
 `
-	_, err := c.db.Exec(bootstrapTable)
+	_, err := h.db.Exec(bootstrapTable)
 	if err != nil {
 		return err
 	}

@@ -5,11 +5,11 @@ import (
 	"log"
 )
 
-type Index struct {
+type Search struct {
 	index bleve.Index
 }
 
-func Init(path string) (*Index, error) {
+func Init(path string) (*Search, error) {
 
 	index, err := bleve.Open(path)
 
@@ -27,9 +27,9 @@ func Init(path string) (*Index, error) {
 		}
 	}
 
-	return &Index{index: index}, nil
+	return &Search{index: index}, nil
 }
 
-func (i *Index) Add(key string, val interface{}) {
-	i.index.Index(key, val)
+func (s *Search) Add(key string, val interface{}) {
+	s.index.Index(key, val)
 }

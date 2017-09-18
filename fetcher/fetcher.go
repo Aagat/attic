@@ -9,12 +9,12 @@ import (
 	"net/http"
 )
 
-type App struct {
+type Fetcher struct {
 	jobs    <-chan string
 	results chan<- string
 	errors  chan<- string
 	DB      *sql.DB
-	index   *search.Index
+	index   *search.Search
 }
 
 type PageInfo struct {
@@ -24,10 +24,10 @@ type PageInfo struct {
 	Type        string `meta:"og:type"`
 }
 
-func Init(c *config.Config, jobs <-chan string, results chan<- string, errors chan<- string) *App {
-	return &App{
+func Init(c *config.Config, jobs <-chan string, results chan<- string, errors chan<- string) *Fetcher {
+	return &Fetcher{
 		DB:      c.DB.(*sql.DB),
-		index:   c.Search.(*search.Index),
+		index:   c.Search.(*search.Search),
 		jobs:    jobs,
 		results: results,
 		errors:  errors,

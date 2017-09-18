@@ -5,11 +5,11 @@ import (
 	"github.com/aagat/attic/models"
 )
 
-type App struct {
-	db *models.DB
+type Handler struct {
+	db *models.Models
 }
 
-func Init(c *config.Config) *App {
-	a := &App{db: c.Models.(*models.DB)}
+func Init(c *config.Config) *Handler {
+	a := &Handler{db: c.Models.(*models.Models)}
 	return a
 }
