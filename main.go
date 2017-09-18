@@ -23,7 +23,7 @@ func main() {
 
 	flag.Parse()
 
-	var c config.Config
+	var app config.Config
 
 	r := mux.NewRouter()
 
@@ -33,35 +33,36 @@ func main() {
 	}
 	defer db.Close()
 
-	c.DB = db
+	app.DB = db
 
-	c.Models, _ = models.NewDB(&c)
+	app.Models, _ = models.NewDB(&app)
 
-	c.Search, err = search.OpenIndex(*indexPath)
+	app.Search, err = search.OpenIndex(*indexPath)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	c.Web = web.NewApp(&c)
-	app := c.Web.(*web.App)
-	c.Helpers = helpers.Init(&c)
+	app.Web = web.NewApp(&app)
+	handler := app.Web.(*web.App)
+	app.Helpers = helpers.Init(&app)
+	utils := app.Helpers.(*helpers.Config)
 
-	err = c.Helpers.(*helpers.Config).CreateTables()
+	err = utils.CreateTables()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if *importFromFile != "" {
-		c.Helpers.(*helpers.Config).ImportBookmarks(importFromFile)
+		utils.ImportBookmarks(importFromFile)
 	}
 
-	r.HandleFunc("/", app.Index)
-	r.HandleFunc("/show/{id:[0-9]+}", app.BookmarkById).Methods("GET")
-	r.HandleFunc("/show/{hash}", app.BookmarkByHash).Methods("GET")
-	r.HandleFunc("/add", app.NewBookmark).Methods("POST")
-	r.HandleFunc("/update/{id:[0-9]+}", app.UpdateBookmarkById).Methods("POST")
-	r.HandleFunc("/update/{hash}", app.UpdateBookmarkByHash).Methods("POST")
+	r.HandleFunc("/", handler.Index)
+	r.HandleFunc("/show/{id:[0-9]+}", handler.BookmarkById).Methods("GET")
+	r.HandleFunc("/show/{hash}", handler.BookmarkByHash).Methods("GET")
+	r.HandleFunc("/add", handler.NewBookmark).Methods("POST")
+	r.HandleFunc("/update/{id:[0-9]+}", handler.UpdateBookmarkById).Methods("POST")
+	r.HandleFunc("/update/{hash}", handler.UpdateBookmarkByHash).Methods("POST")
 
 	log.Printf("Listening and serving on port %v\n", *addr)
 	http.ListenAndServe(*addr, r)
