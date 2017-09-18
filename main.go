@@ -9,6 +9,7 @@ import (
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	"github.com/aagat/attic/web"
+	//	bleveHttp "github.com/blevesearch/bleve/http"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
@@ -39,6 +40,7 @@ func main() {
 	app.Models, _ = models.Init(&app)
 
 	app.Search, err = search.Init(*indexPath)
+	searchHandler := app.Search.(*search.Search).SearchHandler()
 
 	if err != nil {
 		log.Fatal(err)
@@ -71,6 +73,7 @@ func main() {
 	r.HandleFunc("/add", handler.NewBookmark).Methods("POST")
 	r.HandleFunc("/update/{id:[0-9]+}", handler.UpdateBookmarkById).Methods("POST")
 	r.HandleFunc("/update/{hash}", handler.UpdateBookmarkByHash).Methods("POST")
+	r.Handle("/bookmarks/search", searchHandler)
 
 	log.Printf("Listening and serving on port %v\n", *addr)
 	http.ListenAndServe(*addr, r)
