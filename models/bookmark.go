@@ -3,6 +3,7 @@ package models
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"log"
 	"strings"
 	"time"
 )
@@ -80,6 +81,33 @@ func (b *Bookmark) FillMissing() {
 	if b.Tags == nil {
 		b.Tags = []string{}
 	}
+}
+
+func (b *Bookmark) FillMetadata() {
+	bm := BookmarkMeta{}
+	var keywords string
+	statement, err := dbg.Prepare(`SELECT * FROM bookmarks_meta WHERE bookmark=?`)
+	if err != nil {
+		log.Println(err)
+	}
+
+	err = statement.QueryRow(b.Hash).Scan(
+		&bm.Id,
+		&bm.Created,
+		&bm.Bookmark,
+		&bm.Title,
+		&bm.Description,
+		&keywords,
+		&bm.Type,
+	)
+
+	bm.KeywordsToArray(keywords)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	b.Meta = bm
 }
 
 func (b *Bookmark) SetUpdatedTimestamp() {

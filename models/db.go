@@ -54,6 +54,7 @@ func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 
 		b.TagsToArray(tags)
 
+		b.FillMetadata()
 		bookmarks = append(bookmarks, b)
 	}
 
