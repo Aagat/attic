@@ -45,12 +45,16 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 		// Get bookmarks object first. We'll use this for indexing.
 		b, err := f.models.GetBookmarkByHash(hash)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			errors <- hash
+			continue
 		}
 
 		purl, err := urlx.Parse(url)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			errors <- url
+			continue
 		}
 
 		if purl.Scheme != "http" && purl.Scheme != "https" {
@@ -62,20 +66,24 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 		normalized, err := urlx.Normalize(purl)
 
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			errors <- url
+			continue
 		}
 
 		log.Println("Downloading:", purl)
 		resp, err := http.Get(normalized)
 		if err != nil {
-			errors <- hash
-			log.Fatal(err)
+			log.Println(err)
+			errors <- url
+			continue
 		}
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
+			log.Println(err)
 			errors <- hash
-			log.Fatal(err)
+			continue
 		}
 
 		b.Text = string(body)
@@ -84,8 +92,9 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 
 		err = m.Metabolize(resp.Body, metadata)
 		if err != nil {
+			log.Println(err)
 			errors <- hash
-			log.Fatal(err)
+			continue
 		}
 
 		metadata.Bookmark = hash
