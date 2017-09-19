@@ -48,7 +48,6 @@ func (h *Helpers) ImportBookmarks(f *string) {
 		}
 
 		h.fetcher.Fetch(val.Url)
-		go h.search.Index(val.Hash, val)
 	}
 
 	if err != nil {
