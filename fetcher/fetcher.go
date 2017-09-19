@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
@@ -52,29 +53,15 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, results chan<- *models.Book
 			continue
 		}
 
-		purl, err := urlx.Parse(url)
-		if err != nil {
-			log.Println(err)
-			errors <- url
-			continue
-		}
-
-		if purl.Scheme != "http" && purl.Scheme != "https" {
-			log.Println("Invalid scheme/protocol")
-			errors <- url
-			continue
-		}
-
-		normalized, err := urlx.Normalize(purl)
+		sanitized, err := SanitizeUrl(url)
 
 		if err != nil {
-			log.Println(err)
 			errors <- url
 			continue
 		}
 
-		log.Println("Downloading:", purl)
-		resp, err := http.Get(normalized)
+		log.Println("Downloading:", sanitized)
+		resp, err := http.Get(sanitized)
 		if err != nil {
 			log.Println(err)
 			errors <- url
@@ -130,6 +117,27 @@ func Hash(url string) string {
 	hash := sha1.New()
 	hash.Write([]byte(url))
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func SanitizeUrl(url string) (string, error) {
+
+	purl, err := urlx.Parse(url)
+	if err != nil {
+		return "", err
+	}
+
+	if purl.Scheme != "http" && purl.Scheme != "https" {
+		log.Println("Invalid protocol/schema for", url)
+		return "", errors.New("Invalid request scheme")
+	}
+
+	normalized, err := urlx.Normalize(purl)
+
+	if err != nil {
+		return "", err
+	}
+
+	return normalized, nil
 }
 
 func IsIndexableType(ty string) bool {
