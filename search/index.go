@@ -34,6 +34,10 @@ func (s *Search) Index(key string, val interface{}) {
 	s.index.Index(key, val)
 }
 
+func (s *Search) Delete(key string) error {
+	return s.index.Delete(key)
+}
+
 func (s *Search) SearchHandler() *bleveHttp.SearchHandler {
 	bleveHttp.RegisterIndexName("bookmarks", s.index)
 	searchHandler := bleveHttp.NewSearchHandler("bookmarks")

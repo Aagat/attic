@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"github.com/aagat/attic/config"
+	"github.com/aagat/attic/search"
 	"log"
 )
 
@@ -10,7 +11,8 @@ import (
 var dbg *sql.DB
 
 type Models struct {
-	DB *sql.DB
+	DB     *sql.DB
+	search *search.Search
 }
 
 func Init(c *config.Config) (*Models, error) {
@@ -159,12 +161,25 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 }
 
 func (m *Models) DeleteBookmarkById(id int) error {
+
+	persisted, err := m.GetBookmarkById(id)
+
+	if err != nil {
+		return err
+	}
+
 	statement, err := m.DB.Prepare(`DELETE FROM bookmarks WHERE id=?`)
 	if err != nil {
 		return err
 	}
 
 	_, err = statement.Exec(id)
+	if err != nil {
+		return err
+	}
+
+	err = m.search.Delete(persisted.Hash)
+
 	if err != nil {
 		return err
 	}
@@ -180,6 +195,12 @@ func (m *Models) DeleteBookmarkByHash(hash string) error {
 	}
 
 	_, err = statement.Exec(hash)
+	if err != nil {
+		return err
+	}
+
+	err = m.search.Delete(hash)
+
 	if err != nil {
 		return err
 	}
