@@ -10,6 +10,7 @@ import (
 	m "github.com/keighl/metabolize"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
 )
 
@@ -37,7 +38,7 @@ func (f *Fetcher) Boot(num int) {
 	}
 }
 
-func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
+func (f *Fetcher) Worker(id int, jobs <-chan string, results chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
 		hash := Hash(url)
@@ -78,32 +79,43 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 			errors <- url
 			continue
 		}
+
+		ty, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if err != nil {
+			log.Println(err)
+			errors <- url
+			continue
+		}
 		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Println(err)
-			errors <- hash
-			continue
+
+		if IsIndexableType(ty) {
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Println(err)
+				errors <- hash
+				continue
+			}
+
+			b.Text = string(body)
+
+			metadata := new(models.BookmarkMeta)
+
+			err = m.Metabolize(resp.Body, metadata)
+			if err != nil {
+				log.Println(err)
+				errors <- hash
+				continue
+			}
+
+			metadata.Bookmark = hash
+			metadata.Url = url
+			metadata.KeywordsToArray(metadata.RawKeywords)
+
+			results <- metadata
+		} else {
+			errors <- url
 		}
-
-		b.Text = string(body)
-
-		metadata := new(models.BookmarkMeta)
-
-		err = m.Metabolize(resp.Body, metadata)
-		if err != nil {
-			log.Println(err)
-			errors <- hash
-			continue
-		}
-
-		metadata.Bookmark = hash
-		metadata.Url = url
-		metadata.KeywordsToArray(metadata.RawKeywords)
-
 		go f.search.Index(hash, b)
-
-		result <- metadata
 	}
 }
 
@@ -115,4 +127,23 @@ func Hash(url string) string {
 	hash := sha1.New()
 	hash.Write([]byte(url))
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func IsIndexableType(ty string) bool {
+
+	accepted_types := []string{
+		"text/html",
+		"application/xhtml+xml",
+		"application/xml",
+		"application/json",
+		"text/plain",
+	}
+
+	for _, t := range accepted_types {
+		if t == ty {
+			return true
+		}
+	}
+	return false
+
 }
