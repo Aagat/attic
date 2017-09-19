@@ -23,13 +23,14 @@ type Bookmark struct {
 }
 
 type BookmarkMeta struct {
-	Id          int      `json:"-"`
-	Bookmark    string   `json:"-"`
-	Title       string   `json:"title" meta:"og:title,title"`
-	Description string   `json:"description" meta:"og:description,description"`
-	RawKeywords string   `json:"-" meta:"keywords"`
-	Keywords    []string `json:"keywords"`
-	Type        string   `json:"type" meta:"og:type"`
+	Id          int       `json:"-"`
+	Created     time.Time `json:"created"`
+	Bookmark    string    `json:"-"`
+	Title       string    `json:"title" meta:"og:title,title"`
+	Description string    `json:"description" meta:"og:description,description"`
+	RawKeywords string    `json:"-" meta:"keywords"`
+	Keywords    []string  `json:"keywords"`
+	Type        string    `json:"type" meta:"og:type"`
 }
 
 func (b *Bookmark) TagsToString() string {
@@ -100,12 +101,12 @@ func (b *BookmarkMeta) KeywordsToArray(s string) {
 }
 
 func (b *BookmarkMeta) Insert() error {
-	statement, err := dbg.Prepare("INSERT OR REPLACE INTO bookmarks_meta (bookmark, title, description, keywords, type) VALUES (?,?,?,?,?)")
+	statement, err := dbg.Prepare("INSERT OR REPLACE INTO bookmarks_meta (created, bookmark, title, description, keywords, type) VALUES (?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
 
-	_, err = statement.Exec(b.Bookmark, b.Title, b.Description, b.KeywordsToString(), b.Type)
+	_, err = statement.Exec(time.Now(), b.Bookmark, b.Title, b.Description, b.KeywordsToString(), b.Type)
 	if err != nil {
 		return err
 	}

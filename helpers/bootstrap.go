@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 
 CREATE TABLE IF NOT EXISTS bookmarks_meta (
   id INTEGER PRIMARY KEY,
+  created DATETIME,
   bookmark TEXT UNIQUE,
   title TEXT,
   description TEXT,

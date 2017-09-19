@@ -54,7 +54,12 @@ func main() {
 
 	go func() {
 		meta := <-results
-		meta.Insert()
+		err = meta.Insert()
+
+		if err != nil {
+			log.Println(err)
+		}
+
 		log.Printf("%#v", meta)
 	}()
 
