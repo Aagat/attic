@@ -1,6 +1,7 @@
 package fetcher
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"github.com/aagat/attic/config"
@@ -96,11 +97,13 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, results chan<- *models.Book
 				continue
 			}
 
+			buffer := bytes.NewBuffer(body)
+
 			b.Text = string(body)
 
 			metadata := new(models.BookmarkMeta)
 
-			err = m.Metabolize(resp.Body, metadata)
+			err = m.Metabolize(buffer, metadata)
 			if err != nil {
 				log.Println(err)
 				errors <- hash
