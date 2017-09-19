@@ -53,16 +53,18 @@ func main() {
 	app.Fetcher.(*fetcher.Fetcher).Boot(1)
 
 	go func() {
-		select {
-		case meta := <-results:
-			log.Println("Downloaded:", meta.Url)
-			err = meta.Insert()
+		for {
+			select {
+			case meta := <-results:
+				log.Println("Downloaded:", meta.Url)
+				err = meta.Insert()
 
-			if err != nil {
-				log.Println(err)
+				if err != nil {
+					log.Println(err)
+				}
+			case err := <-errors:
+				log.Println("Error fetching bookmark:", err)
 			}
-		case err := <-errors:
-			log.Println("Error fetching bookmark id:", err)
 		}
 	}()
 

@@ -55,7 +55,7 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 
 		if purl.Scheme != "http" && purl.Scheme != "https" {
 			log.Println("Invalid scheme/protocol")
-			errors <- hash
+			errors <- url
 			continue
 		}
 
