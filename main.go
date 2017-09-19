@@ -9,7 +9,6 @@ import (
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	"github.com/aagat/attic/web"
-	//	bleveHttp "github.com/blevesearch/bleve/http"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
@@ -46,15 +45,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app.Web = web.Init(&app)
-	app.Helpers = helpers.Init(&app)
-
 	jobs := make(chan string, 10)
-	results := make(chan string, 10)
+	results := make(chan *models.BookmarkMeta, 10)
 	errors := make(chan string, 10)
 
 	app.Fetcher = fetcher.Init(&app, jobs, results, errors)
 	app.Fetcher.(*fetcher.Fetcher).Boot(1)
+
+	go func() {
+		log.Println(<-results)
+	}()
+
+	app.Web = web.Init(&app)
+	app.Helpers = helpers.Init(&app)
 
 	utils := app.Helpers.(*helpers.Helpers)
 	handler := app.Web.(*web.Handler)

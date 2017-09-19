@@ -8,17 +8,18 @@ import (
 )
 
 type Bookmark struct {
-	Id          int       `json:"id"`
-	Created     time.Time `json:"created"`
-	Updated     time.Time `json:"last_updated"`
-	Verified    time.Time `json:"last_verified"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Url         string    `json:"url"`
-	Hash        string    `json:"hash"`
-	Tags        []string  `json:"tags"`
-	Alive       bool      `json:"alive"`
-	Archived    bool      `json:"archived"`
+	Id          int          `json:"id"`
+	Created     time.Time    `json:"created"`
+	Updated     time.Time    `json:"last_updated"`
+	Verified    time.Time    `json:"last_verified"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	Url         string       `json:"url"`
+	Hash        string       `json:"hash"`
+	Tags        []string     `json:"tags"`
+	Alive       bool         `json:"alive"`
+	Archived    bool         `json:"archived"`
+	Meta        BookmarkMeta `json:"meta"`
 }
 
 type BookmarkMeta struct {

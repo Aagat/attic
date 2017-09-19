@@ -3,6 +3,7 @@ package fetcher
 import (
 	"database/sql"
 	"github.com/aagat/attic/config"
+	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	m "github.com/keighl/metabolize"
 	"log"
@@ -10,9 +11,9 @@ import (
 )
 
 type Fetcher struct {
-	jobs    <-chan string
-	results chan<- string
-	errors  chan<- string
+	jobs    chan string
+	results chan *models.BookmarkMeta
+	errors  chan string
 	DB      *sql.DB
 	index   *search.Search
 }
@@ -24,7 +25,7 @@ type PageInfo struct {
 	Type        string `meta:"og:type"`
 }
 
-func Init(c *config.Config, jobs <-chan string, results chan<- string, errors chan<- string) *Fetcher {
+func Init(c *config.Config, jobs chan string, results chan *models.BookmarkMeta, errors chan string) *Fetcher {
 	return &Fetcher{
 		DB:      c.DB.(*sql.DB),
 		index:   c.Search.(*search.Search),
@@ -40,7 +41,7 @@ func (f *Fetcher) Boot(num int) {
 	}
 }
 
-func Worker(id int, jobs <-chan string, result chan<- string, errors chan<- string) {
+func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
 		log.Println(url)
@@ -50,15 +51,19 @@ func Worker(id int, jobs <-chan string, result chan<- string, errors chan<- stri
 		}
 		defer resp.Body.Close()
 
-		metadata := new(PageInfo)
+		metadata := new(models.BookmarkMeta)
 
 		err = m.Metabolize(resp.Body, metadata)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		result <- url
+		result <- metadata
 
 		log.Printf("%+v", metadata)
 	}
+}
+
+func (f *Fetcher) Fetch(url string) {
+	f.jobs <- url
 }

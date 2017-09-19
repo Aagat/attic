@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"github.com/aagat/attic/config"
+	"github.com/aagat/attic/fetcher"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	"golang.org/x/net/html"
@@ -16,14 +17,16 @@ import (
 )
 
 type Helpers struct {
-	db     *sql.DB
-	search *search.Search
+	db      *sql.DB
+	search  *search.Search
+	fetcher *fetcher.Fetcher
 }
 
 func Init(c *config.Config) *Helpers {
 	return &Helpers{
-		db:     c.DB.(*sql.DB),
-		search: c.Search.(*search.Search),
+		db:      c.DB.(*sql.DB),
+		search:  c.Search.(*search.Search),
+		fetcher: c.Fetcher.(*fetcher.Fetcher),
 	}
 }
 
