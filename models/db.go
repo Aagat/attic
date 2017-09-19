@@ -89,6 +89,7 @@ func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 	)
 
 	b.TagsToArray(tags)
+	b.FillMetadata()
 
 	if err != nil {
 		return nil, err
@@ -120,6 +121,7 @@ func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 	)
 
 	b.TagsToArray(tags)
+	b.FillMetadata()
 
 	if err != nil {
 		return nil, err
@@ -207,5 +209,4 @@ func (m *Models) DeleteBookmarkByHash(hash string) error {
 	}
 
 	return nil
-
 }
