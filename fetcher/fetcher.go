@@ -40,8 +40,6 @@ func (f *Fetcher) Boot(num int) {
 func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
-
-		log.Println("Downloading:", url)
 		hash := Hash(url)
 
 		// Get bookmarks object first. We'll use this for indexing.
@@ -57,7 +55,7 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 			log.Fatal(err)
 		}
 
-		if purl.Scheme != "http" || purl.Scheme != "https" {
+		if purl.Scheme != "http" && purl.Scheme != "https" {
 			log.Fatal("Invalid scheme/protocol")
 		}
 
@@ -67,6 +65,7 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 			log.Fatal(err)
 		}
 
+		log.Println("Downloading:", purl)
 		resp, err := http.Get(normalized)
 		if err != nil {
 			errors <- hash
