@@ -1,7 +1,9 @@
 package fetcher
 
 import (
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
@@ -37,10 +39,13 @@ func (f *Fetcher) Boot(num int) {
 func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
+		// TODO
+		// Sanitize url and make sure there is protocol specified
 		log.Println(url)
 		resp, err := http.Get(url)
 		if err != nil {
-			panic(err)
+			errors <- Hash(url)
+			log.Fatal(err)
 		}
 		defer resp.Body.Close()
 
@@ -48,8 +53,11 @@ func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, erro
 
 		err = m.Metabolize(resp.Body, metadata)
 		if err != nil {
+			errors <- Hash(url)
 			log.Fatal(err)
 		}
+
+		metadata.Bookmark = Hash(url)
 
 		result <- metadata
 	}
@@ -57,4 +65,10 @@ func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, erro
 
 func (f *Fetcher) Fetch(url string) {
 	f.jobs <- url
+}
+
+func Hash(url string) string {
+	hash := sha1.New()
+	hash.Write([]byte(url))
+	return hex.EncodeToString(hash.Sum(nil))
 }
