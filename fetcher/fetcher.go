@@ -48,15 +48,15 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 			log.Fatal(err)
 		}
 
-		// TODO
-		// Sanitize url and make sure there is protocol specified
 		purl, err := urlx.Parse(url)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		if purl.Scheme != "http" && purl.Scheme != "https" {
-			log.Fatal("Invalid scheme/protocol")
+			log.Println("Invalid scheme/protocol")
+			errors <- hash
+			continue
 		}
 
 		normalized, err := urlx.Normalize(purl)
