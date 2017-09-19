@@ -53,7 +53,9 @@ func main() {
 	app.Fetcher.(*fetcher.Fetcher).Boot(1)
 
 	go func() {
-		log.Printf("%#v", <-results)
+		meta := <-results
+		meta.Insert()
+		log.Printf("%#v", meta)
 	}()
 
 	app.Web = web.Init(&app)

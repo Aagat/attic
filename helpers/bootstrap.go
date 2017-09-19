@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 
 CREATE TABLE IF NOT EXISTS bookmarks_meta (
   id INTEGER PRIMARY KEY,
-  bookmark TEXT,
+  bookmark TEXT UNIQUE,
   title TEXT,
   description TEXT,
   keywords TEXT,
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS bookmarks_meta (
 );
 
 CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);
+CREATE INDEX IF NOT EXISTS urlhash ON bookmarks_meta (bookmark);
 `
 	_, err := h.db.Exec(bootstrapTable)
 	if err != nil {

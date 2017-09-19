@@ -100,7 +100,7 @@ func (b *BookmarkMeta) KeywordsToArray(s string) {
 }
 
 func (b *BookmarkMeta) Insert() error {
-	statement, err := dbg.Prepare("INSERT OR IGNORE INTO bookmarks_meta (bookmark, title, description, keywords, type) VALUES (?,?,?,?,?)")
+	statement, err := dbg.Prepare("INSERT OR REPLACE INTO bookmarks_meta (bookmark, title, description, keywords, type) VALUES (?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
