@@ -53,7 +53,7 @@ func main() {
 	app.Fetcher.(*fetcher.Fetcher).Boot(1)
 
 	go func() {
-		log.Println(<-results)
+		log.Printf("%#v", <-results)
 	}()
 
 	app.Web = web.Init(&app)

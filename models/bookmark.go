@@ -23,12 +23,12 @@ type Bookmark struct {
 }
 
 type BookmarkMeta struct {
-	Id          int    `json:"id"`
-	BookmarkId  string `json:"bookmark"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Keywords    string `json:"keywords"`
-	Type        string `json:"type"`
+	Id          int    `json:"-"`
+	BookmarkId  string `json:"-"`
+	Title       string `json:"title" meta:"og:title,title"`
+	Description string `json:"description" meta:"og:description,description"`
+	Keywords    string `json:"keywords" meta:"keywords"`
+	Type        string `json:"type" meta:"og:type"`
 }
 
 func (b *Bookmark) MarshalTags() string {

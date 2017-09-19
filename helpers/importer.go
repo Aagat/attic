@@ -41,6 +41,7 @@ func (h *Helpers) ImportBookmarks(f *string) {
 	}
 
 	log.Println("Initiated Indexing.")
+	h.fetcher.Fetch("http://aagat.com/")
 	for _, val := range b {
 		err = val.Insert()
 		if err != nil {

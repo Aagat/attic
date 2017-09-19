@@ -18,13 +18,6 @@ type Fetcher struct {
 	index   *search.Search
 }
 
-type PageInfo struct {
-	Title       string `meta:"og:title,title"`
-	Description string `meta:"og:description,description"`
-	Keywords    string `meta:"keywords"`
-	Type        string `meta:"og:type"`
-}
-
 func Init(c *config.Config, jobs chan string, results chan *models.BookmarkMeta, errors chan string) *Fetcher {
 	return &Fetcher{
 		DB:      c.DB.(*sql.DB),
@@ -59,8 +52,6 @@ func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, erro
 		}
 
 		result <- metadata
-
-		log.Printf("%+v", metadata)
 	}
 }
 
