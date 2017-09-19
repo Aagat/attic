@@ -6,6 +6,7 @@ import (
 	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
+	"github.com/goware/urlx"
 	m "github.com/keighl/metabolize"
 	"io/ioutil"
 	"log"
@@ -39,8 +40,10 @@ func (f *Fetcher) Boot(num int) {
 func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
+
 		log.Println("Downloading:", url)
 		hash := Hash(url)
+
 		// Get bookmarks object first. We'll use this for indexing.
 		b, err := f.models.GetBookmarkByHash(hash)
 		if err != nil {
@@ -49,7 +52,22 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 
 		// TODO
 		// Sanitize url and make sure there is protocol specified
-		resp, err := http.Get(url)
+		purl, err := urlx.Parse(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if purl.Scheme != "http" || purl.Scheme != "https" {
+			log.Fatal("Invalid scheme/protocol")
+		}
+
+		normalized, err := urlx.Normalize(purl)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		resp, err := http.Get(normalized)
 		if err != nil {
 			errors <- hash
 			log.Fatal(err)
