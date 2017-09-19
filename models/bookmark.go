@@ -42,7 +42,10 @@ func (b *Bookmark) TagsToString() string {
 
 func (b *Bookmark) TagsToArray(s string) {
 	if len(s) != 0 {
-		b.Tags = strings.Split(s, ",")
+		tags := strings.Split(s, ",")
+		for _, tag := range tags {
+			b.Tags = append(b.Tags, strings.TrimSpace(tag))
+		}
 	} else {
 		b.Tags = []string{}
 	}
@@ -124,7 +127,10 @@ func (b *BookmarkMeta) KeywordsToString() string {
 
 func (b *BookmarkMeta) KeywordsToArray(s string) {
 	if len(s) != 0 {
-		b.Keywords = strings.Split(s, ",")
+		keywords := strings.Split(s, ",")
+		for _, keyword := range keywords {
+			b.Keywords = append(b.Keywords, strings.TrimSpace(keyword))
+		}
 	} else {
 		b.Keywords = []string{}
 	}
