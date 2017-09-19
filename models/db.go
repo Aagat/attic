@@ -132,6 +132,7 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 		return err
 	}
 
+	b.SetUpdatedTimestamp()
 	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Id)
 	if err != nil {
 		return err
@@ -146,6 +147,8 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 	if err != nil {
 		return err
 	}
+
+	b.SetUpdatedTimestamp()
 
 	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Hash)
 	if err != nil {

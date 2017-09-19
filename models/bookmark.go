@@ -65,14 +65,22 @@ func (b *Bookmark) CalculateHash() {
 func (b *Bookmark) FillMissing() {
 
 	b.CalculateHash()
+	b.SetUpdatedTimestamp()
+	b.SetUpdatedTimestamp()
 
 	b.Created = time.Now()
-	b.Updated = time.Now()
-	b.Verified = time.Now()
 	b.Alive = true
 	b.Archived = false
 
 	if b.Tags == nil {
 		b.Tags = []string{}
 	}
+}
+
+func (b *Bookmark) SetUpdatedTimestamp() {
+	b.Updated = time.Now()
+}
+
+func (b *Bookmark) SetVerifiedTimestamp() {
+	b.Updated = time.Now()
 }
