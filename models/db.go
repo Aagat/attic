@@ -50,7 +50,7 @@ func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 			log.Fatal(err)
 		}
 
-		b.UnmarshalTags(tags)
+		b.TagsToArray(tags)
 
 		bookmarks = append(bookmarks, b)
 	}
@@ -85,7 +85,7 @@ func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 		&b.Archived,
 	)
 
-	b.UnmarshalTags(tags)
+	b.TagsToArray(tags)
 
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 		&b.Archived,
 	)
 
-	b.UnmarshalTags(tags)
+	b.TagsToArray(tags)
 
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 	}
 
 	b.SetUpdatedTimestamp()
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Id)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.TagsToString(), b.Alive, b.Archived, b.Id)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 
 	b.SetUpdatedTimestamp()
 
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Hash)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.TagsToString(), b.Alive, b.Archived, b.Hash)
 	if err != nil {
 		return err
 	}

@@ -32,11 +32,11 @@ type BookmarkMeta struct {
 	Type        string   `json:"type" meta:"og:type"`
 }
 
-func (b *Bookmark) MarshalTags() string {
+func (b *Bookmark) TagsToString() string {
 	return strings.Join(b.Tags, ",")
 }
 
-func (b *Bookmark) UnmarshalTags(s string) {
+func (b *Bookmark) TagsToArray(s string) {
 	if len(s) != 0 {
 		b.Tags = strings.Split(s, ",")
 	} else {
@@ -50,7 +50,7 @@ func (b *Bookmark) Insert() error {
 		return err
 	}
 
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.TagsToString(), b.Alive, b.Archived)
 	if err != nil {
 		return err
 	}
