@@ -75,6 +75,8 @@ func main() {
 	r.HandleFunc("/update/{id:[0-9]+}", handler.UpdateBookmarkById).Methods("POST")
 	r.HandleFunc("/update/{hash}", handler.UpdateBookmarkByHash).Methods("POST")
 	r.Handle("/bookmarks/search", searchHandler)
+	r.HandleFunc("/delete/{id:[0-9]+}", handler.DeleteBookmarkById).Methods("POST")
+	r.HandleFunc("/delete/{hash}", handler.DeleteBookmarkByHash).Methods("POST")
 
 	log.Printf("Listening and serving on port %v\n", *addr)
 	http.ListenAndServe(*addr, r)

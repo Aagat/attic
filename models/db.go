@@ -154,3 +154,33 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? ,
 
 	return nil
 }
+
+func (m *Models) DeleteBookmarkById(id int) error {
+	statement, err := m.DB.Prepare(`DELETE FROM bookmarks WHERE id=?`)
+	if err != nil {
+		return err
+	}
+
+	_, err = statement.Exec(id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func (m *Models) DeleteBookmarkByHash(hash string) error {
+	statement, err := m.DB.Prepare(`DELETE FROM bookmarks WHERE hash=?`)
+	if err != nil {
+		return err
+	}
+
+	_, err = statement.Exec(hash)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}

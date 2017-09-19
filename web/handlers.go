@@ -175,3 +175,30 @@ func (h *Handler) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 	resp.SetIndent("", "\t")
 	err = resp.Encode(persisted)
 }
+
+func (h *Handler) DeleteBookmarkById(w http.ResponseWriter, r *http.Request) {
+
+	id, _ := strconv.Atoi(mux.Vars(r)["id"])
+	err := h.db.DeleteBookmarkById(id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp := json.NewEncoder(w)
+	resp.SetIndent("", "\t")
+	err = resp.Encode(id)
+}
+
+func (h *Handler) DeleteBookmarkByHash(w http.ResponseWriter, r *http.Request) {
+
+	err := h.db.DeleteBookmarkByHash(mux.Vars(r)["hash"])
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp := json.NewEncoder(w)
+	resp.SetIndent("", "\t")
+	err = resp.Encode(mux.Vars(r)["hash"])
+}
