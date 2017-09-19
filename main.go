@@ -19,6 +19,7 @@ var addr = flag.String("listen", ":8000", "HTTP ip/port to listen to")
 var dbPath = flag.String("db", ":memory:", "Database file to use")
 var indexPath = flag.String("index", "attic.index", "Index location to use")
 var importFromFile = flag.String("import", "", "Bookmark file to import from")
+var workers = flag.Int("workers", 5, "Web workers to fetch your pages.")
 
 func main() {
 
@@ -45,12 +46,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	jobs := make(chan string, 10)
-	results := make(chan *models.BookmarkMeta, 10)
-	errors := make(chan string, 10)
+	jobs := make(chan string, 128)
+	results := make(chan *models.BookmarkMeta, 128)
+	errors := make(chan string, 128)
 
 	app.Fetcher = fetcher.Init(&app, jobs, results, errors)
-	app.Fetcher.(*fetcher.Fetcher).Boot(1)
+	app.Fetcher.(*fetcher.Fetcher).Boot(*workers)
 
 	go func() {
 		for {
