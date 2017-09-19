@@ -16,6 +16,15 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   archived TINYINT
 );
 
+CREATE TABLE IF NOT EXISTS bookmarks_meta (
+  id INTEGER PRIMARY KEY,
+  bookmark TEXT,
+  title TEXT,
+  description TEXT,
+  keywords TEXT,
+  type TEXT
+);
+
 CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);
 `
 	_, err := h.db.Exec(bootstrapTable)

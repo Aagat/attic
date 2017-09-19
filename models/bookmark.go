@@ -24,7 +24,7 @@ type Bookmark struct {
 
 type BookmarkMeta struct {
 	Id          int    `json:"-"`
-	BookmarkId  string `json:"-"`
+	Bookmark    string `json:"-"`
 	Title       string `json:"title" meta:"og:title,title"`
 	Description string `json:"description" meta:"og:description,description"`
 	Keywords    string `json:"keywords" meta:"keywords"`
