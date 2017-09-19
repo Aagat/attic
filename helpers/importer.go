@@ -41,19 +41,20 @@ func (h *Helpers) ImportBookmarks(f *string) {
 	}
 
 	log.Println("Initiated Indexing.")
-	h.fetcher.Fetch("http://aagat.com/")
 	for _, val := range b {
 		err = val.Insert()
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		h.fetcher.Fetch(val.Url)
 		go h.search.Index(val.Hash, val)
 	}
 
 	if err != nil {
 		log.Fatal(err)
 	}
+
 }
 
 func (h *Helpers) BookmarksParser(f *string, b *[]models.Bookmark) error {

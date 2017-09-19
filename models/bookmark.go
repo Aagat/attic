@@ -20,6 +20,7 @@ type Bookmark struct {
 	Alive       bool         `json:"alive"`
 	Archived    bool         `json:"archived"`
 	Meta        BookmarkMeta `json:"meta"`
+	Text        string
 }
 
 type BookmarkMeta struct {

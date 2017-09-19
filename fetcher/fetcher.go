@@ -2,12 +2,12 @@ package fetcher
 
 import (
 	"crypto/sha1"
-	"database/sql"
 	"encoding/hex"
 	"github.com/aagat/attic/config"
 	"github.com/aagat/attic/models"
 	"github.com/aagat/attic/search"
 	m "github.com/keighl/metabolize"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -16,14 +16,14 @@ type Fetcher struct {
 	jobs    chan string
 	results chan *models.BookmarkMeta
 	errors  chan string
-	DB      *sql.DB
-	index   *search.Search
+	search  *search.Search
+	models  *models.Models
 }
 
 func Init(c *config.Config, jobs chan string, results chan *models.BookmarkMeta, errors chan string) *Fetcher {
 	return &Fetcher{
-		DB:      c.DB.(*sql.DB),
-		index:   c.Search.(*search.Search),
+		models:  c.Models.(*models.Models),
+		search:  c.Search.(*search.Search),
 		jobs:    jobs,
 		results: results,
 		errors:  errors,
@@ -32,33 +32,52 @@ func Init(c *config.Config, jobs chan string, results chan *models.BookmarkMeta,
 
 func (f *Fetcher) Boot(num int) {
 	for w := 1; w <= num; w++ {
-		go Worker(w, f.jobs, f.results, f.errors)
+		go f.Worker(w, f.jobs, f.results, f.errors)
 	}
 }
 
-func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
+func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
+		hash := Hash(url)
+		// Get bookmarks object first. We'll use this for indexing.
+		b, err := f.models.GetBookmarkByHash(hash)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		// TODO
 		// Sanitize url and make sure there is protocol specified
 		log.Println(url)
 		resp, err := http.Get(url)
 		if err != nil {
-			errors <- Hash(url)
+			errors <- hash
 			log.Fatal(err)
 		}
 		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			errors <- hash
+			log.Fatal(err)
+		}
+
+		b.Text = string(body)
+
+		log.Printf("%+v", body)
+		log.Println(string(body))
 
 		metadata := new(models.BookmarkMeta)
 
 		err = m.Metabolize(resp.Body, metadata)
 		if err != nil {
-			errors <- Hash(url)
+			errors <- hash
 			log.Fatal(err)
 		}
 
-		metadata.Bookmark = Hash(url)
+		metadata.Bookmark = hash
 		metadata.KeywordsToArray(metadata.RawKeywords)
+
+		go f.search.Index(hash, b)
 
 		result <- metadata
 	}
