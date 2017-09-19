@@ -58,6 +58,7 @@ func Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, erro
 		}
 
 		metadata.Bookmark = Hash(url)
+		metadata.KeywordsToArray(metadata.RawKeywords)
 
 		result <- metadata
 	}
