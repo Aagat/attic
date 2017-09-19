@@ -53,9 +53,9 @@ func main() {
 	app.Fetcher.(*fetcher.Fetcher).Boot(1)
 
 	go func() {
-
 		select {
 		case meta := <-results:
+			log.Println("Downloaded:", meta.Url)
 			err = meta.Insert()
 
 			if err != nil {

@@ -20,11 +20,12 @@ type Bookmark struct {
 	Alive       bool         `json:"alive"`
 	Archived    bool         `json:"archived"`
 	Meta        BookmarkMeta `json:"meta"`
-	Text        string
+	Text        string       `json:"-"`
 }
 
 type BookmarkMeta struct {
 	Id          int       `json:"-"`
+	Url         string    `json:"-"`
 	Created     time.Time `json:"created"`
 	Bookmark    string    `json:"-"`
 	Title       string    `json:"title" meta:"og:title,title"`

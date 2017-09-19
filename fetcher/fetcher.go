@@ -39,6 +39,7 @@ func (f *Fetcher) Boot(num int) {
 func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.BookmarkMeta, errors chan<- string) {
 	log.Println("Worker Online. Worker no:", id)
 	for url := range jobs {
+		log.Println("Downloading:", url)
 		hash := Hash(url)
 		// Get bookmarks object first. We'll use this for indexing.
 		b, err := f.models.GetBookmarkByHash(hash)
@@ -48,7 +49,6 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 
 		// TODO
 		// Sanitize url and make sure there is protocol specified
-		log.Println(url)
 		resp, err := http.Get(url)
 		if err != nil {
 			errors <- hash
@@ -63,9 +63,6 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 
 		b.Text = string(body)
 
-		log.Printf("%+v", body)
-		log.Println(string(body))
-
 		metadata := new(models.BookmarkMeta)
 
 		err = m.Metabolize(resp.Body, metadata)
@@ -75,6 +72,7 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, result chan<- *models.Bookm
 		}
 
 		metadata.Bookmark = hash
+		metadata.Url = url
 		metadata.KeywordsToArray(metadata.RawKeywords)
 
 		go f.search.Index(hash, b)

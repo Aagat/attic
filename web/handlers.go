@@ -79,6 +79,8 @@ func (h *Handler) NewBookmark(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
+	h.fetcher.Fetch(persisted.Url)
+
 	resp := json.NewEncoder(w)
 	resp.SetIndent("", "\t")
 	err = resp.Encode(persisted)
@@ -125,6 +127,8 @@ func (h *Handler) UpdateBookmarkById(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
+	h.fetcher.Fetch(persisted.Url)
+
 	resp := json.NewEncoder(w)
 	resp.SetIndent("", "\t")
 	err = resp.Encode(persisted)
@@ -166,6 +170,8 @@ func (h *Handler) UpdateBookmarkByHash(w http.ResponseWriter, r *http.Request) {
 	}
 
 	persisted, err := h.db.GetBookmarkByHash(b.Hash)
+
+	h.fetcher.Fetch(persisted.Url)
 
 	if err != nil {
 		log.Fatal(err)

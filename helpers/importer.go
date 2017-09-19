@@ -40,7 +40,6 @@ func (h *Helpers) ImportBookmarks(f *string) {
 		log.Fatal(err)
 	}
 
-	log.Println("Initiated Indexing.")
 	for _, val := range b {
 		err = val.Insert()
 		if err != nil {
