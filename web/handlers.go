@@ -69,6 +69,7 @@ func (h *Handler) NewBookmark(w http.ResponseWriter, r *http.Request) {
 	err = b.Insert()
 
 	if err != nil {
+		log.Printf("%+v\n", b)
 		log.Fatal(err)
 	}
 

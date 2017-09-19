@@ -3,6 +3,7 @@ package models
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"strings"
 	"time"
 )
 
@@ -15,7 +16,7 @@ type Bookmark struct {
 	Description string    `json:"description"`
 	Url         string    `json:"url"`
 	Hash        string    `json:"hash"`
-	Tags        []Tag     `json:"tags"`
+	Tags        []string  `json:"tags"`
 	Alive       bool      `json:"alive"`
 	Archived    bool      `json:"archived"`
 }
@@ -29,13 +30,25 @@ type BookmarkMeta struct {
 	Type        string `json:"type"`
 }
 
+func (b *Bookmark) MarshalTags() string {
+	return strings.Join(b.Tags, ",")
+}
+
+func (b *Bookmark) UnmarshalTags(s string) {
+	if len(s) != 0 {
+		b.Tags = strings.Split(s, ",")
+	} else {
+		b.Tags = []string{}
+	}
+}
+
 func (b *Bookmark) Insert() error {
-	statement, err := dbg.Prepare("INSERT OR IGNORE INTO bookmarks (created, updated, verified, title, description, url, hash, alive, archived) VALUES (?,?,?,?,?,?,?,?,?)")
+	statement, err := dbg.Prepare("INSERT OR IGNORE INTO bookmarks (created, updated, verified, title, description, url, hash, tags, alive, archived) VALUES (?,?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
 
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.Alive, b.Archived)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived)
 	if err != nil {
 		return err
 	}
@@ -58,4 +71,8 @@ func (b *Bookmark) FillMissing() {
 	b.Verified = time.Now()
 	b.Alive = true
 	b.Archived = false
+
+	if b.Tags == nil {
+		b.Tags = []string{}
+	}
 }

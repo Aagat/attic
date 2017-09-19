@@ -11,14 +11,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   description TEXT,
   url TEXT,
   hash TEXT UNIQUE,
+  tags TEXT,
   alive TINYINT,
   archived TINYINT
-);
-
-CREATE TABLE IF NOT EXISTS tags (
-  id INTEGER PRIMARY KEY,
-  bookmark_id INTEGER,
-  tag TEXT
 );
 
 CREATE INDEX IF NOT EXISTS urlhash ON bookmarks (hash);

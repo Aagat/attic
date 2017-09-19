@@ -75,7 +75,7 @@ func (h *Helpers) BookmarksParser(f *string, b *[]models.Bookmark) error {
 			isAnchor := token.Data == "a"
 			if isAnchor {
 				bookmark := models.Bookmark{
-					Tags:  []models.Tag{},
+					Tags:  []string{},
 					Alive: false,
 				}
 				for _, a := range token.Attr {

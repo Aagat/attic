@@ -32,6 +32,7 @@ func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 
 	for rows.Next() {
 		b := Bookmark{}
+		var tags string
 		err := rows.Scan(
 			&b.Id,
 			&b.Created,
@@ -41,12 +42,15 @@ func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 			&b.Description,
 			&b.Url,
 			&b.Hash,
+			&tags,
 			&b.Alive,
 			&b.Archived)
 
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		b.UnmarshalTags(tags)
 
 		bookmarks = append(bookmarks, b)
 	}
@@ -61,6 +65,7 @@ func (m *Models) GetAllBookmarks() (*[]Bookmark, error) {
 
 func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 	b := Bookmark{}
+	var tags string
 	statement, err := m.DB.Prepare("select * from bookmarks where id = ?")
 	if err != nil {
 		return nil, err
@@ -75,9 +80,12 @@ func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 		&b.Description,
 		&b.Url,
 		&b.Hash,
+		&tags,
 		&b.Alive,
 		&b.Archived,
 	)
+
+	b.UnmarshalTags(tags)
 
 	if err != nil {
 		return nil, err
@@ -88,6 +96,7 @@ func (m *Models) GetBookmarkById(id int) (*Bookmark, error) {
 
 func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 	b := Bookmark{}
+	var tags string
 	statement, err := m.DB.Prepare("select * from bookmarks where hash = ?")
 	if err != nil {
 		return nil, err
@@ -102,9 +111,12 @@ func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 		&b.Description,
 		&b.Url,
 		&b.Hash,
+		&tags,
 		&b.Alive,
 		&b.Archived,
 	)
+
+	b.UnmarshalTags(tags)
 
 	if err != nil {
 		return nil, err
@@ -115,12 +127,12 @@ func (m *Models) GetBookmarkByHash(hash string) (*Bookmark, error) {
 
 func (m *Models) UpdateBookmarkById(b *Bookmark) error {
 	statement, err := m.DB.Prepare(`UPDATE bookmarks SET created=?,
-updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archived=? WHERE id=?;`)
+updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? , archived=? WHERE id=?;`)
 	if err != nil {
 		return err
 	}
 
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.Alive, b.Archived, b.Id)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Id)
 	if err != nil {
 		return err
 	}
@@ -130,12 +142,12 @@ updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archive
 
 func (m *Models) UpdateBookmarkByHash(b *Bookmark) error {
 	statement, err := m.DB.Prepare(`UPDATE bookmarks SET created=?,
-updated=?, verified=?, title=?, description=?, url=?, hash=?, alive =? , archived=? WHERE hash=?;`)
+updated=?, verified=?, title=?, description=?, url=?, hash=?, tags=?, alive =? , archived=? WHERE hash=?;`)
 	if err != nil {
 		return err
 	}
 
-	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.Alive, b.Archived, b.Hash)
+	_, err = statement.Exec(b.Created, b.Updated, b.Verified, b.Title, b.Description, b.Url, b.Hash, b.MarshalTags(), b.Alive, b.Archived, b.Hash)
 	if err != nil {
 		return err
 	}
