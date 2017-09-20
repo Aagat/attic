@@ -101,6 +101,8 @@ func (f *Fetcher) Worker(id int, jobs <-chan string, results chan<- *models.Book
 			metadata.Url = url
 			metadata.KeywordsToArray(metadata.RawKeywords)
 
+			b.Meta = *metadata
+
 			results <- metadata
 		} else {
 			errors <- url

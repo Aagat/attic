@@ -17,7 +17,7 @@ func buildMapping() mapping.IndexMapping {
 	bookmarkMapping := bleve.NewDocumentMapping()
 	bookmarkMapping.AddFieldMappingsAt("title", enFieldMapping)
 	bookmarkMapping.AddFieldMappingsAt("tags", enFieldMapping)
-	bookmarkMapping.AddFieldMappingsAt("notes", enFieldMapping)
+	bookmarkMapping.AddFieldMappingsAt("text", enFieldMapping)
 	bookmarkMapping.AddFieldMappingsAt("created", dateFieldMapping)
 	bookmarkMapping.AddFieldMappingsAt("last_updated", dateFieldMapping)
 	bookmarkMapping.AddFieldMappingsAt("last_verified", dateFieldMapping)
