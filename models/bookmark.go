@@ -94,7 +94,7 @@ func (b *Bookmark) FillMetadata() {
 		log.Println(err)
 	}
 
-	err = statement.QueryRow(b.Hash).Scan(
+	_ = statement.QueryRow(b.Hash).Scan(
 		&bm.Id,
 		&bm.Created,
 		&bm.Bookmark,
@@ -105,10 +105,6 @@ func (b *Bookmark) FillMetadata() {
 	)
 
 	bm.KeywordsToArray(keywords)
-
-	if err != nil {
-		log.Println(err)
-	}
 
 	b.Meta = bm
 }
