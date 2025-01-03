@@ -3,7 +3,8 @@
   "packages": [
     "pandoc@latest",
     "poppler_utils@latest",
-    "go@latest"
+    "go@latest",
+    "nodejs@latest"
   ],
   "shell": {
     "init_hook": [

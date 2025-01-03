@@ -1,1 +1,3 @@
 config.yaml
+scripts/puppeteer/extensions
+scripts/puppeteer/node_modules
