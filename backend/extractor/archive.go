@@ -46,6 +46,10 @@ func (a *archiveExtractor) extract(ctx context.Context, targetURL string) ([]byt
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("archive API returned status %d", resp.StatusCode)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
@@ -72,9 +76,17 @@ func (a *archiveExtractor) extract(ctx context.Context, targetURL string) ([]byt
 	}
 	defer archiveResp.Body.Close()
 
+	if archiveResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("archive returned status %d", archiveResp.StatusCode)
+	}
+
 	content, err := ioutil.ReadAll(archiveResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read archived content: %w", err)
+	}
+
+	if len(content) == 0 {
+		return nil, fmt.Errorf("archived content is empty")
 	}
 
 	return content, nil

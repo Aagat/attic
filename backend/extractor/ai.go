@@ -10,10 +10,10 @@ import (
 
 type aiExtractor struct {
 	llm       llm.LLM
-	puppeteer *integrations.Puppeteer
+	puppeteer integrations.Puppeteer
 }
 
-func newAIExtractor(llm llm.LLM, puppeteer *integrations.Puppeteer) *aiExtractor {
+func newAIExtractor(llm llm.LLM, puppeteer integrations.Puppeteer) *aiExtractor {
 	return &aiExtractor{
 		llm:       llm,
 		puppeteer: puppeteer,
@@ -41,6 +41,10 @@ func (a *aiExtractor) extract(ctx context.Context, url string) ([]byte, error) {
 	content, err := a.llm.ExtractContent(ctx, screenshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract content: %w", err)
+	}
+
+	if content == "" {
+		return nil, fmt.Errorf("no content extracted")
 	}
 
 	return []byte(content), nil

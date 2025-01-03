@@ -6,20 +6,26 @@ import (
 	"os/exec"
 )
 
-// Puppeteer provides browser automation capabilities
-type Puppeteer struct {
+// Puppeteer defines the interface for browser automation
+type Puppeteer interface {
+	ExtractWithReadability(ctx context.Context, url string) (string, error)
+	CaptureScreenshot(ctx context.Context, url string) ([]byte, error)
+}
+
+// puppeteerImpl provides browser automation capabilities
+type puppeteerImpl struct {
 	scriptPath string
 }
 
 // NewPuppeteer creates a new Puppeteer instance
-func NewPuppeteer(scriptPath string) *Puppeteer {
-	return &Puppeteer{
+func NewPuppeteer(scriptPath string) Puppeteer {
+	return &puppeteerImpl{
 		scriptPath: scriptPath,
 	}
 }
 
 // CaptureScreenshot takes a screenshot of a webpage
-func (p *Puppeteer) CaptureScreenshot(ctx context.Context, url string) ([]byte, error) {
+func (p *puppeteerImpl) CaptureScreenshot(ctx context.Context, url string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "screenshot", url)
 	output, err := cmd.Output()
 	if err != nil {
@@ -29,7 +35,7 @@ func (p *Puppeteer) CaptureScreenshot(ctx context.Context, url string) ([]byte, 
 }
 
 // ExtractWithReadability extracts content using Readability.js
-func (p *Puppeteer) ExtractWithReadability(ctx context.Context, url string) (string, error) {
+func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) (string, error) {
 	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "extract", url)
 	output, err := cmd.Output()
 	if err != nil {

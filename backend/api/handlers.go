@@ -23,7 +23,7 @@ func NewHandler(cfg *config.Config) (*handler, error) {
 	// Initialize LLM client
 	llmClient, err := llm.NewGeminiClient(llm.Config{
 		APIKey: cfg.LLMAPIKey,
-		Model:  "gemini-pro-vision",
+		Model:  cfg.Model,
 	})
 	if err != nil {
 		return nil, err

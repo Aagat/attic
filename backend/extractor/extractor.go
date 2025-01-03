@@ -10,16 +10,20 @@ import (
 	"github.com/aagat/attic/backend/integrations/llm"
 )
 
+var (
+	ErrNoContent = errors.New("failed to extract content from URL")
+)
+
 // Extractor handles content extraction from various sources
 type Extractor struct {
-	puppeteer *integrations.Puppeteer
+	puppeteer integrations.Puppeteer
 	llm       llm.LLM
 	ai        *aiExtractor
 	archive   *archiveExtractor
 }
 
 // NewExtractor creates a new Extractor instance
-func NewExtractor(puppeteer *integrations.Puppeteer, llm llm.LLM) *Extractor {
+func NewExtractor(puppeteer integrations.Puppeteer, llm llm.LLM) *Extractor {
 	return &Extractor{
 		puppeteer: puppeteer,
 		llm:       llm,
@@ -34,7 +38,7 @@ func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
 
 	// Try Readability first
 	content, err := e.puppeteer.ExtractWithReadability(ctx, url)
-	if err == nil {
+	if err == nil && content != "" {
 		return []byte(content), nil
 	}
 
@@ -44,13 +48,19 @@ func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
 		return aiContent, nil
 	}
 
-	// If AI fails, try archive
+	// If AI fails with paywall error, return immediately
+	if err != nil && err.Error() == "content is behind a paywall" {
+		return nil, err
+	}
+
+	// If AI fails for other reasons, try archive
 	archiveContent, err := e.archive.extract(ctx, url)
 	if err == nil {
 		return archiveContent, nil
 	}
 
-	return nil, errors.New("failed to extract content from URL")
+	// All methods failed
+	return nil, ErrNoContent
 }
 
 // ExtractFromFile extracts content from an uploaded file
