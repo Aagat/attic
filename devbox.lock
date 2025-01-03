@@ -1,0 +1,165 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "go@latest": {
+      "last_modified": "2024-12-23T21:10:33Z",
+      "resolved": "github:NixOS/nixpkgs/de1864217bfa9b5845f465e771e0ecb48b30e02d#go",
+      "source": "devbox-search",
+      "version": "1.23.4",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/bva4mymi5b2lhvvbccx8ipws89rar1d8-go-1.23.4",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/bva4mymi5b2lhvvbccx8ipws89rar1d8-go-1.23.4"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/9lvi0l2yf6bwamsjs5d5n9i57c6kbd2c-go-1.23.4",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/9lvi0l2yf6bwamsjs5d5n9i57c6kbd2c-go-1.23.4"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/sf1y7x29wvp9lppx5ya9h5b42fcmxb32-go-1.23.4",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/sf1y7x29wvp9lppx5ya9h5b42fcmxb32-go-1.23.4"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/jfv85qbj4vb1dafcg6kncg4vrbq2bbxv-go-1.23.4",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/jfv85qbj4vb1dafcg6kncg4vrbq2bbxv-go-1.23.4"
+        }
+      }
+    },
+    "pandoc@latest": {
+      "last_modified": "2024-12-23T21:10:33Z",
+      "resolved": "github:NixOS/nixpkgs/de1864217bfa9b5845f465e771e0ecb48b30e02d#pandoc",
+      "source": "devbox-search",
+      "version": "3.1.11.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/p0rdvm4kh7vzjnd2anrlavv21djrz4n8-pandoc-cli-3.1.11.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/p0rdvm4kh7vzjnd2anrlavv21djrz4n8-pandoc-cli-3.1.11.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/yva1cg84s5mv4qijnghjaz0djyhn2mi0-pandoc-cli-3.1.11.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/yva1cg84s5mv4qijnghjaz0djyhn2mi0-pandoc-cli-3.1.11.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1g7228zislzzv5kzk7j26js1wj2f6y1p-pandoc-cli-3.1.11.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/1g7228zislzzv5kzk7j26js1wj2f6y1p-pandoc-cli-3.1.11.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/haam466kpg80dc59blbxlbvm8wx3xyby-pandoc-cli-3.1.11.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/haam466kpg80dc59blbxlbvm8wx3xyby-pandoc-cli-3.1.11.1"
+        }
+      }
+    },
+    "poppler_utils@latest": {
+      "last_modified": "2024-12-23T21:10:33Z",
+      "resolved": "github:NixOS/nixpkgs/de1864217bfa9b5845f465e771e0ecb48b30e02d#poppler_utils",
+      "source": "devbox-search",
+      "version": "24.02.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/mxwzm0j885l9byv4g7zmidr1ricm3iay-poppler-utils-24.02.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/6hsbcrvc25d55r0lzrq8cba68l3v786n-poppler-utils-24.02.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/mxwzm0j885l9byv4g7zmidr1ricm3iay-poppler-utils-24.02.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/688vf8an71snkj4f1jhsz0yik5q26355-poppler-utils-24.02.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/agz014png85fmcm2p8i0y1f7zk0rpa4l-poppler-utils-24.02.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/688vf8an71snkj4f1jhsz0yik5q26355-poppler-utils-24.02.0"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/m32cak0m97bisnxcr2fd25l6x4806pg6-poppler-utils-24.02.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/ksbg9lfiib9nsb97c8qaph39h1g3ni5g-poppler-utils-24.02.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/m32cak0m97bisnxcr2fd25l6x4806pg6-poppler-utils-24.02.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/vfpvrshcqhnfdn3xb69c7wgcjk8am3a0-poppler-utils-24.02.0",
+              "default": true
+            },
+            {
+              "name": "dev",
+              "path": "/nix/store/g84fsmic2lx3zf5jwmylq7kq1ds91glp-poppler-utils-24.02.0-dev"
+            }
+          ],
+          "store_path": "/nix/store/vfpvrshcqhnfdn3xb69c7wgcjk8am3a0-poppler-utils-24.02.0"
+        }
+      }
+    }
+  }
+}

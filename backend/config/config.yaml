@@ -1,10 +1,35 @@
-# Server configuration
+# Attic - Kindle Content Converter Configuration
+
+# Server settings
+# Port on which the server will listen
+# Default: 8080
+# Environment variable: ATTIC_SERVER_PORT
 server_port: "8080"
 
-# Kindle email configuration
+# Kindle email settings
+# Your Kindle's email address (required)
+# This is the email address ending in @kindle.com
+# Environment variable: ATTIC_KINDLE_EMAIL
 kindle_email: "your-kindle@kindle.com"
+
+# Email sender settings
+# The email address that will send content to your Kindle (required)
+# Must be authorized in your Amazon Kindle settings
+# Environment variable: ATTIC_SENDER_EMAIL
 sender_email: "your-email@example.com"
+
+# App-specific password for the sender email (required)
+# For Gmail, create one at: https://myaccount.google.com/apppasswords
+# Environment variable: ATTIC_SENDER_PASSWORD
 sender_password: "your-app-specific-password"
 
-# API Keys
-llm_api_key: "your-llm-api-key" 
+# AI/LLM settings
+# Google Gemini API key (required)
+# Get one from: https://aistudio.google.com/apikey
+# Environment variable: ATTIC_LLM_API_KEY
+llm_api_key: "your-llm-api-key"
+
+# Gemini model to use
+# Default: gemini-2.0-flash-exp
+# Environment variable: ATTIC_MODEL
+model: "gemini-2.0-flash-exp" 
