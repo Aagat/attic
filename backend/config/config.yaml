@@ -1,0 +1,10 @@
+# Server configuration
+server_port: "8080"
+
+# Kindle email configuration
+kindle_email: "your-kindle@kindle.com"
+sender_email: "your-email@example.com"
+sender_password: "your-app-specific-password"
+
+# API Keys
+llm_api_key: "your-llm-api-key" 
