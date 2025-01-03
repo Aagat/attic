@@ -16,7 +16,10 @@ func main() {
 	}
 
 	// Initialize router
-	router := api.SetupRoutes()
+	router, err := api.SetupRoutes(cfg)
+	if err != nil {
+		log.Fatalf("Failed to setup routes: %v", err)
+	}
 
 	// Start server
 	log.Printf("Starting server on port %s", cfg.ServerPort)

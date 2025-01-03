@@ -4,15 +4,51 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/aagat/attic/backend/config"
 	"github.com/aagat/attic/backend/extractor"
 	"github.com/aagat/attic/backend/formatter"
+	"github.com/aagat/attic/backend/integrations"
+	"github.com/aagat/attic/backend/integrations/llm"
 	"github.com/aagat/attic/backend/mailer"
 	"github.com/aagat/attic/backend/models"
 )
 
-// AddToKindleHandler processes requests to convert and send content to Kindle
-func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
+type handler struct {
+	extractor *extractor.Extractor
+	formatter *formatter.Formatter
+	mailer    *mailer.Mailer
+}
 
+func NewHandler(cfg *config.Config) (*handler, error) {
+	// Initialize LLM client
+	llmClient, err := llm.NewGeminiClient(llm.Config{
+		APIKey: cfg.LLMAPIKey,
+		Model:  "gemini-pro-vision",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize Puppeteer
+	puppeteer := integrations.NewPuppeteer("scripts/puppeteer.js")
+
+	// Initialize components
+	ext := extractor.NewExtractor(puppeteer, llmClient)
+	fmt, err := formatter.NewFormatter()
+	if err != nil {
+		return nil, err
+	}
+	mlr := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
+
+	return &handler{
+		extractor: ext,
+		formatter: fmt,
+		mailer:    mlr,
+	}, nil
+}
+
+// AddToKindleHandler processes requests to convert and send content to Kindle
+func (h *handler) AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request format")
@@ -32,7 +68,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract content based on type
 	if requestType == "url" {
 		url := r.FormValue("url")
-		content, err = extractor.ExtractFromURL(url)
+		content, err = h.extractor.ExtractFromURL(url)
 	} else {
 		file, _, err := r.FormFile("file")
 		if err != nil {
@@ -40,7 +76,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer file.Close()
-		content, err = extractor.ExtractFromFile(file)
+		content, err = h.extractor.ExtractFromFile(file)
 	}
 
 	if err != nil {
@@ -49,14 +85,14 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Format content to PDF
-	pdf, err := formatter.FormatToPDF(content)
+	pdf, err := h.formatter.FormatToPDF(content)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to format content")
 		return
 	}
 
 	// Send to Kindle
-	if err := mailer.SendToKindle(pdf); err != nil {
+	if err := h.mailer.SendToKindle(pdf); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
 		return
 	}
