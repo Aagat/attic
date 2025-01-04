@@ -75,6 +75,12 @@ func checkDependencies() error {
 		return fmt.Errorf("pandoc is not installed")
 	}
 
+	// Check for xelatex
+	_, err = exec.LookPath("xelatex")
+	if err != nil {
+		return fmt.Errorf("xelatex is not installed")
+	}
+
 	// Check for poppler-utils
 	_, err = exec.LookPath("pdfinfo")
 	if err != nil {

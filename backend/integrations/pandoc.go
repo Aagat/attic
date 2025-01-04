@@ -20,7 +20,7 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string) ([]byte, error) {
 	cmd := exec.Command("pandoc",
 		"--from", from,
 		"--to", "pdf",
-		"--pdf-engine", "wkhtmltopdf",
+		"--pdf-engine", "xelatex",
 		"--standalone")
 
 	stdin, err := cmd.StdinPipe()

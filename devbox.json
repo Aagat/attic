@@ -4,7 +4,9 @@
     "pandoc@latest",
     "poppler_utils@latest",
     "go@latest",
-    "nodejs@latest"
+    "nodejs@latest",
+    "texliveSmall@latest",
+    "pdftk@latest"
   ],
   "shell": {
     "init_hook": [
