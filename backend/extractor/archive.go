@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -54,7 +54,7 @@ func (a *archiveExtractor) extract(ctx context.Context, targetURL string) ([]byt
 		return nil, fmt.Errorf("archive API returned status %d", resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -84,7 +84,7 @@ func (a *archiveExtractor) extract(ctx context.Context, targetURL string) ([]byt
 		return nil, fmt.Errorf("archive returned status %d", archiveResp.StatusCode)
 	}
 
-	content, err := ioutil.ReadAll(archiveResp.Body)
+	content, err := io.ReadAll(archiveResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read archived content: %w", err)
 	}

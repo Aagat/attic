@@ -48,16 +48,31 @@ func NewExtractor(puppeteer integrations.Puppeteer, llm llm.LLM) *Extractor {
 	}
 }
 
+// ExtractedContent represents the content and metadata extracted from a source
+type ExtractedContent struct {
+	Content  []byte
+	Metadata map[string]string
+}
+
 // ExtractFromURL extracts content from a given URL
-func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
+func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 	ctx := context.Background()
 
 	// Try Readability first
 	log.Printf("Attempting to extract content using Readability from %s", url)
-	content, err := e.puppeteer.ExtractWithReadability(ctx, url)
-	if err == nil && content != "" {
+	result, err := e.puppeteer.ExtractWithReadability(ctx, url)
+	if err == nil && result.Content != "" {
 		log.Printf("Successfully extracted content using Readability from %s", url)
-		return []byte(content), nil
+		metadata := map[string]string{
+			"Title":   result.Title,
+			"Author":  result.Byline,
+			"Excerpt": result.Excerpt,
+			"Source":  url,
+		}
+		return &ExtractedContent{
+			Content:  []byte(result.Content),
+			Metadata: metadata,
+		}, nil
 	}
 	if err != nil {
 		log.Printf("Readability extraction failed for %s: %v", url, err)
@@ -68,7 +83,13 @@ func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
 	aiContent, err := e.ai.extract(ctx, url)
 	if err == nil {
 		log.Printf("Successfully extracted content using AI from %s", url)
-		return aiContent, nil
+		metadata := map[string]string{
+			"Source": url,
+		}
+		return &ExtractedContent{
+			Content:  aiContent,
+			Metadata: metadata,
+		}, nil
 	}
 	if err != nil {
 		if errors.Is(err, ErrPaywall) {
@@ -83,7 +104,13 @@ func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
 	archiveContent, err := e.archive.extract(ctx, url)
 	if err == nil {
 		log.Printf("Successfully extracted content from archive for %s", url)
-		return archiveContent, nil
+		metadata := map[string]string{
+			"Source": url,
+		}
+		return &ExtractedContent{
+			Content:  archiveContent,
+			Metadata: metadata,
+		}, nil
 	}
 	if err != nil {
 		log.Printf("Archive extraction failed for %s: %v", url, err)
@@ -95,7 +122,7 @@ func (e *Extractor) ExtractFromURL(url string) ([]byte, error) {
 }
 
 // ExtractFromFile extracts content from an uploaded file
-func (e *Extractor) ExtractFromFile(file io.Reader, filename string) ([]byte, error) {
+func (e *Extractor) ExtractFromFile(file io.Reader, filename string) (*ExtractedContent, error) {
 	// Read the entire file
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
@@ -112,20 +139,38 @@ func (e *Extractor) ExtractFromFile(file io.Reader, filename string) ([]byte, er
 
 	log.Printf("Processing file %s with MIME type %s", filename, mimeType)
 
+	metadata := map[string]string{
+		"Title":  filename,
+		"Source": "File Upload",
+	}
+
 	switch {
 	case mimeType == "application/pdf":
 		// PDF files can be passed through directly
-		return content, nil
+		return &ExtractedContent{
+			Content:  content,
+			Metadata: metadata,
+		}, nil
 	case mimeType == "application/epub+zip":
 		// TODO: Implement EPUB conversion
 		return nil, fmt.Errorf("EPUB conversion not implemented yet")
 	case strings.HasPrefix(mimeType, "text/"):
 		// Text files can be passed through directly
-		return content, nil
+		return &ExtractedContent{
+			Content:  content,
+			Metadata: metadata,
+		}, nil
 	case strings.HasPrefix(mimeType, "image/"):
 		// For images, use AI to extract any text content
 		log.Printf("Attempting to extract text from image %s", filename)
-		return e.ai.extract(context.Background(), "", content)
+		aiContent, err := e.ai.extract(context.Background(), "", content)
+		if err != nil {
+			return nil, err
+		}
+		return &ExtractedContent{
+			Content:  aiContent,
+			Metadata: metadata,
+		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedFileType, mimeType)
 	}

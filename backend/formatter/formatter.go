@@ -2,6 +2,8 @@ package formatter
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
 
 	"github.com/aagat/attic/backend/integrations"
@@ -25,26 +27,44 @@ func NewFormatter() (*Formatter, error) {
 	}, nil
 }
 
-// FormatToPDF converts content to PDF format using Pandoc
-func (f *Formatter) FormatToPDF(content []byte) ([]byte, error) {
+// FormatToPDF converts content to PDF format using Pandoc and saves it to a file
+func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string) (string, error) {
 	// Convert content to PDF
 	pdf, err := f.pandoc.ConvertHTMLToPDF(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert to PDF: %w", err)
+		return "", fmt.Errorf("failed to convert to PDF: %w", err)
 	}
 
 	// Add metadata
-	metadata := map[string]string{
-		"Creator": "Attic Kindle Converter",
-		"Title":   "Web Article",
+	if metadata == nil {
+		metadata = map[string]string{
+			"Creator": "Attic Kindle Converter",
+		}
 	}
 
 	pdf, err = f.poppler.AddMetadata(pdf, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add metadata: %w", err)
+		return "", fmt.Errorf("failed to add metadata: %w", err)
 	}
 
-	return pdf, nil
+	// Save PDF to a temporary file
+	tmpFile, err := ioutil.TempFile("", "attic-*.pdf")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	if _, err := tmpFile.Write(pdf); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to write PDF file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to close PDF file: %w", err)
+	}
+
+	return tmpFile.Name(), nil
 }
 
 // checkDependencies verifies that required external tools are available

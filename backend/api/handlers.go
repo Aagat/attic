@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/json"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
 
 	"github.com/aagat/attic/backend/config"
 	"github.com/aagat/attic/backend/extractor"
@@ -15,6 +17,8 @@ import (
 
 // AddToKindleHandler processes requests to convert and send content to Kindle
 func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	// Get configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -40,10 +44,10 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize extractor
-	extractor := extractor.NewExtractor(puppeteer, llmClient)
+	e := extractor.NewExtractor(puppeteer, llmClient)
 
 	// Parse multipart form
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err = r.ParseMultipartForm(32 << 20); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request format")
 		return
 	}
@@ -55,20 +59,22 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var content []byte
+	var extracted *extractor.ExtractedContent
 
 	// Extract content based on type
 	if requestType == "url" {
 		url := r.FormValue("url")
-		content, err = extractor.ExtractFromURL(url)
+		extracted, err = e.ExtractFromURL(url)
 	} else {
-		file, _, err := r.FormFile("file")
+		var file multipart.File
+		var header *multipart.FileHeader
+		file, header, err = r.FormFile("file")
 		if err != nil {
 			respondWithError(w, http.StatusBadRequest, "Failed to read file")
 			return
 		}
 		defer file.Close()
-		content, err = extractor.ExtractFromFile(file, r.FormValue("filename"))
+		extracted, err = e.ExtractFromFile(file, header.Filename)
 	}
 
 	if err != nil {
@@ -85,19 +91,32 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pdf, err := pdfFormatter.FormatToPDF(content)
+	pdfPath, err := pdfFormatter.FormatToPDF(extracted.Content, extracted.Metadata)
 	if err != nil {
 		log.Printf("PDF formatting failed: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to format content")
 		return
 	}
 
+	// Read the PDF file
+	pdfContent, err := os.ReadFile(pdfPath)
+	if err != nil {
+		log.Printf("Failed to read PDF file: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
+		return
+	}
+
 	// Send to Kindle
 	mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
-	if err := mailer.SendToKindle(pdf); err != nil {
+	if err = mailer.SendToKindle(pdfContent); err != nil {
 		log.Printf("Failed to send to Kindle: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
 		return
+	}
+
+	// Clean up the temporary PDF file
+	if err = os.Remove(pdfPath); err != nil {
+		log.Printf("Failed to clean up PDF file: %v", err)
 	}
 
 	// Respond with success

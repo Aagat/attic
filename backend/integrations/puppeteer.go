@@ -9,10 +9,19 @@ import (
 	"path/filepath"
 )
 
+// ReadabilityContent represents the content and metadata extracted from a webpage using Readability.js
+type ReadabilityContent struct {
+	Content string `json:"content"`
+	Title   string `json:"title"`
+	Byline  string `json:"byline"`
+	Excerpt string `json:"excerpt"`
+	Error   string `json:"error,omitempty"`
+}
+
 // Puppeteer provides methods for browser automation and content extraction
 type Puppeteer interface {
 	// ExtractWithReadability extracts content from a URL using Readability.js
-	ExtractWithReadability(ctx context.Context, url string) (string, error)
+	ExtractWithReadability(ctx context.Context, url string) (*ReadabilityContent, error)
 	// CaptureScreenshot takes a screenshot of a webpage
 	CaptureScreenshot(ctx context.Context, url string) ([]byte, error)
 }
@@ -41,7 +50,7 @@ func NewPuppeteer() (Puppeteer, error) {
 }
 
 // ExtractWithReadability extracts content from a URL using Readability.js
-func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) (string, error) {
+func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) (*ReadabilityContent, error) {
 	// Run the Node.js script
 	cmd := exec.CommandContext(ctx, "node",
 		filepath.Join(p.scriptPath, "extract.js"),
@@ -53,24 +62,20 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to run extract script: %w, stderr: %s", err, stderr.String())
+		return nil, fmt.Errorf("failed to run extract script: %w, stderr: %s", err, stderr.String())
 	}
 
 	// Parse the JSON response
-	var result struct {
-		Content string `json:"content"`
-		Error   string `json:"error,omitempty"`
-	}
-
+	var result ReadabilityContent
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		return "", fmt.Errorf("failed to parse script output: %w", err)
+		return nil, fmt.Errorf("failed to parse script output: %w", err)
 	}
 
 	if result.Error != "" {
-		return "", fmt.Errorf("script error: %s", result.Error)
+		return nil, fmt.Errorf("script error: %s", result.Error)
 	}
 
-	return result.Content, nil
+	return &result, nil
 }
 
 // CaptureScreenshot takes a screenshot of a webpage
