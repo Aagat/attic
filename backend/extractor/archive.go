@@ -10,11 +10,15 @@ import (
 	"time"
 )
 
+// archiveExtractor implements archiveExtractorInterface for Internet Archive
 type archiveExtractor struct {
 	client *http.Client
 }
 
-func newArchiveExtractor() *archiveExtractor {
+// Verify interface implementation
+var _ archiveExtractorInterface = (*archiveExtractor)(nil)
+
+func newArchiveExtractor() archiveExtractorInterface {
 	return &archiveExtractor{
 		client: &http.Client{
 			Timeout: 10 * time.Second,

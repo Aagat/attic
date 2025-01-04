@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/aagat/attic/backend/config"
@@ -10,45 +11,37 @@ import (
 	"github.com/aagat/attic/backend/integrations"
 	"github.com/aagat/attic/backend/integrations/llm"
 	"github.com/aagat/attic/backend/mailer"
-	"github.com/aagat/attic/backend/models"
 )
 
-type handler struct {
-	extractor *extractor.Extractor
-	formatter *formatter.Formatter
-	mailer    *mailer.Mailer
-}
+// AddToKindleHandler processes requests to convert and send content to Kindle
+func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
+	// Get configuration
+	cfg, err := config.Load()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to load configuration")
+		return
+	}
 
-func NewHandler(cfg *config.Config) (*handler, error) {
 	// Initialize LLM client
 	llmClient, err := llm.NewGeminiClient(llm.Config{
 		APIKey: cfg.LLMAPIKey,
 		Model:  cfg.Model,
 	})
 	if err != nil {
-		return nil, err
+		respondWithError(w, http.StatusInternalServerError, "Failed to initialize LLM client")
+		return
 	}
 
 	// Initialize Puppeteer
-	puppeteer := integrations.NewPuppeteer("scripts/puppeteer.js")
-
-	// Initialize components
-	ext := extractor.NewExtractor(puppeteer, llmClient)
-	fmt, err := formatter.NewFormatter()
+	puppeteer, err := integrations.NewPuppeteer()
 	if err != nil {
-		return nil, err
+		respondWithError(w, http.StatusInternalServerError, "Failed to initialize Puppeteer")
+		return
 	}
-	mlr := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
 
-	return &handler{
-		extractor: ext,
-		formatter: fmt,
-		mailer:    mlr,
-	}, nil
-}
+	// Initialize extractor
+	extractor := extractor.NewExtractor(puppeteer, llmClient)
 
-// AddToKindleHandler processes requests to convert and send content to Kindle
-func (h *handler) AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request format")
@@ -63,12 +56,11 @@ func (h *handler) AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var content []byte
-	var err error
 
 	// Extract content based on type
 	if requestType == "url" {
 		url := r.FormValue("url")
-		content, err = h.extractor.ExtractFromURL(url)
+		content, err = extractor.ExtractFromURL(url)
 	} else {
 		file, _, err := r.FormFile("file")
 		if err != nil {
@@ -76,31 +68,42 @@ func (h *handler) AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer file.Close()
-		content, err = h.extractor.ExtractFromFile(file)
+		content, err = extractor.ExtractFromFile(file, r.FormValue("filename"))
 	}
 
 	if err != nil {
+		log.Printf("Content extraction failed: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to extract content")
 		return
 	}
 
 	// Format content to PDF
-	pdf, err := h.formatter.FormatToPDF(content)
+	pdfFormatter, err := formatter.NewFormatter()
 	if err != nil {
+		log.Printf("Failed to initialize formatter: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to initialize formatter")
+		return
+	}
+
+	pdf, err := pdfFormatter.FormatToPDF(content)
+	if err != nil {
+		log.Printf("PDF formatting failed: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to format content")
 		return
 	}
 
 	// Send to Kindle
-	if err := h.mailer.SendToKindle(pdf); err != nil {
+	mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
+	if err := mailer.SendToKindle(pdf); err != nil {
+		log.Printf("Failed to send to Kindle: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
 		return
 	}
 
 	// Respond with success
-	response := models.AddToKindleResponse{
-		Status:  "success",
-		Message: "Content successfully sent to Kindle",
+	response := map[string]string{
+		"status":  "success",
+		"message": "Content successfully sent to Kindle",
 	}
 	respondWithJSON(w, http.StatusOK, response)
 }

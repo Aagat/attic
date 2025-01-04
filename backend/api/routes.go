@@ -7,19 +7,13 @@ import (
 
 // SetupRoutes configures and returns the router with all API routes
 func SetupRoutes(cfg *config.Config) (*mux.Router, error) {
-	// Create handler
-	h, err := NewHandler(cfg)
-	if err != nil {
-		return nil, err
-	}
-
 	r := mux.NewRouter()
 
 	// Add middleware
 	r.Use(loggingMiddleware)
 
 	// API routes
-	r.HandleFunc("/add-to-kindle", h.AddToKindleHandler).Methods("POST")
+	r.HandleFunc("/add-to-kindle", AddToKindleHandler).Methods("POST")
 
 	return r, nil
 }
