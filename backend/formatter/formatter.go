@@ -3,27 +3,31 @@ package formatter
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/aagat/attic/backend/integrations"
 )
 
 // Formatter handles content formatting and PDF generation
 type Formatter struct {
-	pandoc  *integrations.Pandoc
-	poppler *integrations.Poppler
+	pandoc      *integrations.Pandoc
+	poppler     *integrations.Poppler
+	storagePath string
 }
 
 // NewFormatter creates a new Formatter instance
-func NewFormatter() (*Formatter, error) {
+func NewFormatter(storagePath string) (*Formatter, error) {
 	if err := checkDependencies(); err != nil {
 		return nil, err
 	}
 
 	return &Formatter{
-		pandoc:  integrations.NewPandoc(),
-		poppler: integrations.NewPoppler(),
+		pandoc:      integrations.NewPandoc(),
+		poppler:     integrations.NewPoppler(),
+		storagePath: storagePath,
 	}, nil
 }
 
@@ -47,24 +51,36 @@ func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string) (str
 		return "", fmt.Errorf("failed to add metadata: %w", err)
 	}
 
-	// Save PDF to a temporary file
-	tmpFile, err := ioutil.TempFile("", "attic-*.pdf")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+	// Generate a unique filename using timestamp and metadata
+	timestamp := time.Now().Format("20060102-150405")
+	title := sanitizeFilename(metadata["Title"])
+	if title == "" {
+		title = "untitled"
 	}
+	filename := fmt.Sprintf("%s-%s.pdf", timestamp, title)
+	pdfPath := filepath.Join(f.storagePath, filename)
 
-	if _, err := tmpFile.Write(pdf); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+	// Save PDF to file
+	if err := ioutil.WriteFile(pdfPath, pdf, 0644); err != nil {
 		return "", fmt.Errorf("failed to write PDF file: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpFile.Name())
-		return "", fmt.Errorf("failed to close PDF file: %w", err)
-	}
+	return pdfPath, nil
+}
 
-	return tmpFile.Name(), nil
+// sanitizeFilename removes or replaces characters that are not safe for filenames
+func sanitizeFilename(name string) string {
+	// Replace unsafe characters with underscores
+	unsafe := []string{"/", "\\", "?", "%", "*", ":", "|", "\"", "<", ">", ".", " "}
+	safe := name
+	for _, char := range unsafe {
+		safe = filepath.Clean(strings.ReplaceAll(safe, char, "_"))
+	}
+	// Limit the length
+	if len(safe) > 50 {
+		safe = safe[:50]
+	}
+	return safe
 }
 
 // checkDependencies verifies that required external tools are available

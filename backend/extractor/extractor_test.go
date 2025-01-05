@@ -5,19 +5,21 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/aagat/attic/backend/integrations"
 )
 
 // Mock implementations for testing
 type mockPuppeteer struct {
 	captureScreenshotFunc      func(ctx context.Context, url string) ([]byte, error)
-	extractWithReadabilityFunc func(ctx context.Context, url string) (string, error)
+	extractWithReadabilityFunc func(ctx context.Context, url string) (*integrations.ReadabilityContent, error)
 }
 
 func (m *mockPuppeteer) CaptureScreenshot(ctx context.Context, url string) ([]byte, error) {
 	return m.captureScreenshotFunc(ctx, url)
 }
 
-func (m *mockPuppeteer) ExtractWithReadability(ctx context.Context, url string) (string, error) {
+func (m *mockPuppeteer) ExtractWithReadability(ctx context.Context, url string) (*integrations.ReadabilityContent, error) {
 	return m.extractWithReadabilityFunc(ctx, url)
 }
 
@@ -47,7 +49,7 @@ func TestExtractFromURL(t *testing.T) {
 		name           string
 		url            string
 		readabilityErr error
-		readabilityRes string
+		readabilityRes *integrations.ReadabilityContent
 		screenshotErr  error
 		screenshotRes  []byte
 		paywallErr     error
@@ -58,14 +60,26 @@ func TestExtractFromURL(t *testing.T) {
 		archiveRes     []byte
 		wantErr        error
 		wantContent    []byte
+		wantMetadata   map[string]string
 	}{
 		{
 			name:           "readability success",
 			url:            "https://example.com",
 			readabilityErr: nil,
-			readabilityRes: "test content",
-			wantErr:        nil,
-			wantContent:    []byte("test content"),
+			readabilityRes: &integrations.ReadabilityContent{
+				Content: "test content",
+				Title:   "Test Title",
+				Byline:  "Test Author",
+				Excerpt: "Test Excerpt",
+			},
+			wantErr:     nil,
+			wantContent: []byte("test content"),
+			wantMetadata: map[string]string{
+				"Title":   "Test Title",
+				"Author":  "Test Author",
+				"Excerpt": "Test Excerpt",
+				"Source":  "https://example.com",
+			},
 		},
 		{
 			name:           "readability fails, ai success",
@@ -76,6 +90,9 @@ func TestExtractFromURL(t *testing.T) {
 			aiRes:          "ai content",
 			wantErr:        nil,
 			wantContent:    []byte("ai content"),
+			wantMetadata: map[string]string{
+				"Source": "https://example.com",
+			},
 		},
 		{
 			name:           "paywall detected",
@@ -104,7 +121,7 @@ func TestExtractFromURL(t *testing.T) {
 				captureScreenshotFunc: func(ctx context.Context, url string) ([]byte, error) {
 					return tt.screenshotRes, tt.screenshotErr
 				},
-				extractWithReadabilityFunc: func(ctx context.Context, url string) (string, error) {
+				extractWithReadabilityFunc: func(ctx context.Context, url string) (*integrations.ReadabilityContent, error) {
 					return tt.readabilityRes, tt.readabilityErr
 				},
 			}
@@ -140,10 +157,15 @@ func TestExtractFromURL(t *testing.T) {
 				return
 			}
 
-			// Check content if no error expected
+			// Check content and metadata if no error expected
 			if tt.wantErr == nil {
-				if string(got) != string(tt.wantContent) {
-					t.Errorf("ExtractFromURL() = %v, want %v", string(got), string(tt.wantContent))
+				if !bytes.Equal(got.Content, tt.wantContent) {
+					t.Errorf("ExtractFromURL() content = %v, want %v", string(got.Content), string(tt.wantContent))
+				}
+				for k, v := range tt.wantMetadata {
+					if got.Metadata[k] != v {
+						t.Errorf("ExtractFromURL() metadata[%s] = %v, want %v", k, got.Metadata[k], v)
+					}
 				}
 			}
 		})
@@ -152,13 +174,14 @@ func TestExtractFromURL(t *testing.T) {
 
 func TestExtractFromFile(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     []byte
-		filename    string
-		aiErr       error
-		aiRes       string
-		wantErr     error
-		wantContent []byte
+		name         string
+		content      []byte
+		filename     string
+		aiErr        error
+		aiRes        string
+		wantErr      error
+		wantContent  []byte
+		wantMetadata map[string]string
 	}{
 		{
 			name:        "pdf file",
@@ -166,6 +189,10 @@ func TestExtractFromFile(t *testing.T) {
 			filename:    "test.pdf",
 			wantErr:     nil,
 			wantContent: []byte("pdf content"),
+			wantMetadata: map[string]string{
+				"Title":  "test.pdf",
+				"Source": "File Upload",
+			},
 		},
 		{
 			name:        "text file",
@@ -173,6 +200,10 @@ func TestExtractFromFile(t *testing.T) {
 			filename:    "test.txt",
 			wantErr:     nil,
 			wantContent: []byte("text content"),
+			wantMetadata: map[string]string{
+				"Title":  "test.txt",
+				"Source": "File Upload",
+			},
 		},
 		{
 			name:        "image file",
@@ -181,21 +212,23 @@ func TestExtractFromFile(t *testing.T) {
 			aiRes:       "extracted text from image",
 			wantErr:     nil,
 			wantContent: []byte("extracted text from image"),
+			wantMetadata: map[string]string{
+				"Title":  "test.png",
+				"Source": "File Upload",
+			},
 		},
 		{
-			name:        "image extraction fails",
-			content:     []byte("image data"),
-			filename:    "test.jpg",
-			aiErr:       errors.New("failed to extract text"),
-			wantErr:     errors.New("failed to extract text"),
-			wantContent: nil,
+			name:     "image extraction fails",
+			content:  []byte("image data"),
+			filename: "test.jpg",
+			aiErr:    errors.New("failed to extract text"),
+			wantErr:  errors.New("failed to extract text"),
 		},
 		{
-			name:        "unsupported file type",
-			content:     []byte("binary data"),
-			filename:    "test.exe",
-			wantErr:     ErrUnsupportedFileType,
-			wantContent: nil,
+			name:     "unsupported file type",
+			content:  []byte("binary data"),
+			filename: "test.exe",
+			wantErr:  ErrUnsupportedFileType,
 		},
 		{
 			name:        "empty file",
@@ -203,6 +236,10 @@ func TestExtractFromFile(t *testing.T) {
 			filename:    "test.txt",
 			wantErr:     nil,
 			wantContent: []byte{},
+			wantMetadata: map[string]string{
+				"Title":  "test.txt",
+				"Source": "File Upload",
+			},
 		},
 	}
 
@@ -213,8 +250,8 @@ func TestExtractFromFile(t *testing.T) {
 				captureScreenshotFunc: func(ctx context.Context, url string) ([]byte, error) {
 					return nil, errors.New("not used")
 				},
-				extractWithReadabilityFunc: func(ctx context.Context, url string) (string, error) {
-					return "", errors.New("not used")
+				extractWithReadabilityFunc: func(ctx context.Context, url string) (*integrations.ReadabilityContent, error) {
+					return nil, errors.New("not used")
 				},
 			}
 
@@ -250,10 +287,15 @@ func TestExtractFromFile(t *testing.T) {
 				return
 			}
 
-			// Check content if no error expected
+			// Check content and metadata if no error expected
 			if tt.wantErr == nil {
-				if !bytes.Equal(got, tt.wantContent) {
-					t.Errorf("ExtractFromFile() = %v, want %v", got, tt.wantContent)
+				if !bytes.Equal(got.Content, tt.wantContent) {
+					t.Errorf("ExtractFromFile() content = %v, want %v", string(got.Content), string(tt.wantContent))
+				}
+				for k, v := range tt.wantMetadata {
+					if got.Metadata[k] != v {
+						t.Errorf("ExtractFromFile() metadata[%s] = %v, want %v", k, got.Metadata[k], v)
+					}
 				}
 			}
 		})

@@ -84,7 +84,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Format content to PDF
-	pdfFormatter, err := formatter.NewFormatter()
+	pdfFormatter, err := formatter.NewFormatter(cfg.StoragePath)
 	if err != nil {
 		log.Printf("Failed to initialize formatter: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Failed to initialize formatter")
@@ -98,31 +98,42 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read the PDF file
-	pdfContent, err := os.ReadFile(pdfPath)
-	if err != nil {
-		log.Printf("Failed to read PDF file: %v", err)
+	// Read the PDF file to verify it's valid
+	if _, err := os.ReadFile(pdfPath); err != nil {
+		log.Printf("Failed to read PDF file at %s: %v", pdfPath, err)
+		// We only delete files that failed to generate properly
+		if err := os.Remove(pdfPath); err != nil {
+			log.Printf("Failed to clean up invalid PDF file: %v", err)
+		}
 		respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
 		return
 	}
 
-	// Send to Kindle
-	mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
-	if err = mailer.SendToKindle(pdfContent); err != nil {
-		log.Printf("Failed to send to Kindle: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
-		return
+	log.Printf("Successfully generated PDF at: %s", pdfPath)
+
+	// Send to Kindle if email is enabled
+	if cfg.EmailEnabled {
+		pdfContent, err := os.ReadFile(pdfPath)
+		if err != nil {
+			log.Printf("Failed to read PDF file for email: %v", err)
+			respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
+			return
+		}
+
+		mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
+		if err = mailer.SendToKindle(pdfContent); err != nil {
+			log.Printf("Failed to send to Kindle: %v", err)
+			respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
+			return
+		}
+		log.Printf("Successfully sent PDF to Kindle")
 	}
 
-	// Clean up the temporary PDF file
-	if err = os.Remove(pdfPath); err != nil {
-		log.Printf("Failed to clean up PDF file: %v", err)
-	}
-
-	// Respond with success
+	// Respond with success and file path
 	response := map[string]string{
-		"status":  "success",
-		"message": "Content successfully sent to Kindle",
+		"status":   "success",
+		"message":  "PDF generated successfully",
+		"pdf_path": pdfPath,
 	}
 	respondWithJSON(w, http.StatusOK, response)
 }
