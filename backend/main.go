@@ -1,29 +1,32 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/aagat/attic/backend/api"
 	"github.com/aagat/attic/backend/config"
+	"github.com/aagat/attic/backend/logger"
 )
 
 func main() {
+	log := logger.WithComponent("server")
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
-	// Initialize router
+	// Create router
 	router, err := api.SetupRoutes(cfg)
 	if err != nil {
-		log.Fatalf("Failed to setup routes: %v", err)
+		log.Fatal().Err(err).Msg("Failed to setup routes")
 	}
 
 	// Start server
-	log.Printf("Starting server on port %s", cfg.ServerPort)
-	if err := http.ListenAndServe(":"+cfg.ServerPort, router); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	addr := ":" + cfg.ServerPort
+	log.Info().Str("port", cfg.ServerPort).Msg("Starting server")
+	if err := http.ListenAndServe(addr, router); err != nil {
+		log.Fatal().Err(err).Str("addr", addr).Msg("Server failed to start")
 	}
 }

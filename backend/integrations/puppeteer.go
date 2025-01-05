@@ -1,12 +1,14 @@
 package integrations
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/aagat/attic/backend/logger"
+	"github.com/rs/zerolog"
 )
 
 // ReadabilityContent represents the content and metadata extracted from a webpage using Readability.js
@@ -18,82 +20,75 @@ type ReadabilityContent struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// Puppeteer provides methods for browser automation and content extraction
+// Puppeteer defines the interface for browser automation and content extraction
 type Puppeteer interface {
-	// ExtractWithReadability extracts content from a URL using Readability.js
 	ExtractWithReadability(ctx context.Context, url string) (*ReadabilityContent, error)
-	// CaptureScreenshot takes a screenshot of a webpage
 	CaptureScreenshot(ctx context.Context, url string) ([]byte, error)
 }
 
-// puppeteerImpl implements the Puppeteer interface using Node.js and Puppeteer
+// puppeteerImpl provides PDF manipulation functionality using poppler-utils
 type puppeteerImpl struct {
 	scriptPath string
+	log        zerolog.Logger
 }
 
 // NewPuppeteer creates a new Puppeteer instance
 func NewPuppeteer() (Puppeteer, error) {
-	// Check if Node.js is installed
-	if _, err := exec.LookPath("node"); err != nil {
-		return nil, fmt.Errorf("node.js is not installed: %w", err)
-	}
-
-	// Get the absolute path to the script directory
-	scriptPath, err := filepath.Abs("scripts/puppeteer")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get script path: %w", err)
-	}
-
 	return &puppeteerImpl{
-		scriptPath: scriptPath,
+		scriptPath: filepath.Join("scripts", "puppeteer", "extract.js"),
+		log:        logger.WithComponent("puppeteer"),
 	}, nil
 }
 
 // ExtractWithReadability extracts content from a URL using Readability.js
 func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) (*ReadabilityContent, error) {
-	// Run the Node.js script
-	cmd := exec.CommandContext(ctx, "node",
-		filepath.Join(p.scriptPath, "extract.js"),
-		"--url", url,
-	)
+	p.log.Info().Str("url", url).Msg("Extracting content using Readability")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to run extract script: %w, stderr: %s", err, stderr.String())
+	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "--url", url)
+	output, err := cmd.Output()
+	if err != nil {
+		var stderr string
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		p.log.Error().Err(err).Str("stderr", stderr).Msg("Failed to extract content")
+		return nil, fmt.Errorf("puppeteer failed: %w", err)
 	}
 
-	// Parse the JSON response
-	var result ReadabilityContent
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse script output: %w", err)
+	var content ReadabilityContent
+	if err := json.Unmarshal(output, &content); err != nil {
+		p.log.Error().Err(err).Msg("Failed to parse extracted content")
+		return nil, fmt.Errorf("failed to parse content: %w", err)
 	}
 
-	if result.Error != "" {
-		return nil, fmt.Errorf("script error: %s", result.Error)
-	}
+	p.log.Info().
+		Str("url", url).
+		Str("title", content.Title).
+		Int("content_length", len(content.Content)).
+		Msg("Successfully extracted content")
 
-	return &result, nil
+	return &content, nil
 }
 
-// CaptureScreenshot takes a screenshot of a webpage
+// CaptureScreenshot captures a screenshot of a URL
 func (p *puppeteerImpl) CaptureScreenshot(ctx context.Context, url string) ([]byte, error) {
-	// Run the Node.js script
-	cmd := exec.CommandContext(ctx, "node",
-		filepath.Join(p.scriptPath, "screenshot.js"),
-		"--url", url,
-	)
+	p.log.Info().Str("url", url).Msg("Capturing screenshot")
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to run screenshot script: %w, stderr: %s", err, stderr.String())
+	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "--url", url, "--screenshot")
+	output, err := cmd.Output()
+	if err != nil {
+		var stderr string
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		p.log.Error().Err(err).Str("stderr", stderr).Msg("Failed to capture screenshot")
+		return nil, fmt.Errorf("screenshot failed: %w", err)
 	}
 
-	// The script outputs the base64-encoded screenshot
-	return stdout.Bytes(), nil
+	p.log.Info().
+		Str("url", url).
+		Int("size", len(output)).
+		Msg("Successfully captured screenshot")
+
+	return output, nil
 }

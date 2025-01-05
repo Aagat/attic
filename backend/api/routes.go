@@ -1,19 +1,18 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/aagat/attic/backend/config"
-	"github.com/gorilla/mux"
 )
 
-// SetupRoutes configures and returns the router with all API routes
-func SetupRoutes(cfg *config.Config) (*mux.Router, error) {
-	r := mux.NewRouter()
+// SetupRoutes configures all application routes
+func SetupRoutes(cfg *config.Config) (http.Handler, error) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/add-to-kindle", AddToKindleHandler)
 
-	// Add middleware
-	r.Use(loggingMiddleware)
+	// Wrap with middleware
+	handler := loggingMiddleware(mux)
 
-	// API routes
-	r.HandleFunc("/add-to-kindle", AddToKindleHandler).Methods("POST")
-
-	return r, nil
+	return handler, nil
 }

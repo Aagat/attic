@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -12,16 +11,19 @@ import (
 	"github.com/aagat/attic/backend/formatter"
 	"github.com/aagat/attic/backend/integrations"
 	"github.com/aagat/attic/backend/integrations/llm"
+	"github.com/aagat/attic/backend/logger"
 	"github.com/aagat/attic/backend/mailer"
 )
 
 // AddToKindleHandler processes requests to convert and send content to Kindle
 func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
+	log := logger.FromContext(r.Context())
 
 	// Get configuration
 	cfg, err := config.Load()
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to load configuration")
 		respondWithError(w, http.StatusInternalServerError, "Failed to load configuration")
 		return
 	}
@@ -32,6 +34,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		Model:  cfg.Model,
 	})
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize LLM client")
 		respondWithError(w, http.StatusInternalServerError, "Failed to initialize LLM client")
 		return
 	}
@@ -39,6 +42,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Initialize Puppeteer
 	puppeteer, err := integrations.NewPuppeteer()
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize Puppeteer")
 		respondWithError(w, http.StatusInternalServerError, "Failed to initialize Puppeteer")
 		return
 	}
@@ -48,6 +52,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Parse multipart form
 	if err = r.ParseMultipartForm(32 << 20); err != nil {
+		log.Error().Err(err).Msg("Invalid request format")
 		respondWithError(w, http.StatusBadRequest, "Invalid request format")
 		return
 	}
@@ -55,6 +60,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Get request type
 	requestType := r.FormValue("type")
 	if requestType != "url" && requestType != "file" {
+		log.Error().Str("type", requestType).Msg("Invalid request type")
 		respondWithError(w, http.StatusBadRequest, "Invalid request type")
 		return
 	}
@@ -64,21 +70,24 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract content based on type
 	if requestType == "url" {
 		url := r.FormValue("url")
+		log.Info().Str("url", url).Msg("Processing URL")
 		extracted, err = e.ExtractFromURL(url)
 	} else {
 		var file multipart.File
 		var header *multipart.FileHeader
 		file, header, err = r.FormFile("file")
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to read file")
 			respondWithError(w, http.StatusBadRequest, "Failed to read file")
 			return
 		}
 		defer file.Close()
+		log.Info().Str("filename", header.Filename).Msg("Processing file")
 		extracted, err = e.ExtractFromFile(file, header.Filename)
 	}
 
 	if err != nil {
-		log.Printf("Content extraction failed: %v", err)
+		log.Error().Err(err).Msg("Content extraction failed")
 		respondWithError(w, http.StatusInternalServerError, "Failed to extract content")
 		return
 	}
@@ -86,47 +95,49 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	// Format content to PDF
 	pdfFormatter, err := formatter.NewFormatter(cfg.StoragePath)
 	if err != nil {
-		log.Printf("Failed to initialize formatter: %v", err)
+		log.Error().Err(err).Msg("Failed to initialize formatter")
 		respondWithError(w, http.StatusInternalServerError, "Failed to initialize formatter")
 		return
 	}
 
+	log.Info().Msg("Converting content to PDF")
 	pdfPath, err := pdfFormatter.FormatToPDF(extracted.Content, extracted.Metadata)
 	if err != nil {
-		log.Printf("PDF formatting failed: %v", err)
+		log.Error().Err(err).Msg("PDF formatting failed")
 		respondWithError(w, http.StatusInternalServerError, "Failed to format content")
 		return
 	}
 
 	// Read the PDF file to verify it's valid
 	if _, err := os.ReadFile(pdfPath); err != nil {
-		log.Printf("Failed to read PDF file at %s: %v", pdfPath, err)
+		log.Error().Err(err).Str("path", pdfPath).Msg("Failed to read PDF file")
 		// We only delete files that failed to generate properly
 		if err := os.Remove(pdfPath); err != nil {
-			log.Printf("Failed to clean up invalid PDF file: %v", err)
+			log.Error().Err(err).Str("path", pdfPath).Msg("Failed to clean up invalid PDF file")
 		}
 		respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
 		return
 	}
 
-	log.Printf("Successfully generated PDF at: %s", pdfPath)
+	log.Info().Str("path", pdfPath).Msg("PDF generated successfully")
 
 	// Send to Kindle if email is enabled
 	if cfg.EmailEnabled {
+		log.Info().Str("email", cfg.KindleEmail).Msg("Email delivery enabled, sending to Kindle")
 		pdfContent, err := os.ReadFile(pdfPath)
 		if err != nil {
-			log.Printf("Failed to read PDF file for email: %v", err)
+			log.Error().Err(err).Str("path", pdfPath).Msg("Failed to read PDF file for email")
 			respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
 			return
 		}
 
 		mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
 		if err = mailer.SendToKindle(pdfContent); err != nil {
-			log.Printf("Failed to send to Kindle: %v", err)
+			log.Error().Err(err).Str("email", cfg.KindleEmail).Msg("Failed to send to Kindle")
 			respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
 			return
 		}
-		log.Printf("Successfully sent PDF to Kindle")
+		log.Info().Str("email", cfg.KindleEmail).Msg("Successfully delivered to Kindle")
 	}
 
 	// Respond with success and file path

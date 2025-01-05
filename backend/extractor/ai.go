@@ -3,61 +3,66 @@ package extractor
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/aagat/attic/backend/integrations"
-	"github.com/aagat/attic/backend/integrations/llm"
+	"github.com/aagat/attic/backend/logger"
+	"github.com/rs/zerolog"
 )
 
+// aiExtractor handles content extraction using AI
 type aiExtractor struct {
-	llm       llm.LLM
+	llm       LLMClient
 	puppeteer integrations.Puppeteer
+	log       zerolog.Logger
 }
 
-func newAIExtractor(llm llm.LLM, puppeteer integrations.Puppeteer) *aiExtractor {
+// newAIExtractor creates a new AI extractor instance
+func newAIExtractor(llm LLMClient, puppeteer integrations.Puppeteer) *aiExtractor {
 	return &aiExtractor{
 		llm:       llm,
 		puppeteer: puppeteer,
+		log:       logger.WithComponent("ai_extractor"),
 	}
 }
 
-func (a *aiExtractor) extract(ctx context.Context, url string, content ...[]byte) ([]byte, error) {
-	var screenshot []byte
-	var err error
+// extract attempts to extract content from a URL using AI
+func (a *aiExtractor) extract(ctx context.Context, url string) (string, error) {
+	a.log.Info().Str("url", url).Msg("Taking screenshot for AI processing")
 
-	if len(content) > 0 {
-		// Content provided directly (e.g., for image processing)
-		screenshot = content[0]
-	} else {
-		// Take screenshot of the URL
-		log.Printf("Taking screenshot of %s", url)
-		screenshot, err = a.puppeteer.CaptureScreenshot(ctx, url)
-		if err != nil {
-			return nil, fmt.Errorf("failed to capture screenshot: %w", err)
-		}
+	// Take a screenshot of the page
+	screenshot, err := a.puppeteer.CaptureScreenshot(ctx, url)
+	if err != nil {
+		a.log.Error().Err(err).Str("url", url).Msg("Failed to capture screenshot")
+		return "", fmt.Errorf("failed to capture screenshot: %w", err)
 	}
 
 	// Check for paywall
-	log.Printf("Checking for paywall")
-	hasPaywall, err := a.llm.DetectPaywall(ctx, screenshot)
+	isPaywall, err := a.llm.DetectPaywall(ctx, screenshot)
 	if err != nil {
-		log.Printf("Failed to detect paywall: %v", err)
-		// Continue with content extraction even if paywall detection fails
-	} else if hasPaywall {
-		log.Printf("Paywall detected")
-		return nil, ErrPaywall
+		a.log.Error().Err(err).Str("url", url).Msg("Failed to detect paywall")
+		return "", fmt.Errorf("failed to detect paywall: %w", err)
+	}
+	if isPaywall {
+		a.log.Warn().Str("url", url).Msg("Paywall detected")
+		return "", ErrPaywall
 	}
 
-	// Extract content using LLM
-	log.Printf("Extracting content using LLM")
-	extractedContent, err := a.llm.ExtractContent(ctx, screenshot)
+	// Extract content using AI
+	content, err := a.llm.ExtractContent(ctx, screenshot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract content: %w", err)
+		a.log.Error().Err(err).Str("url", url).Msg("Failed to extract content using AI")
+		return "", fmt.Errorf("failed to extract content: %w", err)
 	}
 
-	if extractedContent == "" {
-		return nil, fmt.Errorf("no content extracted")
+	if content == "" {
+		a.log.Warn().Str("url", url).Msg("AI returned empty content")
+		return "", fmt.Errorf("no content extracted")
 	}
 
-	return []byte(extractedContent), nil
+	a.log.Info().
+		Str("url", url).
+		Int("content_length", len(content)).
+		Msg("Successfully extracted content using AI")
+
+	return content, nil
 }

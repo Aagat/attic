@@ -1,11 +1,20 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/aagat/attic/backend/logger"
 	"github.com/spf13/viper"
+)
+
+var (
+	ErrMissingKindleEmail    = errors.New("kindle_email is required when email is enabled")
+	ErrMissingSenderEmail    = errors.New("sender_email is required when email is enabled")
+	ErrMissingSenderPassword = errors.New("sender_password is required when email is enabled")
+	ErrMissingLLMAPIKey      = errors.New("llm_api_key is required")
 )
 
 // Config holds all configuration for the application
@@ -22,6 +31,8 @@ type Config struct {
 
 // Load reads configuration from file or environment variables
 func Load() (*Config, error) {
+	log := logger.WithComponent("config")
+
 	// Set defaults
 	viper.SetDefault("server_port", "8080")
 	viper.SetDefault("model", "gemini-2.0-flash-exp")
@@ -52,6 +63,7 @@ func Load() (*Config, error) {
 	// Get the executable path
 	ex, err := os.Executable()
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to get executable path")
 		return nil, fmt.Errorf("failed to get executable path: %w", err)
 	}
 	exPath := filepath.Dir(ex)
@@ -82,39 +94,60 @@ func Load() (*Config, error) {
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			log.Error().Err(err).Msg("Failed to read config file")
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
-		fmt.Printf("No config file found, checking paths: %v\n", configPaths)
+		log.Warn().Strs("paths", configPaths).Msg("No config file found, using defaults")
 	} else {
-		fmt.Printf("Using config file: %s\n", viper.ConfigFileUsed())
+		log.Info().Str("file", viper.ConfigFileUsed()).Msg("Configuration loaded")
 	}
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal config")
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	// Validate required fields only if email is enabled
 	if config.EmailEnabled {
 		if config.KindleEmail == "" {
-			return nil, fmt.Errorf("kindle_email is required when email is enabled")
+			log.Error().Msg("Missing required field: kindle_email")
+			return nil, ErrMissingKindleEmail
 		}
 		if config.SenderEmail == "" {
-			return nil, fmt.Errorf("sender_email is required when email is enabled")
+			log.Error().Msg("Missing required field: sender_email")
+			return nil, ErrMissingSenderEmail
 		}
 		if config.SenderPassword == "" {
-			return nil, fmt.Errorf("sender_password is required when email is enabled")
+			log.Error().Msg("Missing required field: sender_password")
+			return nil, ErrMissingSenderPassword
 		}
 	}
 
 	// LLM API key is always required
 	if config.LLMAPIKey == "" {
-		return nil, fmt.Errorf("llm_api_key is required")
+		log.Error().Msg("Missing required field: llm_api_key")
+		return nil, ErrMissingLLMAPIKey
 	}
 
 	// Create storage directory if it doesn't exist
 	if err := os.MkdirAll(config.StoragePath, 0755); err != nil {
+		log.Error().Err(err).Str("path", config.StoragePath).Msg("Failed to create storage directory")
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
+	}
+
+	// Log final configuration state
+	log.Info().
+		Str("port", config.ServerPort).
+		Str("storage", config.StoragePath).
+		Bool("email_enabled", config.EmailEnabled).
+		Msg("Configuration initialized")
+
+	if config.EmailEnabled {
+		log.Info().
+			Str("kindle_email", config.KindleEmail).
+			Str("sender_email", config.SenderEmail).
+			Msg("Email delivery configured")
 	}
 
 	return &config, nil
