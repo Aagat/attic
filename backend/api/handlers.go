@@ -15,7 +15,7 @@ import (
 	"github.com/aagat/attic/backend/mailer"
 )
 
-// AddToKindleHandler processes requests to convert and send content to Kindle
+// AddToKindleHandler handles requests to convert and send content to Kindle
 func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	log := logger.FromContext(r.Context())
@@ -28,7 +28,14 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize LLM client
+	// Initialize components
+	puppeteer, err := integrations.NewPuppeteer()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize puppeteer")
+		respondWithError(w, http.StatusInternalServerError, "Failed to initialize puppeteer")
+		return
+	}
+
 	llmClient, err := llm.NewGeminiClient(llm.Config{
 		APIKey: cfg.LLMAPIKey,
 		Model:  cfg.Model,
@@ -39,60 +46,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize Puppeteer
-	puppeteer, err := integrations.NewPuppeteer()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialize Puppeteer")
-		respondWithError(w, http.StatusInternalServerError, "Failed to initialize Puppeteer")
-		return
-	}
-
-	// Initialize extractor
-	e := extractor.NewExtractor(puppeteer, llmClient)
-
-	// Parse multipart form
-	if err = r.ParseMultipartForm(32 << 20); err != nil {
-		log.Error().Err(err).Msg("Invalid request format")
-		respondWithError(w, http.StatusBadRequest, "Invalid request format")
-		return
-	}
-
-	// Get request type
-	requestType := r.FormValue("type")
-	if requestType != "url" && requestType != "file" {
-		log.Error().Str("type", requestType).Msg("Invalid request type")
-		respondWithError(w, http.StatusBadRequest, "Invalid request type")
-		return
-	}
-
-	var extracted *extractor.ExtractedContent
-
-	// Extract content based on type
-	if requestType == "url" {
-		url := r.FormValue("url")
-		log.Info().Str("url", url).Msg("Processing URL")
-		extracted, err = e.ExtractFromURL(url)
-	} else {
-		var file multipart.File
-		var header *multipart.FileHeader
-		file, header, err = r.FormFile("file")
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to read file")
-			respondWithError(w, http.StatusBadRequest, "Failed to read file")
-			return
-		}
-		defer file.Close()
-		log.Info().Str("filename", header.Filename).Msg("Processing file")
-		extracted, err = e.ExtractFromFile(file, header.Filename)
-	}
-
-	if err != nil {
-		log.Error().Err(err).Msg("Content extraction failed")
-		respondWithError(w, http.StatusInternalServerError, "Failed to extract content")
-		return
-	}
-
-	// Format content to PDF
+	contentExtractor := extractor.NewExtractor(puppeteer, llmClient, cfg.StoragePath)
 	pdfFormatter, err := formatter.NewFormatter(cfg.StoragePath)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize formatter")
@@ -100,53 +54,70 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse multipart form
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		log.Error().Err(err).Msg("Failed to parse form")
+		respondWithError(w, http.StatusBadRequest, "Failed to parse form")
+		return
+	}
+
+	// Extract content
+	var extracted *extractor.ExtractedContent
+	if url := r.FormValue("url"); url != "" {
+		log.Info().Str("url", url).Msg("Processing URL")
+		extracted, err = contentExtractor.ExtractFromURL(url)
+	} else {
+		var file multipart.File
+		var header *multipart.FileHeader
+		file, header, err = r.FormFile("file")
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to get file")
+			respondWithError(w, http.StatusBadRequest, "Failed to get file")
+			return
+		}
+		defer file.Close()
+		log.Info().Str("filename", header.Filename).Msg("Processing file")
+		extracted, err = contentExtractor.ExtractFromFile(file, header.Filename)
+	}
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to extract content")
+		respondWithError(w, http.StatusInternalServerError, "Failed to extract content")
+		return
+	}
+
+	// Convert to PDF
 	log.Info().Msg("Converting content to PDF")
 	pdfPath, err := pdfFormatter.FormatToPDF(extracted.Content, extracted.Metadata)
 	if err != nil {
-		log.Error().Err(err).Msg("PDF formatting failed")
-		respondWithError(w, http.StatusInternalServerError, "Failed to format content")
+		log.Error().Err(err).Msg("Failed to convert to PDF")
+		respondWithError(w, http.StatusInternalServerError, "Failed to convert to PDF")
 		return
 	}
-
-	// Read the PDF file to verify it's valid
-	if _, err := os.ReadFile(pdfPath); err != nil {
-		log.Error().Err(err).Str("path", pdfPath).Msg("Failed to read PDF file")
-		// We only delete files that failed to generate properly
-		if err := os.Remove(pdfPath); err != nil {
-			log.Error().Err(err).Str("path", pdfPath).Msg("Failed to clean up invalid PDF file")
-		}
-		respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
-		return
-	}
-
-	log.Info().Str("path", pdfPath).Msg("PDF generated successfully")
 
 	// Send to Kindle if email is enabled
 	if cfg.EmailEnabled {
-		log.Info().Str("email", cfg.KindleEmail).Msg("Email delivery enabled, sending to Kindle")
+		log.Info().Msg("Sending to Kindle")
 		pdfContent, err := os.ReadFile(pdfPath)
 		if err != nil {
-			log.Error().Err(err).Str("path", pdfPath).Msg("Failed to read PDF file for email")
+			log.Error().Err(err).Msg("Failed to read PDF file")
 			respondWithError(w, http.StatusInternalServerError, "Failed to read PDF file")
 			return
 		}
-
 		mailer := mailer.NewMailer(cfg.KindleEmail, cfg.SenderEmail, cfg.SenderPassword)
-		if err = mailer.SendToKindle(pdfContent); err != nil {
-			log.Error().Err(err).Str("email", cfg.KindleEmail).Msg("Failed to send to Kindle")
+		if err := mailer.SendToKindle(pdfContent); err != nil {
+			log.Error().Err(err).Msg("Failed to send to Kindle")
 			respondWithError(w, http.StatusInternalServerError, "Failed to send to Kindle")
 			return
 		}
-		log.Info().Str("email", cfg.KindleEmail).Msg("Successfully delivered to Kindle")
 	}
 
-	// Respond with success and file path
-	response := map[string]string{
-		"status":   "success",
-		"message":  "PDF generated successfully",
-		"pdf_path": pdfPath,
-	}
-	respondWithJSON(w, http.StatusOK, response)
+	// Return success
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"path":   pdfPath,
+	})
 }
 
 func respondWithError(w http.ResponseWriter, code int, message string) {

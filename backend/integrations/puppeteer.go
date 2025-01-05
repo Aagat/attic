@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -21,6 +22,7 @@ type ReadabilityContent struct {
 	Length      int    `json:"length"`      // Length of the article content
 	SiteName    string `json:"siteName"`    // Site name from metadata
 	IsReadable  bool   `json:"isReadable"`  // Readability's assessment of article parseability
+	Screenshot  string `json:"screenshot"`  // Base64 encoded screenshot
 	Error       string `json:"error,omitempty"`
 }
 
@@ -63,6 +65,11 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 	if err := json.Unmarshal(output, &content); err != nil {
 		p.log.Error().Err(err).Msg("Failed to parse extracted content")
 		return nil, fmt.Errorf("failed to parse content: %w", err)
+	}
+
+	if content.Error != "" {
+		p.log.Error().Str("error", content.Error).Msg("Extraction returned error")
+		return nil, fmt.Errorf("extraction failed: %s", content.Error)
 	}
 
 	// Check if Readability successfully parsed the article
@@ -114,21 +121,23 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 func (p *puppeteerImpl) CaptureScreenshot(ctx context.Context, url string) ([]byte, error) {
 	p.log.Info().Str("url", url).Msg("Capturing screenshot")
 
-	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "--url", url, "--screenshot")
-	output, err := cmd.Output()
+	// Get content which includes screenshot
+	content, err := p.ExtractWithReadability(ctx, url)
 	if err != nil {
-		var stderr string
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr = string(exitErr.Stderr)
-		}
-		p.log.Error().Err(err).Str("stderr", stderr).Msg("Failed to capture screenshot")
-		return nil, fmt.Errorf("screenshot failed: %w", err)
+		return nil, fmt.Errorf("failed to capture screenshot: %w", err)
+	}
+
+	// Decode base64 screenshot
+	screenshot, err := base64.StdEncoding.DecodeString(content.Screenshot)
+	if err != nil {
+		p.log.Error().Err(err).Msg("Failed to decode screenshot")
+		return nil, fmt.Errorf("failed to decode screenshot: %w", err)
 	}
 
 	p.log.Info().
 		Str("url", url).
-		Int("size", len(output)).
+		Int("size", len(screenshot)).
 		Msg("Successfully captured screenshot")
 
-	return output, nil
+	return screenshot, nil
 }

@@ -2,12 +2,17 @@ package extractor
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aagat/attic/backend/integrations"
 	"github.com/aagat/attic/backend/logger"
@@ -29,38 +34,78 @@ type LLMClient interface {
 
 // ExtractedContent represents the extracted content and its metadata
 type ExtractedContent struct {
-	Content  []byte
-	Metadata map[string]string
+	Content    []byte            // The extracted content
+	Metadata   map[string]string // Metadata about the content
+	Screenshot []byte            // Screenshot of the content source
 }
 
 // Extractor handles content extraction from various sources
 type Extractor struct {
-	puppeteer integrations.Puppeteer
-	llm       LLMClient
-	ai        *aiExtractor
-	archive   ArchiveExtractor
-	log       zerolog.Logger
+	puppeteer   integrations.Puppeteer
+	llm         LLMClient
+	ai          *aiExtractor
+	archive     ArchiveExtractor
+	log         zerolog.Logger
+	storagePath string
 }
 
 // NewExtractor creates a new Extractor instance
-func NewExtractor(puppeteer integrations.Puppeteer, llm LLMClient) *Extractor {
+func NewExtractor(puppeteer integrations.Puppeteer, llm LLMClient, storagePath string) *Extractor {
 	return &Extractor{
-		puppeteer: puppeteer,
-		llm:       llm,
-		ai:        newAIExtractor(llm, puppeteer),
-		archive:   newArchiveExtractor(),
-		log:       logger.WithComponent("extractor"),
+		puppeteer:   puppeteer,
+		llm:         llm,
+		ai:          newAIExtractor(llm, puppeteer),
+		archive:     newArchiveExtractor(),
+		log:         logger.WithComponent("extractor"),
+		storagePath: storagePath,
 	}
+}
+
+// saveScreenshot saves the screenshot to disk and returns its path
+func (e *Extractor) saveScreenshot(screenshot []byte, url string) (string, error) {
+	// Create screenshots directory if it doesn't exist
+	screenshotsDir := filepath.Join(e.storagePath, "screenshots")
+	if err := os.MkdirAll(screenshotsDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create screenshots directory: %w", err)
+	}
+
+	// Generate a unique filename using timestamp and sanitized URL
+	timestamp := time.Now().Format("20060102-150405")
+	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(url)))[:8]
+	filename := fmt.Sprintf("%s-%s.jpg", timestamp, urlHash)
+	screenshotPath := filepath.Join(screenshotsDir, filename)
+
+	// Save screenshot
+	if err := ioutil.WriteFile(screenshotPath, screenshot, 0644); err != nil {
+		return "", fmt.Errorf("failed to save screenshot: %w", err)
+	}
+
+	return screenshotPath, nil
 }
 
 // ExtractFromURL extracts content from a URL
 func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 	ctx := context.Background()
+	var screenshot []byte
 
 	// Try Readability first
 	e.log.Info().Str("url", url).Msg("Attempting to extract content using Readability")
 	content, err := e.puppeteer.ExtractWithReadability(ctx, url)
 	if err == nil {
+		// Decode and save screenshot
+		var screenshotErr error
+		screenshot, screenshotErr = base64.StdEncoding.DecodeString(content.Screenshot)
+		if screenshotErr != nil {
+			e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to decode screenshot")
+		} else {
+			screenshotPath, err := e.saveScreenshot(screenshot, url)
+			if err != nil {
+				e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
+			} else {
+				e.log.Info().Str("path", screenshotPath).Msg("Saved screenshot")
+			}
+		}
+
 		e.log.Info().
 			Str("url", url).
 			Str("title", content.Title).
@@ -74,6 +119,7 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 				"Excerpt": content.Excerpt,
 				"Source":  url,
 			},
+			Screenshot: screenshot,
 		}, nil
 	}
 	e.log.Warn().Err(err).Str("url", url).Msg("Readability extraction failed")
@@ -91,6 +137,7 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 			Metadata: map[string]string{
 				"Source": url,
 			},
+			Screenshot: screenshot,
 		}, nil
 	}
 	if errors.Is(err, ErrPaywall) {
@@ -112,6 +159,7 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 			Metadata: map[string]string{
 				"Source": url,
 			},
+			Screenshot: screenshot,
 		}, nil
 	}
 	e.log.Warn().Err(err).Str("url", url).Msg("Archive extraction failed")
