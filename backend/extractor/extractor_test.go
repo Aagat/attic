@@ -243,8 +243,8 @@ func TestExtractFromFile(t *testing.T) {
 			name:     "image extraction fails",
 			content:  []byte("image data"),
 			filename: "test.jpg",
-			aiErr:    errors.New("failed to extract text"),
-			wantErr:  errors.New("failed to extract text"),
+			aiErr:    errors.New("some error"),
+			wantErr:  ErrImageExtraction,
 		},
 		{
 			name:     "unsupported file type",
@@ -268,56 +268,39 @@ func TestExtractFromFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mocks
-			puppeteer := &mockPuppeteer{
-				captureScreenshotFunc: func(ctx context.Context, url string) ([]byte, error) {
-					return nil, errors.New("not used")
-				},
-				extractWithReadabilityFunc: func(ctx context.Context, url string) (*integrations.ReadabilityContent, error) {
-					return nil, errors.New("not used")
-				},
-			}
-
 			llm := &mockLLM{
-				detectPaywallFunc: func(ctx context.Context, screenshot []byte) (bool, error) {
-					return false, errors.New("not used")
-				},
 				extractContentFunc: func(ctx context.Context, screenshot []byte) (string, error) {
 					return tt.aiRes, tt.aiErr
 				},
 			}
 
 			extractor := &Extractor{
-				puppeteer: puppeteer,
-				llm:       llm,
-				ai:        newAIExtractor(llm, puppeteer),
+				llm: llm,
+				log: logger.WithComponent("extractor_test"),
 			}
 
 			// Run test
 			got, err := extractor.ExtractFromFile(bytes.NewReader(tt.content), tt.filename)
 
 			// Check error
-			if tt.wantErr != nil && err == nil {
-				t.Errorf("ExtractFromFile() expected error %v, got nil", tt.wantErr)
-				return
-			}
-			if tt.wantErr == nil && err != nil {
-				t.Errorf("ExtractFromFile() unexpected error: %v", err)
-				return
-			}
-			if tt.wantErr != nil && err != nil && tt.wantErr.Error() != err.Error() {
-				t.Errorf("ExtractFromFile() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("ExtractFromFile() error = %v, wantErr %v", err, tt.wantErr)
+				}
 				return
 			}
 
 			// Check content and metadata if no error expected
-			if tt.wantErr == nil {
-				if !bytes.Equal(got.Content, tt.wantContent) {
-					t.Errorf("ExtractFromFile() content = %v, want %v", string(got.Content), string(tt.wantContent))
-				}
-				for k, v := range tt.wantMetadata {
-					if got.Metadata[k] != v {
-						t.Errorf("ExtractFromFile() metadata[%s] = %v, want %v", k, got.Metadata[k], v)
-					}
+			if err != nil {
+				t.Errorf("ExtractFromFile() unexpected error: %v", err)
+				return
+			}
+			if !bytes.Equal(got.Content, tt.wantContent) {
+				t.Errorf("ExtractFromFile() content = %v, want %v", string(got.Content), string(tt.wantContent))
+			}
+			for k, v := range tt.wantMetadata {
+				if got.Metadata[k] != v {
+					t.Errorf("ExtractFromFile() metadata[%s] = %v, want %v", k, got.Metadata[k], v)
 				}
 			}
 		})

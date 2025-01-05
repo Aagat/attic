@@ -18,6 +18,7 @@ var (
 	ErrPaywall             = errors.New("content is behind a paywall")
 	ErrNoContent           = errors.New("no content could be extracted")
 	ErrUnsupportedFileType = errors.New("unsupported file type")
+	ErrImageExtraction     = errors.New("failed to extract text from image")
 )
 
 // LLMClient defines the interface for LLM-based content extraction
@@ -162,7 +163,7 @@ func (e *Extractor) ExtractFromFile(file io.Reader, filename string) (*Extracted
 		text, err := e.llm.ExtractContent(context.Background(), content)
 		if err != nil {
 			e.log.Error().Err(err).Str("filename", filename).Msg("Failed to extract text from image")
-			return nil, err
+			return nil, fmt.Errorf("%w: %v", ErrImageExtraction, err)
 		}
 		return &ExtractedContent{
 			Content: []byte(text),
