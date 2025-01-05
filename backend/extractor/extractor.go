@@ -37,7 +37,7 @@ type Extractor struct {
 	puppeteer integrations.Puppeteer
 	llm       LLMClient
 	ai        *aiExtractor
-	archive   *archiveExtractor
+	archive   ArchiveExtractor
 	log       zerolog.Logger
 }
 

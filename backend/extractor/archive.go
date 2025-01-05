@@ -12,6 +12,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// ArchiveExtractor defines the interface for archive-based content extraction
+type ArchiveExtractor interface {
+	extract(ctx context.Context, url string) ([]byte, error)
+}
+
 type archiveResponse struct {
 	ArchivedSnapshots struct {
 		Closest struct {

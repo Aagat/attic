@@ -83,10 +83,14 @@ async function extractContent(url) {
 
       // Return result as JSON
       console.log(JSON.stringify({
-        content: article.textContent,
+        content: article.content,
+        textContent: article.textContent,
         title: article.title,
         byline: article.byline,
-        excerpt: article.excerpt
+        excerpt: article.excerpt,
+        length: article.length,
+        siteName: article.siteName,
+        isReadable: true
       }));
 
     } finally {

@@ -13,11 +13,15 @@ import (
 
 // ReadabilityContent represents the content and metadata extracted from a webpage using Readability.js
 type ReadabilityContent struct {
-	Content string `json:"content"`
-	Title   string `json:"title"`
-	Byline  string `json:"byline"`
-	Excerpt string `json:"excerpt"`
-	Error   string `json:"error,omitempty"`
+	Content     string `json:"content"`
+	Title       string `json:"title"`
+	Byline      string `json:"byline"`
+	Excerpt     string `json:"excerpt"`
+	TextContent string `json:"textContent"` // Plain text content for length comparison
+	Length      int    `json:"length"`      // Length of the article content
+	SiteName    string `json:"siteName"`    // Site name from metadata
+	IsReadable  bool   `json:"isReadable"`  // Readability's assessment of article parseability
+	Error       string `json:"error,omitempty"`
 }
 
 // Puppeteer defines the interface for browser automation and content extraction
@@ -61,10 +65,46 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 		return nil, fmt.Errorf("failed to parse content: %w", err)
 	}
 
+	// Check if Readability successfully parsed the article
+	if !content.IsReadable {
+		p.log.Warn().
+			Str("url", url).
+			Int("content_length", len(content.Content)).
+			Msg("Readability reports article is not parseable")
+		return nil, fmt.Errorf("content not parseable by readability")
+	}
+
+	// Additional heuristic: Check if the extracted content is too short
+	// compared to the full text content (indicating possible extraction failure)
+	if len(content.TextContent) > 0 && len(content.Content) > 0 {
+		textRatio := float64(len(content.TextContent)) / float64(len(content.Content))
+		if textRatio < 0.1 { // Less than 10% of HTML content is text
+			p.log.Warn().
+				Str("url", url).
+				Float64("text_ratio", textRatio).
+				Int("text_length", len(content.TextContent)).
+				Int("html_length", len(content.Content)).
+				Msg("Extracted content has too little text compared to HTML")
+			return nil, fmt.Errorf("extracted content has insufficient text")
+		}
+	}
+
+	// Check if the content is too short in absolute terms
+	if len(content.TextContent) < 100 { // Minimum text content length threshold
+		p.log.Warn().
+			Str("url", url).
+			Int("text_length", len(content.TextContent)).
+			Msg("Extracted text content is too short")
+		return nil, fmt.Errorf("content too short")
+	}
+
 	p.log.Info().
 		Str("url", url).
 		Str("title", content.Title).
-		Int("content_length", len(content.Content)).
+		Int("text_length", len(content.TextContent)).
+		Int("html_length", len(content.Content)).
+		Bool("is_readable", content.IsReadable).
+		Str("site_name", content.SiteName).
 		Msg("Successfully extracted content")
 
 	return &content, nil

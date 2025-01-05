@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aagat/attic/backend/integrations"
+	"github.com/aagat/attic/backend/logger"
 )
 
 // Mock implementations for testing
@@ -40,6 +41,8 @@ type mockArchiveExtractor struct {
 	extractFunc func(ctx context.Context, url string) ([]byte, error)
 }
 
+var _ ArchiveExtractor = (*mockArchiveExtractor)(nil) // Ensure mock implements interface
+
 func (m *mockArchiveExtractor) extract(ctx context.Context, url string) ([]byte, error) {
 	return m.extractFunc(ctx, url)
 }
@@ -67,13 +70,17 @@ func TestExtractFromURL(t *testing.T) {
 			url:            "https://example.com",
 			readabilityErr: nil,
 			readabilityRes: &integrations.ReadabilityContent{
-				Content: "test content",
-				Title:   "Test Title",
-				Byline:  "Test Author",
-				Excerpt: "Test Excerpt",
+				Content:     "<article>test content</article>",
+				TextContent: "test content",
+				Title:       "Test Title",
+				Byline:      "Test Author",
+				Excerpt:     "Test Excerpt",
+				Length:      100,
+				IsReadable:  true,
+				SiteName:    "Example Site",
 			},
 			wantErr:     nil,
-			wantContent: []byte("test content"),
+			wantContent: []byte("<article>test content</article>"),
 			wantMetadata: map[string]string{
 				"Title":   "Test Title",
 				"Author":  "Test Author",
@@ -112,6 +119,20 @@ func TestExtractFromURL(t *testing.T) {
 			archiveErr:     errors.New("archive failed"),
 			wantErr:        ErrNoContent,
 		},
+		{
+			name:           "archive success",
+			url:            "https://example.com",
+			readabilityErr: errors.New("readability failed"),
+			screenshotRes:  []byte("screenshot"),
+			paywallRes:     false,
+			aiErr:          errors.New("ai failed"),
+			archiveRes:     []byte("archive content"),
+			wantErr:        nil,
+			wantContent:    []byte("archive content"),
+			wantMetadata: map[string]string{
+				"Source": "https://example.com",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -146,6 +167,7 @@ func TestExtractFromURL(t *testing.T) {
 				llm:       llm,
 				ai:        newAIExtractor(llm, puppeteer),
 				archive:   archive,
+				log:       logger.WithComponent("extractor_test"),
 			}
 
 			// Run test

@@ -33,19 +33,25 @@ func NewFormatter(storagePath string) (*Formatter, error) {
 
 // FormatToPDF converts content to PDF format using Pandoc and saves it to a file
 func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string) (string, error) {
-	// Convert content to PDF
-	pdf, err := f.pandoc.ConvertHTMLToPDF(content)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert to PDF: %w", err)
-	}
-
-	// Add metadata
+	// Ensure metadata exists
 	if metadata == nil {
 		metadata = map[string]string{
 			"Creator": "Attic Kindle Converter",
 		}
+	} else {
+		// Ensure Creator is set
+		if _, ok := metadata["Creator"]; !ok {
+			metadata["Creator"] = "Attic Kindle Converter"
+		}
 	}
 
+	// Convert content to PDF with metadata
+	pdf, err := f.pandoc.ConvertHTMLToPDF(content, metadata)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert to PDF: %w", err)
+	}
+
+	// Add metadata using Poppler as well for better compatibility
 	pdf, err = f.poppler.AddMetadata(pdf, metadata)
 	if err != nil {
 		return "", fmt.Errorf("failed to add metadata: %w", err)

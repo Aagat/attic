@@ -16,12 +16,23 @@ func NewPandoc() *Pandoc {
 }
 
 // ConvertToPDF converts content to PDF format
-func (p *Pandoc) ConvertToPDF(content []byte, from string) ([]byte, error) {
-	cmd := exec.Command("pandoc",
+func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]string) ([]byte, error) {
+	args := []string{
 		"--from", from,
 		"--to", "pdf",
 		"--pdf-engine", "xelatex",
-		"--standalone")
+		"--standalone",
+	}
+
+	// Add metadata arguments
+	if title, ok := metadata["Title"]; ok && title != "" {
+		args = append(args, "--metadata", fmt.Sprintf("title=%s", title))
+	}
+	if author, ok := metadata["Author"]; ok && author != "" {
+		args = append(args, "--metadata", fmt.Sprintf("author=%s", author))
+	}
+
+	cmd := exec.Command("pandoc", args...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -49,10 +60,10 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string) ([]byte, error) {
 
 // ConvertEPUBToPDF converts an EPUB file to PDF
 func (p *Pandoc) ConvertEPUBToPDF(epub []byte) ([]byte, error) {
-	return p.ConvertToPDF(epub, "epub")
+	return p.ConvertToPDF(epub, "epub", nil)
 }
 
 // ConvertHTMLToPDF converts HTML content to PDF
-func (p *Pandoc) ConvertHTMLToPDF(html []byte) ([]byte, error) {
-	return p.ConvertToPDF(html, "html")
+func (p *Pandoc) ConvertHTMLToPDF(html []byte, metadata map[string]string) ([]byte, error) {
+	return p.ConvertToPDF(html, "html", metadata)
 }
