@@ -36,6 +36,23 @@ type ExtractedContent struct {
 	Screenshot []byte            // Screenshot of the content source
 }
 
+// ExtractError represents an error with additional context
+type ExtractError struct {
+	Type   error
+	Reason string
+}
+
+func (e *ExtractError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("%v: %s", e.Type, e.Reason)
+	}
+	return e.Type.Error()
+}
+
+func (e *ExtractError) Unwrap() error {
+	return e.Type
+}
+
 // Extractor handles content extraction from various sources
 type Extractor struct {
 	puppeteer   integrations.Puppeteer
@@ -154,16 +171,25 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 				Screenshot: screenshot,
 			}, nil
 		}
-		if errors.Is(err, ErrPaywall) {
-			e.log.Warn().Str("url", url).Msg("Content is behind a paywall")
-			return nil, ErrPaywall
+		var extractErr *ExtractError
+		if errors.As(err, &extractErr) {
+			if errors.Is(extractErr.Type, ErrNonArticle) {
+				e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("AI determined content is not an article")
+				return nil, err
+			}
+			if errors.Is(extractErr.Type, ErrPaywall) {
+				e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("Content is behind a paywall, trying archive")
+			} else {
+				e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
+			}
+		} else {
+			e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
 		}
-		e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
 	} else {
 		e.log.Warn().Str("url", url).Msg("No screenshot available for AI extraction")
 	}
 
-	// Try archive as last resort
+	// Try archive as last resort or if content is paywalled
 	e.log.Info().Str("url", url).Msg("Attempting to extract content from archive")
 	archiveContent, err := e.archive.extract(ctx, url)
 	if err == nil {

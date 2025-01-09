@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -82,6 +83,16 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to extract content")
+		var extractErr *extractor.ExtractError
+		if errors.As(err, &extractErr) {
+			// Return the detailed error message for known error types
+			if errors.Is(extractErr.Type, extractor.ErrNonArticle) ||
+				errors.Is(extractErr.Type, extractor.ErrPaywall) ||
+				errors.Is(extractErr.Type, extractor.ErrPartialContent) {
+				respondWithError(w, http.StatusUnprocessableEntity, extractErr.Error())
+				return
+			}
+		}
 		respondWithError(w, http.StatusInternalServerError, "Failed to extract content")
 		return
 	}

@@ -119,17 +119,26 @@ func (g *GeminiClient) ExtractContent(ctx context.Context, screenshot []byte) (s
 
 	if result.HasPaywall {
 		g.log.Info().Str("categorization_reason", result.CategorizationReason).Msg("Detected paywall")
-		return "", extractor.ErrPaywall
+		return "", &extractor.ExtractError{
+			Type:   extractor.ErrPaywall,
+			Reason: result.CategorizationReason,
+		}
 	}
 
 	if result.ContentType != "article" {
 		g.log.Info().Str("categorization_reason", result.CategorizationReason).Msg("Detected non-article content")
-		return "", extractor.ErrNonArticle
+		return "", &extractor.ExtractError{
+			Type:   extractor.ErrNonArticle,
+			Reason: result.CategorizationReason,
+		}
 	}
 
 	if result.HasPartialContent {
 		g.log.Info().Msg("Detected partial content")
-		return "", extractor.ErrPartialContent
+		return "", &extractor.ExtractError{
+			Type:   extractor.ErrPartialContent,
+			Reason: result.Description,
+		}
 	}
 
 	return result.Article, nil
