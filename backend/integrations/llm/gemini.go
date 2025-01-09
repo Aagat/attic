@@ -7,6 +7,8 @@ import (
 
 	"github.com/aagat/attic/backend/extractor"
 	"github.com/aagat/attic/backend/interfaces"
+	"github.com/aagat/attic/backend/logger"
+	"github.com/rs/zerolog"
 	"google.golang.org/genai"
 )
 
@@ -14,6 +16,7 @@ import (
 type GeminiClient struct {
 	client *genai.Client
 	model  string
+	log    zerolog.Logger
 }
 
 // Ensure GeminiClient implements interfaces.LLMClient
@@ -38,6 +41,7 @@ func NewGeminiClient(cfg Config) (*GeminiClient, error) {
 	return &GeminiClient{
 		client: client,
 		model:  cfg.Model,
+		log:    logger.WithComponent("gemini"),
 	}, nil
 }
 
@@ -63,30 +67,44 @@ If the page is not an article, describe what you see.`
 		ResponseSchema: &genai.Schema{
 			Type: genai.TypeObject,
 			Properties: map[string]*genai.Schema{
-				"hasPaywall": {Type: genai.TypeBoolean},
-				"content":    {Type: genai.TypeString},
-				"reason":     {Type: genai.TypeString},
+				"hasPaywall": {Type: genai.TypeBoolean, Description: "Whether the page has a paywall"},
+				"content":    {Type: genai.TypeString, Description: "The main content of the page"},
+				"reason":     {Type: genai.TypeString, Description: "The reason for the paywall or content extraction"},
 			},
 			Required: []string{"hasPaywall", "content", "reason"},
 		},
 	}
 
+	g.log.Info().Msg("Sending request to Gemini")
 	resp, err := g.client.Models.GenerateContent(ctx, g.model, content, config)
 	if err != nil {
+		g.log.Error().Err(err).Msg("Failed to get response from Gemini")
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		g.log.Error().Msg("No content in Gemini response")
 		return "", extractor.ErrNoContent
 	}
 
+	rawResponse := resp.Candidates[0].Content.Parts[0].Text
+	g.log.Debug().Str("raw_response", rawResponse).Msg("Got response from Gemini")
+
 	// Parse the JSON response
 	var result AnalysisResult
-	if err := json.Unmarshal([]byte(resp.Candidates[0].Content.Parts[0].Text), &result); err != nil {
+	if err := json.Unmarshal([]byte(rawResponse), &result); err != nil {
+		g.log.Error().Err(err).Str("raw_response", rawResponse).Msg("Failed to parse Gemini response")
 		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	g.log.Info().
+		Bool("has_paywall", result.HasPaywall).
+		Str("reason", result.Reason).
+		Int("content_length", len(result.Content)).
+		Msg("Successfully analyzed content")
+
 	if result.HasPaywall {
+		g.log.Info().Str("reason", result.Reason).Msg("Detected paywall")
 		return "", extractor.ErrPaywall
 	}
 
