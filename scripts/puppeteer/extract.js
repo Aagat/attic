@@ -1,8 +1,8 @@
 import puppeteer from 'puppeteer';
-import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import fs from 'fs';
+import path from 'path';
 
 // Parse command line arguments
 const argv = yargs(hideBin(process.argv))
@@ -14,8 +14,19 @@ const argv = yargs(hideBin(process.argv))
   .help()
   .argv;
 
+// Read both Readability files
+const readabilityJs = fs.readFileSync(
+  path.join('node_modules', '@mozilla', 'readability', 'Readability.js'),
+  'utf8'
+);
+const readerableJs = fs.readFileSync(
+  path.join('node_modules', '@mozilla', 'readability', 'Readability-readerable.js'),
+  'utf8'
+);
+
 async function extractContent(url) {
   let browser;
+  let screenshot = '';
   try {
     // Launch browser
     browser = await puppeteer.launch({
@@ -51,7 +62,7 @@ async function extractContent(url) {
 
     // Navigate to URL with timeout
     await page.goto(url, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'networkidle2',
       timeout: 30000
     });
 
@@ -59,61 +70,51 @@ async function extractContent(url) {
     await page.waitForSelector('body', { timeout: 5000 });
 
     // Capture screenshot first
-    const screenshot = await page.screenshot({
+    screenshot = await page.screenshot({
       type: 'jpeg',
       quality: 80,
-      fullPage: true
+      fullPage: true,
+      encoding: 'base64'
     });
-    const screenshotBase64 = Buffer.from(screenshot).toString('base64');
 
-    // Get page content
-    const html = await page.content();
+    // Inject both Readability scripts
+    await page.evaluate(readerableJs);
+    await page.evaluate(readabilityJs);
 
-    // Parse content with Readability
-    const dom = new JSDOM(html, { url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
+    // Check if the page is probably readable first
+    const isProbablyReaderable = await page.evaluate(() => {
+      return isProbablyReaderable(document, {
+        minContentLength: 140,
+        minScore: 20
+      });
+    });
 
-    if (!article) {
-      throw new Error('Failed to parse article content');
-    }
+    // Run Readability in the browser context
+    const article = await page.evaluate(() => {
+      const documentClone = document.cloneNode(true);
+      const reader = new Readability(documentClone);
+      const article = reader.parse();
+      return article;
+    });
 
-    // Return result as JSON
+    // Return result as JSON with whatever content we got
     console.log(JSON.stringify({
-      content: article.content,
-      textContent: article.textContent,
-      title: article.title,
-      byline: article.byline,
-      excerpt: article.excerpt,
-      length: article.length,
-      siteName: article.siteName,
-      isReadable: true,
-      screenshot: screenshotBase64
+      content: article?.content || '',
+      textContent: article?.textContent || '',
+      title: article?.title || '',
+      byline: article?.byline || '',
+      excerpt: article?.excerpt || '',
+      length: article?.length || 0,
+      siteName: article?.siteName || '',
+      isReadable: isProbablyReaderable && article !== null,
+      screenshot: screenshot
     }));
 
   } catch (error) {
-    // If we have a browser page, try to get a screenshot even if readability failed
-    let errorScreenshot = '';
-    if (browser) {
-      try {
-        const page = (await browser.pages())[0];
-        if (page) {
-          const screenshot = await page.screenshot({
-            type: 'jpeg',
-            quality: 80,
-            fullPage: true
-          });
-          errorScreenshot = Buffer.from(screenshot).toString('base64');
-        }
-      } catch (screenshotError) {
-        console.error('Failed to capture error screenshot:', screenshotError);
-      }
-    }
-
-    // Return error as JSON with screenshot if available
+    // Return error as JSON with the screenshot we already captured
     console.log(JSON.stringify({
       error: error.message,
-      screenshot: errorScreenshot,
+      screenshot: screenshot,
       isReadable: false
     }));
     process.exit(1);

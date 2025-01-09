@@ -69,7 +69,8 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 
 	if content.Error != "" {
 		p.log.Error().Str("error", content.Error).Msg("Extraction returned error")
-		return nil, fmt.Errorf("extraction failed: %s", content.Error)
+		// Return the content anyway since it might contain a screenshot
+		return &content, fmt.Errorf("extraction failed: %s", content.Error)
 	}
 
 	// Check if Readability successfully parsed the article
@@ -78,7 +79,8 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 			Str("url", url).
 			Int("content_length", len(content.Content)).
 			Msg("Readability reports article is not parseable")
-		return nil, fmt.Errorf("content not parseable by readability")
+		// Return the content anyway since it might contain a screenshot
+		return &content, fmt.Errorf("content not parseable by readability")
 	}
 
 	// Additional heuristic: Check if the extracted content is too short
@@ -92,7 +94,8 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 				Int("text_length", len(content.TextContent)).
 				Int("html_length", len(content.Content)).
 				Msg("Extracted content has too little text compared to HTML")
-			return nil, fmt.Errorf("extracted content has insufficient text")
+			// Return the content anyway since it might contain a screenshot
+			return &content, fmt.Errorf("extracted content has insufficient text")
 		}
 	}
 
@@ -102,7 +105,8 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 			Str("url", url).
 			Int("text_length", len(content.TextContent)).
 			Msg("Extracted text content is too short")
-		return nil, fmt.Errorf("content too short")
+		// Return the content anyway since it might contain a screenshot
+		return &content, fmt.Errorf("content too short")
 	}
 
 	p.log.Info().
