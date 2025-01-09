@@ -124,27 +124,47 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 	}
 	e.log.Warn().Err(err).Str("url", url).Msg("Readability extraction failed")
 
-	// Try AI extraction
-	e.log.Info().Str("url", url).Msg("Attempting to extract content using AI")
-	aiContent, err := e.ai.extract(ctx, url)
-	if err == nil {
-		e.log.Info().
-			Str("url", url).
-			Int("content_length", len(aiContent)).
-			Msg("Successfully extracted content using AI")
-		return &ExtractedContent{
-			Content: []byte(aiContent),
-			Metadata: map[string]string{
-				"Source": url,
-			},
-			Screenshot: screenshot,
-		}, nil
+	// Try to decode screenshot from failed Readability attempt
+	if content != nil && content.Screenshot != "" {
+		var screenshotErr error
+		screenshot, screenshotErr = base64.StdEncoding.DecodeString(content.Screenshot)
+		if screenshotErr != nil {
+			e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to decode screenshot from failed attempt")
+		} else {
+			screenshotPath, err := e.saveScreenshot(screenshot, url)
+			if err != nil {
+				e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
+			} else {
+				e.log.Info().Str("path", screenshotPath).Msg("Saved screenshot from failed attempt")
+			}
+		}
 	}
-	if errors.Is(err, ErrPaywall) {
-		e.log.Warn().Str("url", url).Msg("Content is behind a paywall")
-		return nil, ErrPaywall
+
+	// Try AI extraction with the screenshot we have
+	if screenshot != nil {
+		e.log.Info().Str("url", url).Msg("Attempting to extract content using AI")
+		aiContent, err := e.ai.extract(ctx, screenshot)
+		if err == nil {
+			e.log.Info().
+				Str("url", url).
+				Int("content_length", len(aiContent)).
+				Msg("Successfully extracted content using AI")
+			return &ExtractedContent{
+				Content: []byte(aiContent),
+				Metadata: map[string]string{
+					"Source": url,
+				},
+				Screenshot: screenshot,
+			}, nil
+		}
+		if errors.Is(err, ErrPaywall) {
+			e.log.Warn().Str("url", url).Msg("Content is behind a paywall")
+			return nil, ErrPaywall
+		}
+		e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
+	} else {
+		e.log.Warn().Str("url", url).Msg("No screenshot available for AI extraction")
 	}
-	e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
 
 	// Try archive as last resort
 	e.log.Info().Str("url", url).Msg("Attempting to extract content from archive")
