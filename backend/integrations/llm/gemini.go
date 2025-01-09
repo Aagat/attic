@@ -24,9 +24,12 @@ var _ interfaces.LLMClient = (*GeminiClient)(nil)
 
 // AnalysisResult represents the structured output from Gemini
 type AnalysisResult struct {
-	HasPaywall bool   `json:"hasPaywall"`
-	Content    string `json:"content"`
-	Reason     string `json:"reason"`
+	HasPaywall           bool   `json:"hasPaywall"`
+	ContentType          string `json:"contentType"`
+	Article              string `json:"article"`
+	CategorizationReason string `json:"categorizationReason"`
+	Description          string `json:"description"`
+	HasPartialContent    bool   `json:"hasPartialContent"`
 }
 
 // NewGeminiClient creates a new Gemini client
@@ -47,8 +50,12 @@ func NewGeminiClient(cfg Config) (*GeminiClient, error) {
 
 // ExtractContent implements interfaces.LLMClient
 func (g *GeminiClient) ExtractContent(ctx context.Context, screenshot []byte) (string, error) {
-	prompt := `Analyze this webpage screenshot and extract the main content. If there's a paywall, extract whatever content is visible.
-If the page is not an article, describe what you see.`
+	prompt := `You are an expert content extraction tool designed to analyze webpage screenshots and determine if their main content is suitable for conversion into a readable PDF for an e-reader like Kindle.
+** Your primary goal is to extract the main textual content of the page ONLY if it is an article or blog post. Consider content like news articles, blog entries, or in-depth explanations as fitting this category.
+** If the page's main content is primarily interactive (e.g., visualizations, videos, forms, maps, code playgrounds) or is dominated by user interface elements, DO NOT extract the content. Instead, categorize the page's content type and explain your reasoning for not extracting.
+
+** If the page has a paywall restricting access to the main content, DO NOT attempt to extract any content. Provide a clear reason stating that a paywall was detected.
+	`
 
 	content := []*genai.Content{
 		{
@@ -67,11 +74,14 @@ If the page is not an article, describe what you see.`
 		ResponseSchema: &genai.Schema{
 			Type: genai.TypeObject,
 			Properties: map[string]*genai.Schema{
-				"hasPaywall": {Type: genai.TypeBoolean, Description: "Whether the page has a paywall"},
-				"content":    {Type: genai.TypeString, Description: "The main content of the page"},
-				"reason":     {Type: genai.TypeString, Description: "The reason for the paywall or content extraction"},
+				"hasPaywall":           {Type: genai.TypeBoolean, Description: "Indicates if the page has a paywall."},
+				"contentType":          {Type: genai.TypeString, Description: "The type of content on the page.", Enum: []string{"article", "video", "tweet", "code", "visualization", "other"}},
+				"article":              {Type: genai.TypeString, Description: "The extracted article content, present only if contentType is 'article'."},
+				"categorizationReason": {Type: genai.TypeString, Description: "The reasoning behind the assigned contentType."},
+				"description":          {Type: genai.TypeString, Description: "A concise summary of the page's content."},
+				"hasPartialContent":    {Type: genai.TypeBoolean, Description: "Indicates if only a portion of the article content was extracted."},
 			},
-			Required: []string{"hasPaywall", "content", "reason"},
+			Required: []string{"hasPaywall", "contentType", "categorizationReason", "description", "hasPartialContent"},
 		},
 	}
 
@@ -99,14 +109,28 @@ If the page is not an article, describe what you see.`
 
 	g.log.Info().
 		Bool("has_paywall", result.HasPaywall).
-		Str("reason", result.Reason).
-		Int("content_length", len(result.Content)).
+		Str("categorization_reason", result.CategorizationReason).
+		Int("content_length", len(result.Article)).
+		Bool("has_partial_content", result.HasPartialContent).
+		Str("description", result.Description).
+		Str("content_type", result.ContentType).
+		Str("article", result.Article).
 		Msg("Successfully analyzed content")
 
 	if result.HasPaywall {
-		g.log.Info().Str("reason", result.Reason).Msg("Detected paywall")
+		g.log.Info().Str("categorization_reason", result.CategorizationReason).Msg("Detected paywall")
 		return "", extractor.ErrPaywall
 	}
 
-	return result.Content, nil
+	if result.ContentType != "article" {
+		g.log.Info().Str("categorization_reason", result.CategorizationReason).Msg("Detected non-article content")
+		return "", extractor.ErrNonArticle
+	}
+
+	if result.HasPartialContent {
+		g.log.Info().Msg("Detected partial content")
+		return "", extractor.ErrPartialContent
+	}
+
+	return result.Article, nil
 }

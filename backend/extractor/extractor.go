@@ -25,6 +25,8 @@ var (
 	ErrNoContent           = errors.New("no content could be extracted")
 	ErrUnsupportedFileType = errors.New("unsupported file type")
 	ErrImageExtraction     = errors.New("failed to extract text from image")
+	ErrNonArticle          = errors.New("content is not an article")
+	ErrPartialContent      = errors.New("content is only a partial extract")
 )
 
 // ExtractedContent represents the extracted content and its metadata
