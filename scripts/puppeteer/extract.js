@@ -3,6 +3,11 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Parse command line arguments
 const argv = yargs(hideBin(process.argv))
@@ -16,17 +21,16 @@ const argv = yargs(hideBin(process.argv))
 
 // Read both Readability files
 const readabilityJs = fs.readFileSync(
-  path.join('node_modules', '@mozilla', 'readability', 'Readability.js'),
+  path.join(__dirname, 'node_modules', '@mozilla', 'readability', 'Readability.js'),
   'utf8'
 );
 const readerableJs = fs.readFileSync(
-  path.join('node_modules', '@mozilla', 'readability', 'Readability-readerable.js'),
+  path.join(__dirname, 'node_modules', '@mozilla', 'readability', 'Readability-readerable.js'),
   'utf8'
 );
 
 async function extractContent(url) {
   let browser;
-  let screenshot = '';
   try {
     // Launch browser
     browser = await puppeteer.launch({
@@ -62,7 +66,7 @@ async function extractContent(url) {
 
     // Navigate to URL with timeout
     await page.goto(url, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'networkidle0',
       timeout: 30000
     });
 
@@ -70,7 +74,7 @@ async function extractContent(url) {
     await page.waitForSelector('body', { timeout: 5000 });
 
     // Capture screenshot first
-    screenshot = await page.screenshot({
+    const screenshot = await page.screenshot({
       type: 'jpeg',
       quality: 80,
       fullPage: true,
@@ -114,7 +118,7 @@ async function extractContent(url) {
     // Return error as JSON with the screenshot we already captured
     console.log(JSON.stringify({
       error: error.message,
-      screenshot: screenshot,
+      screenshot: screenshot || '',
       isReadable: false
     }));
     process.exit(1);

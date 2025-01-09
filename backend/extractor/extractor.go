@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/aagat/attic/backend/integrations"
+	"github.com/aagat/attic/backend/interfaces"
 	"github.com/aagat/attic/backend/logger"
 	"github.com/rs/zerolog"
 )
@@ -26,12 +27,6 @@ var (
 	ErrImageExtraction     = errors.New("failed to extract text from image")
 )
 
-// LLMClient defines the interface for LLM-based content extraction
-type LLMClient interface {
-	DetectPaywall(ctx context.Context, screenshot []byte) (bool, error)
-	ExtractContent(ctx context.Context, screenshot []byte) (string, error)
-}
-
 // ExtractedContent represents the extracted content and its metadata
 type ExtractedContent struct {
 	Content    []byte            // The extracted content
@@ -42,7 +37,7 @@ type ExtractedContent struct {
 // Extractor handles content extraction from various sources
 type Extractor struct {
 	puppeteer   integrations.Puppeteer
-	llm         LLMClient
+	llm         interfaces.LLMClient
 	ai          *aiExtractor
 	archive     ArchiveExtractor
 	log         zerolog.Logger
@@ -50,7 +45,7 @@ type Extractor struct {
 }
 
 // NewExtractor creates a new Extractor instance
-func NewExtractor(puppeteer integrations.Puppeteer, llm LLMClient, storagePath string) *Extractor {
+func NewExtractor(puppeteer integrations.Puppeteer, llm interfaces.LLMClient, storagePath string) *Extractor {
 	return &Extractor{
 		puppeteer:   puppeteer,
 		llm:         llm,

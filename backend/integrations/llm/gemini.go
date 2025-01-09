@@ -2,9 +2,11 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strings"
 
+	"github.com/aagat/attic/backend/extractor"
+	"github.com/aagat/attic/backend/interfaces"
 	"google.golang.org/genai"
 )
 
@@ -12,6 +14,16 @@ import (
 type GeminiClient struct {
 	client *genai.Client
 	model  string
+}
+
+// Ensure GeminiClient implements interfaces.LLMClient
+var _ interfaces.LLMClient = (*GeminiClient)(nil)
+
+// AnalysisResult represents the structured output from Gemini
+type AnalysisResult struct {
+	HasPaywall bool   `json:"hasPaywall"`
+	Content    string `json:"content"`
+	Reason     string `json:"reason"`
 }
 
 // NewGeminiClient creates a new Gemini client
@@ -29,51 +41,54 @@ func NewGeminiClient(cfg Config) (*GeminiClient, error) {
 	}, nil
 }
 
-// ExtractContent implements LLM.ExtractContent
+// ExtractContent implements interfaces.LLMClient
 func (g *GeminiClient) ExtractContent(ctx context.Context, screenshot []byte) (string, error) {
-	prompt := "What's this image about? Extract the main article content."
+	prompt := `Analyze this webpage screenshot and extract the main content. If there's a paywall, extract whatever content is visible.
+If the page is not an article, describe what you see.`
 
-	parts := []*genai.Part{
-		{Text: prompt},
-		{InlineData: &genai.Blob{
-			Data:     screenshot,
-			MIMEType: "image/png",
-		}},
+	content := []*genai.Content{
+		{
+			Parts: []*genai.Part{
+				{Text: prompt},
+				{InlineData: &genai.Blob{
+					Data:     screenshot,
+					MIMEType: "image/jpeg",
+				}},
+			},
+		},
 	}
 
-	resp, err := g.client.Models.GenerateContent(ctx, g.model, []*genai.Content{{Parts: parts}}, nil)
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"hasPaywall": {Type: genai.TypeBoolean},
+				"content":    {Type: genai.TypeString},
+				"reason":     {Type: genai.TypeString},
+			},
+			Required: []string{"hasPaywall", "content", "reason"},
+		},
+	}
+
+	resp, err := g.client.Models.GenerateContent(ctx, g.model, content, config)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", ErrNoContent
+		return "", extractor.ErrNoContent
 	}
 
-	return resp.Candidates[0].Content.Parts[0].Text, nil
-}
-
-// DetectPaywall implements LLM.DetectPaywall
-func (g *GeminiClient) DetectPaywall(ctx context.Context, screenshot []byte) (bool, error) {
-	prompt := "Does this webpage contain a paywall? Answer with just 'yes' or 'no'."
-
-	parts := []*genai.Part{
-		{Text: prompt},
-		{InlineData: &genai.Blob{
-			Data:     screenshot,
-			MIMEType: "image/png",
-		}},
+	// Parse the JSON response
+	var result AnalysisResult
+	if err := json.Unmarshal([]byte(resp.Candidates[0].Content.Parts[0].Text), &result); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	resp, err := g.client.Models.GenerateContent(ctx, g.model, []*genai.Content{{Parts: parts}}, nil)
-	if err != nil {
-		return false, fmt.Errorf("failed to detect paywall: %w", err)
+	if result.HasPaywall {
+		return "", extractor.ErrPaywall
 	}
 
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return false, ErrNoContent
-	}
-
-	answer := strings.ToLower(resp.Candidates[0].Content.Parts[0].Text)
-	return strings.Contains(answer, "yes"), nil
+	return result.Content, nil
 }
