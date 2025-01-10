@@ -1,10 +1,7 @@
 package extractor
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -17,69 +14,80 @@ type ArchiveExtractor interface {
 	getArchiveURL(url string) (string, error)
 }
 
-type archiveResponse struct {
-	ArchivedSnapshots struct {
-		Closest struct {
-			Available bool   `json:"available"`
-			URL       string `json:"url"`
-		} `json:"closest"`
-	} `json:"archived_snapshots"`
+// archiveSource represents a source for archived content
+type archiveSource struct {
+	name     string
+	getURL   func(client *http.Client, url string) (string, error)
+	priority int // Lower number means higher priority
 }
 
 type archiveExtractor struct {
-	client *http.Client
-	log    zerolog.Logger
+	client  *http.Client
+	log     zerolog.Logger
+	sources []archiveSource
+	index   int // Track which source we're trying
 }
 
 func newArchiveExtractor() *archiveExtractor {
 	return &archiveExtractor{
 		client: &http.Client{},
 		log:    logger.WithComponent("archive_extractor"),
+		index:  0,
+		sources: []archiveSource{
+			{
+				name:     "archive.org",
+				getURL:   getArchiveOrgURL,
+				priority: 1,
+			},
+			{
+				name:     "archive.today",
+				getURL:   getArchiveTodayURL,
+				priority: 2,
+			},
+		},
 	}
 }
 
 func (a *archiveExtractor) getArchiveURL(targetURL string) (string, error) {
-	a.log.Info().Str("url", targetURL).Msg("Checking Internet Archive for content")
+	// If we've tried all sources, return error
+	if a.index >= len(a.sources) {
+		a.index = 0 // Reset for next time
+		return "", fmt.Errorf("no more archive sources available")
+	}
 
-	// Query archive.org API
-	apiURL := fmt.Sprintf("https://archive.org/wayback/available?url=%s", url.QueryEscape(targetURL))
-	req, err := http.NewRequestWithContext(context.Background(), "GET", apiURL, nil)
+	source := a.sources[a.index]
+	a.log.Debug().
+		Str("url", targetURL).
+		Str("source", source.name).
+		Int("attempt", a.index+1).
+		Msg("Trying archive source")
+
+	archiveURL, err := source.getURL(a.client, targetURL)
 	if err != nil {
-		a.log.Error().Err(err).Str("url", apiURL).Msg("Failed to create archive request")
-		return "", fmt.Errorf("failed to create request: %w", err)
+		a.log.Debug().
+			Err(err).
+			Str("url", targetURL).
+			Str("source", source.name).
+			Msg("Archive source failed")
+	} else {
+		a.log.Info().
+			Str("url", targetURL).
+			Str("archive_url", archiveURL).
+			Str("source", source.name).
+			Msg("Found archived version")
 	}
 
-	resp, err := a.client.Do(req)
-	if err != nil {
-		a.log.Error().Err(err).Str("url", apiURL).Msg("Failed to query archive")
-		return "", fmt.Errorf("failed to query archive: %w", err)
-	}
-	defer resp.Body.Close()
+	// Move to next source for next call
+	a.index++
+	return archiveURL, err
+}
 
-	if resp.StatusCode != http.StatusOK {
-		a.log.Error().Int("status", resp.StatusCode).Str("url", apiURL).Msg("Archive API returned error")
-		return "", fmt.Errorf("archive API returned status %d", resp.StatusCode)
-	}
+// getArchiveOrgURL gets an archived URL from archive.org
+func getArchiveOrgURL(client *http.Client, targetURL string) (string, error) {
+	return fmt.Sprintf("https://web.archive.org/web/%s", url.QueryEscape(targetURL)), nil
+}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		a.log.Error().Err(err).Str("url", apiURL).Msg("Failed to read archive response")
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var result archiveResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		a.log.Error().Err(err).Str("url", apiURL).Msg("Failed to parse archive response")
-		return "", fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if !result.ArchivedSnapshots.Closest.Available {
-		a.log.Warn().Str("url", targetURL).Msg("No archived version available")
-		return "", fmt.Errorf("no archived version available")
-	}
-
-	archiveURL := result.ArchivedSnapshots.Closest.URL
-	a.log.Info().Str("url", archiveURL).Msg("Found archived version")
-
-	return archiveURL, nil
+// getArchiveTodayURL gets an archived URL from archive.today
+func getArchiveTodayURL(client *http.Client, targetURL string) (string, error) {
+	return fmt.Sprintf("https://archive.today/%s", url.QueryEscape(targetURL)), nil
 }

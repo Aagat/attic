@@ -103,21 +103,42 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 	if err != nil {
 		var extractErr *ExtractError
 		if errors.As(err, &extractErr) && errors.Is(extractErr.Type, ErrPaywall) {
-			// If content is paywalled, try archive
-			e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("Content is behind a paywall, trying archive")
-			archiveURL, err := e.archive.getArchiveURL(url)
-			if err != nil {
-				e.log.Warn().Err(err).Str("url", url).Msg("Failed to get archive URL")
-				return nil, extractErr // Return original paywall error if archive fails
-			}
+			// If content is paywalled, try archives
+			e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("Content is behind a paywall, trying archives")
 
-			e.log.Info().Str("url", url).Str("archive_url", archiveURL).Msg("Found archived version, attempting extraction")
-			extracted, err = e.extractFromURL(archiveURL)
-			if err != nil {
-				e.log.Warn().Err(err).Str("url", url).Msg("Failed to extract from archive")
-				return nil, extractErr // Return original paywall error if archive extraction fails
+			// Keep trying archive URLs until one works
+			for {
+				archiveURL, err := e.archive.getArchiveURL(url)
+				if err != nil {
+					e.log.Warn().Err(err).Str("url", url).Msg("Failed to get archive URL")
+					return nil, extractErr // Return original paywall error if no more archives available
+				}
+
+				e.log.Info().Str("url", url).Str("archive_url", archiveURL).Msg("Found archived version, attempting extraction")
+				extracted, err = e.extractFromURL(archiveURL)
+				if err == nil {
+					return extracted, nil // Success! Return the extracted content
+				}
+
+				// If this archive URL failed with a paywall or non-article error, try next archive
+				var archiveErr *ExtractError
+				if errors.As(err, &archiveErr) && (errors.Is(archiveErr.Type, ErrPaywall) || errors.Is(archiveErr.Type, ErrNonArticle)) {
+					e.log.Warn().
+						Err(err).
+						Str("url", url).
+						Str("archive_url", archiveURL).
+						Str("reason", archiveErr.Reason).
+						Msg("Archive extraction failed, trying next archive")
+					continue
+				}
+
+				// For other errors, try next archive
+				e.log.Warn().
+					Err(err).
+					Str("url", url).
+					Str("archive_url", archiveURL).
+					Msg("Archive extraction failed, trying next archive")
 			}
-			return extracted, nil
 		}
 		return nil, err
 	}
