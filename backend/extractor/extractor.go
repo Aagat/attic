@@ -99,6 +99,33 @@ func (e *Extractor) saveScreenshot(screenshot []byte, url string) (string, error
 
 // ExtractFromURL extracts content from a URL
 func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
+	extracted, err := e.extractFromURL(url)
+	if err != nil {
+		var extractErr *ExtractError
+		if errors.As(err, &extractErr) && errors.Is(extractErr.Type, ErrPaywall) {
+			// If content is paywalled, try archive
+			e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("Content is behind a paywall, trying archive")
+			archiveURL, err := e.archive.getArchiveURL(url)
+			if err != nil {
+				e.log.Warn().Err(err).Str("url", url).Msg("Failed to get archive URL")
+				return nil, extractErr // Return original paywall error if archive fails
+			}
+
+			e.log.Info().Str("url", url).Str("archive_url", archiveURL).Msg("Found archived version, attempting extraction")
+			extracted, err = e.extractFromURL(archiveURL)
+			if err != nil {
+				e.log.Warn().Err(err).Str("url", url).Msg("Failed to extract from archive")
+				return nil, extractErr // Return original paywall error if archive extraction fails
+			}
+			return extracted, nil
+		}
+		return nil, err
+	}
+	return extracted, nil
+}
+
+// extractFromURL is the internal method that handles the actual extraction
+func (e *Extractor) extractFromURL(url string) (*ExtractedContent, error) {
 	ctx := context.Background()
 	var screenshot []byte
 
@@ -171,42 +198,11 @@ func (e *Extractor) ExtractFromURL(url string) (*ExtractedContent, error) {
 				Screenshot: screenshot,
 			}, nil
 		}
-		var extractErr *ExtractError
-		if errors.As(err, &extractErr) {
-			if errors.Is(extractErr.Type, ErrNonArticle) {
-				e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("AI determined content is not an article")
-				return nil, err
-			}
-			if errors.Is(extractErr.Type, ErrPaywall) {
-				e.log.Info().Str("url", url).Str("reason", extractErr.Reason).Msg("Content is behind a paywall, trying archive")
-			} else {
-				e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
-			}
-		} else {
-			e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
-		}
-	} else {
-		e.log.Warn().Str("url", url).Msg("No screenshot available for AI extraction")
+		e.log.Warn().Err(err).Str("url", url).Msg("AI extraction failed")
+		return nil, err
 	}
 
-	// Try archive as last resort or if content is paywalled
-	e.log.Info().Str("url", url).Msg("Attempting to extract content from archive")
-	archiveContent, err := e.archive.extract(ctx, url)
-	if err == nil {
-		e.log.Info().
-			Str("url", url).
-			Int("content_length", len(archiveContent)).
-			Msg("Successfully extracted content from archive")
-		return &ExtractedContent{
-			Content: archiveContent,
-			Metadata: map[string]string{
-				"Source": url,
-			},
-			Screenshot: screenshot,
-		}, nil
-	}
-	e.log.Warn().Err(err).Str("url", url).Msg("Archive extraction failed")
-
+	e.log.Warn().Str("url", url).Msg("No screenshot available for AI extraction")
 	return nil, ErrNoContent
 }
 

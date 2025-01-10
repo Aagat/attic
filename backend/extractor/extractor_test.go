@@ -38,32 +38,36 @@ func (m *mockLLM) ExtractContent(ctx context.Context, screenshot []byte) (string
 }
 
 type mockArchiveExtractor struct {
-	extractFunc func(ctx context.Context, url string) ([]byte, error)
+	getArchiveURLFunc func(url string) (string, error)
 }
 
 var _ ArchiveExtractor = (*mockArchiveExtractor)(nil) // Ensure mock implements interface
 
-func (m *mockArchiveExtractor) extract(ctx context.Context, url string) ([]byte, error) {
-	return m.extractFunc(ctx, url)
+func (m *mockArchiveExtractor) getArchiveURL(url string) (string, error) {
+	return m.getArchiveURLFunc(url)
 }
 
 func TestExtractFromURL(t *testing.T) {
 	tests := []struct {
-		name           string
-		url            string
-		readabilityErr error
-		readabilityRes *integrations.ReadabilityContent
-		screenshotErr  error
-		screenshotRes  []byte
-		paywallErr     error
-		paywallRes     bool
-		aiErr          error
-		aiRes          string
-		archiveErr     error
-		archiveRes     []byte
-		wantErr        error
-		wantContent    []byte
-		wantMetadata   map[string]string
+		name                  string
+		url                   string
+		readabilityErr        error
+		readabilityRes        *integrations.ReadabilityContent
+		screenshotErr         error
+		screenshotRes         []byte
+		paywallErr            error
+		paywallRes            bool
+		aiErr                 error
+		aiRes                 string
+		archiveURLErr         error
+		archiveURL            string
+		archiveReadabilityErr error
+		archiveReadabilityRes *integrations.ReadabilityContent
+		archiveAIErr          error
+		archiveAIRes          string
+		wantErr               error
+		wantContent           []byte
+		wantMetadata          map[string]string
 	}{
 		{
 			name:           "readability success",
@@ -93,7 +97,6 @@ func TestExtractFromURL(t *testing.T) {
 			url:            "https://example.com",
 			readabilityErr: errors.New("readability failed"),
 			screenshotRes:  []byte("screenshot"),
-			paywallRes:     false,
 			aiRes:          "ai content",
 			wantErr:        nil,
 			wantContent:    []byte("ai content"),
@@ -102,36 +105,53 @@ func TestExtractFromURL(t *testing.T) {
 			},
 		},
 		{
-			name:           "paywall detected",
+			name:           "paywall detected, archive success",
 			url:            "https://example.com",
 			readabilityErr: errors.New("readability failed"),
 			screenshotRes:  []byte("screenshot"),
-			paywallRes:     true,
+			aiErr:          &ExtractError{Type: ErrPaywall, Reason: "paywall detected"},
+			archiveURL:     "https://web.archive.org/example.com",
+			archiveReadabilityRes: &integrations.ReadabilityContent{
+				Content:     "<article>archived content</article>",
+				TextContent: "archived content",
+				Title:       "Archived Title",
+				Length:      100,
+				IsReadable:  true,
+			},
+			wantErr:     nil,
+			wantContent: []byte("<article>archived content</article>"),
+			wantMetadata: map[string]string{
+				"Title":  "Archived Title",
+				"Source": "https://web.archive.org/example.com",
+			},
+		},
+		{
+			name:           "paywall detected, archive not available",
+			url:            "https://example.com",
+			readabilityErr: errors.New("readability failed"),
+			screenshotRes:  []byte("screenshot"),
+			aiErr:          &ExtractError{Type: ErrPaywall, Reason: "paywall detected"},
+			archiveURLErr:  errors.New("no archived version available"),
 			wantErr:        ErrPaywall,
 		},
 		{
-			name:           "all methods fail",
-			url:            "https://example.com",
-			readabilityErr: errors.New("readability failed"),
-			screenshotRes:  []byte("screenshot"),
-			paywallRes:     false,
-			aiErr:          errors.New("ai failed"),
-			archiveErr:     errors.New("archive failed"),
-			wantErr:        ErrNoContent,
+			name:                  "paywall detected, archive extraction fails",
+			url:                   "https://example.com",
+			readabilityErr:        errors.New("readability failed"),
+			screenshotRes:         []byte("screenshot"),
+			aiErr:                 &ExtractError{Type: ErrPaywall, Reason: "paywall detected"},
+			archiveURL:            "https://web.archive.org/example.com",
+			archiveReadabilityErr: errors.New("archive extraction failed"),
+			archiveAIErr:          errors.New("archive ai failed"),
+			wantErr:               ErrPaywall,
 		},
 		{
-			name:           "archive success",
+			name:           "non-article content",
 			url:            "https://example.com",
 			readabilityErr: errors.New("readability failed"),
 			screenshotRes:  []byte("screenshot"),
-			paywallRes:     false,
-			aiErr:          errors.New("ai failed"),
-			archiveRes:     []byte("archive content"),
-			wantErr:        nil,
-			wantContent:    []byte("archive content"),
-			wantMetadata: map[string]string{
-				"Source": "https://example.com",
-			},
+			aiErr:          &ExtractError{Type: ErrNonArticle, Reason: "this is a landing page"},
+			wantErr:        ErrNonArticle,
 		},
 	}
 
@@ -140,25 +160,31 @@ func TestExtractFromURL(t *testing.T) {
 			// Setup mocks
 			puppeteer := &mockPuppeteer{
 				captureScreenshotFunc: func(ctx context.Context, url string) ([]byte, error) {
+					if url == tt.archiveURL {
+						return tt.screenshotRes, tt.screenshotErr
+					}
 					return tt.screenshotRes, tt.screenshotErr
 				},
 				extractWithReadabilityFunc: func(ctx context.Context, url string) (*integrations.ReadabilityContent, error) {
+					if url == tt.archiveURL {
+						return tt.archiveReadabilityRes, tt.archiveReadabilityErr
+					}
 					return tt.readabilityRes, tt.readabilityErr
 				},
 			}
 
 			llm := &mockLLM{
-				detectPaywallFunc: func(ctx context.Context, screenshot []byte) (bool, error) {
-					return tt.paywallRes, tt.paywallErr
-				},
 				extractContentFunc: func(ctx context.Context, screenshot []byte) (string, error) {
+					if tt.archiveAIRes != "" {
+						return tt.archiveAIRes, tt.archiveAIErr
+					}
 					return tt.aiRes, tt.aiErr
 				},
 			}
 
 			archive := &mockArchiveExtractor{
-				extractFunc: func(ctx context.Context, url string) ([]byte, error) {
-					return tt.archiveRes, tt.archiveErr
+				getArchiveURLFunc: func(url string) (string, error) {
+					return tt.archiveURL, tt.archiveURLErr
 				},
 			}
 
