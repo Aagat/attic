@@ -17,16 +17,24 @@ var (
 	ErrMissingLLMAPIKey      = errors.New("llm_api_key is required")
 )
 
-// Config holds all configuration for the application
+// ArchiveConfig represents configuration for an archive source
+type ArchiveConfig struct {
+	Name      string `mapstructure:"name"`
+	URLFormat string `mapstructure:"url_format"` // Format string where %s will be replaced with the target URL
+	Priority  int    `mapstructure:"priority"`
+}
+
+// Config represents the application configuration
 type Config struct {
-	ServerPort     string `mapstructure:"server_port"`
-	KindleEmail    string `mapstructure:"kindle_email"`
-	SenderEmail    string `mapstructure:"sender_email"`
-	SenderPassword string `mapstructure:"sender_password"`
-	LLMAPIKey      string `mapstructure:"llm_api_key"`
-	Model          string `mapstructure:"model"`
-	StoragePath    string `mapstructure:"storage_path"`
-	EmailEnabled   bool   `mapstructure:"email_enabled"`
+	StoragePath    string          `mapstructure:"storage_path"`
+	ServerPort     string          `mapstructure:"server_port"`
+	LLMAPIKey      string          `mapstructure:"llm_api_key"`
+	Model          string          `mapstructure:"model"`
+	EmailEnabled   bool            `mapstructure:"email_enabled"`
+	KindleEmail    string          `mapstructure:"kindle_email"`
+	SenderEmail    string          `mapstructure:"sender_email"`
+	SenderPassword string          `mapstructure:"sender_password"`
+	Archives       []ArchiveConfig `mapstructure:"archives"`
 }
 
 // Load reads configuration from file or environment variables

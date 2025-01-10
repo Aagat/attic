@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aagat/attic/backend/config"
 	"github.com/aagat/attic/backend/integrations"
 	"github.com/aagat/attic/backend/interfaces"
 	"github.com/aagat/attic/backend/logger"
@@ -64,14 +65,14 @@ type Extractor struct {
 }
 
 // NewExtractor creates a new Extractor instance
-func NewExtractor(puppeteer integrations.Puppeteer, llm interfaces.LLMClient, storagePath string) *Extractor {
+func NewExtractor(puppeteer integrations.Puppeteer, llm interfaces.LLMClient, cfg *config.Config) *Extractor {
 	return &Extractor{
 		puppeteer:   puppeteer,
 		llm:         llm,
 		ai:          newAIExtractor(llm, puppeteer),
-		archive:     newArchiveExtractor(),
+		archive:     newArchiveExtractor(cfg.Archives),
 		log:         logger.WithComponent("extractor"),
-		storagePath: storagePath,
+		storagePath: cfg.StoragePath,
 	}
 }
 

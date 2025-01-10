@@ -47,7 +47,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentExtractor := extractor.NewExtractor(puppeteer, llmClient, cfg.StoragePath)
+	contentExtractor := extractor.NewExtractor(puppeteer, llmClient, cfg)
 	pdfFormatter, err := formatter.NewFormatter(cfg.StoragePath)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize formatter")

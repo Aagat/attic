@@ -31,6 +31,7 @@ const readerableJs = fs.readFileSync(
 
 async function extractContent(url) {
   let browser;
+  let screenshot;
   try {
     // Launch browser
     browser = await puppeteer.launch({
@@ -74,7 +75,7 @@ async function extractContent(url) {
     await page.waitForSelector('body', { timeout: 5000 });
 
     // Capture screenshot first
-    const screenshot = await page.screenshot({
+    screenshot = await page.screenshot({
       type: 'jpeg',
       quality: 80,
       fullPage: true,
@@ -115,7 +116,7 @@ async function extractContent(url) {
     }));
 
   } catch (error) {
-    // Return error as JSON with the screenshot we already captured
+    // Return error as JSON with the screenshot we already captured (if any)
     console.log(JSON.stringify({
       error: error.message,
       screenshot: screenshot || '',

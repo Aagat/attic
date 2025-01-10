@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 
+	"github.com/aagat/attic/backend/config"
 	"github.com/aagat/attic/backend/logger"
 	"github.com/rs/zerolog"
 )
@@ -16,9 +18,9 @@ type ArchiveExtractor interface {
 
 // archiveSource represents a source for archived content
 type archiveSource struct {
-	name     string
-	getURL   func(client *http.Client, url string) (string, error)
-	priority int // Lower number means higher priority
+	name      string
+	urlFormat string
+	priority  int
 }
 
 type archiveExtractor struct {
@@ -28,23 +30,27 @@ type archiveExtractor struct {
 	index   int // Track which source we're trying
 }
 
-func newArchiveExtractor() *archiveExtractor {
+func newArchiveExtractor(cfg []config.ArchiveConfig) *archiveExtractor {
+	// Convert config to archive sources
+	sources := make([]archiveSource, len(cfg))
+	for i, archive := range cfg {
+		sources[i] = archiveSource{
+			name:      archive.Name,
+			urlFormat: archive.URLFormat,
+			priority:  archive.Priority,
+		}
+	}
+
+	// Sort sources by priority
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].priority < sources[j].priority
+	})
+
 	return &archiveExtractor{
-		client: &http.Client{},
-		log:    logger.WithComponent("archive_extractor"),
-		index:  0,
-		sources: []archiveSource{
-			{
-				name:     "archive.org",
-				getURL:   getArchiveOrgURL,
-				priority: 1,
-			},
-			{
-				name:     "archive.today",
-				getURL:   getArchiveTodayURL,
-				priority: 2,
-			},
-		},
+		client:  &http.Client{},
+		log:     logger.WithComponent("archive_extractor"),
+		index:   0,
+		sources: sources,
 	}
 }
 
@@ -62,32 +68,15 @@ func (a *archiveExtractor) getArchiveURL(targetURL string) (string, error) {
 		Int("attempt", a.index+1).
 		Msg("Trying archive source")
 
-	archiveURL, err := source.getURL(a.client, targetURL)
-	if err != nil {
-		a.log.Debug().
-			Err(err).
-			Str("url", targetURL).
-			Str("source", source.name).
-			Msg("Archive source failed")
-	} else {
-		a.log.Info().
-			Str("url", targetURL).
-			Str("archive_url", archiveURL).
-			Str("source", source.name).
-			Msg("Found archived version")
-	}
+	// Format the archive URL using the configured format string
+	archiveURL := fmt.Sprintf(source.urlFormat, url.QueryEscape(targetURL))
+	a.log.Info().
+		Str("url", targetURL).
+		Str("archive_url", archiveURL).
+		Str("source", source.name).
+		Msg("Found archived version")
 
 	// Move to next source for next call
 	a.index++
-	return archiveURL, err
-}
-
-// getArchiveOrgURL gets an archived URL from archive.org
-func getArchiveOrgURL(client *http.Client, targetURL string) (string, error) {
-	return fmt.Sprintf("https://web.archive.org/web/%s", url.QueryEscape(targetURL)), nil
-}
-
-// getArchiveTodayURL gets an archived URL from archive.today
-func getArchiveTodayURL(client *http.Client, targetURL string) (string, error) {
-	return fmt.Sprintf("https://archive.today/%s", url.QueryEscape(targetURL)), nil
+	return archiveURL, nil
 }
