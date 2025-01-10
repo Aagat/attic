@@ -22,6 +22,15 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]s
 		"--to", "pdf",
 		"--pdf-engine", "xelatex",
 		"--standalone",
+		"--variable", "geometry:margin=0.5in",
+		"--variable", "fontsize=12pt",
+		"--variable", "papersize=letter",
+		"--variable", "classoption=article",
+		"--variable", "block-headings",
+		"--variable", "papersize=letter",
+		"--variable", "documentclass=article",
+		"--variable", "pagestyle=empty",
+		"--variable", "header-includes=\\pagenumbering{gobble}",
 	}
 
 	// Add metadata arguments
