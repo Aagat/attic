@@ -19,9 +19,9 @@ var (
 
 // ArchiveConfig represents configuration for an archive source
 type ArchiveConfig struct {
-	Name      string `mapstructure:"name"`
-	URLFormat string `mapstructure:"url_format"` // Format string where %s will be replaced with the target URL
-	Priority  int    `mapstructure:"priority"`
+	Name     string `mapstructure:"name"`
+	URLExpr  string `mapstructure:"url_expr"` // Expr expression to generate archive URL. Has access to url.Scheme, url.Host, url.Path, url.RawQuery, url.Fragment
+	Priority int    `mapstructure:"priority"`
 }
 
 // Config represents the application configuration

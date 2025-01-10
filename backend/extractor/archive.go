@@ -8,6 +8,7 @@ import (
 
 	"github.com/aagat/attic/backend/config"
 	"github.com/aagat/attic/backend/logger"
+	"github.com/expr-lang/expr"
 	"github.com/rs/zerolog"
 )
 
@@ -18,9 +19,9 @@ type ArchiveExtractor interface {
 
 // archiveSource represents a source for archived content
 type archiveSource struct {
-	name      string
-	urlFormat string
-	priority  int
+	name     string
+	urlExpr  string
+	priority int
 }
 
 type archiveExtractor struct {
@@ -35,9 +36,9 @@ func newArchiveExtractor(cfg []config.ArchiveConfig) *archiveExtractor {
 	sources := make([]archiveSource, len(cfg))
 	for i, archive := range cfg {
 		sources[i] = archiveSource{
-			name:      archive.Name,
-			urlFormat: archive.URLFormat,
-			priority:  archive.Priority,
+			name:     archive.Name,
+			urlExpr:  archive.URLExpr,
+			priority: archive.Priority,
 		}
 	}
 
@@ -49,15 +50,13 @@ func newArchiveExtractor(cfg []config.ArchiveConfig) *archiveExtractor {
 	return &archiveExtractor{
 		client:  &http.Client{},
 		log:     logger.WithComponent("archive_extractor"),
-		index:   0,
 		sources: sources,
+		index:   0,
 	}
 }
 
 func (a *archiveExtractor) getArchiveURL(targetURL string) (string, error) {
-	// If we've tried all sources, return error
 	if a.index >= len(a.sources) {
-		a.index = 0 // Reset for next time
 		return "", fmt.Errorf("no more archive sources available")
 	}
 
@@ -68,15 +67,62 @@ func (a *archiveExtractor) getArchiveURL(targetURL string) (string, error) {
 		Int("attempt", a.index+1).
 		Msg("Trying archive source")
 
-	// Format the archive URL using the configured format string
-	archiveURL := fmt.Sprintf(source.urlFormat, url.QueryEscape(targetURL))
+	// Parse the target URL
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	// Create environment for expr with string functions
+	env := map[string]interface{}{
+		"url": map[string]interface{}{
+			"scheme":     parsedURL.Scheme,
+			"host":       parsedURL.Host,
+			"path":       parsedURL.Path,
+			"rawQuery":   parsedURL.RawQuery,
+			"fragment":   parsedURL.Fragment,
+			"rawURL":     targetURL,
+			"encodedURL": url.QueryEscape(targetURL),
+		},
+		// Add string functions
+		"join": func(parts ...string) string {
+			result := ""
+			for _, part := range parts {
+				result += part
+			}
+			return result
+		},
+		"concat": func(parts ...string) string {
+			result := ""
+			for _, part := range parts {
+				result += part
+			}
+			return result
+		},
+	}
+
+	// Evaluate the URL expression
+	program, err := expr.Compile(source.urlExpr, expr.Env(env))
+	if err != nil {
+		return "", fmt.Errorf("failed to compile URL expression: %w", err)
+	}
+
+	result, err := expr.Run(program, env)
+	if err != nil {
+		return "", fmt.Errorf("failed to evaluate URL expression: %w", err)
+	}
+
+	archiveURL, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("URL expression did not return a string")
+	}
+
 	a.log.Info().
 		Str("url", targetURL).
-		Str("archive_url", archiveURL).
 		Str("source", source.name).
+		Str("archive_url", archiveURL).
 		Msg("Found archived version")
 
-	// Move to next source for next call
 	a.index++
 	return archiveURL, nil
 }
