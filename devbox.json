@@ -5,8 +5,9 @@
     "poppler_utils@latest",
     "go@latest",
     "nodejs@latest",
-    "texliveSmall@latest",
-    "pdftk@latest"
+    "texliveFull@latest",
+    "pdftk@latest",
+    "librsvg@latest"
   ],
   "shell": {
     "init_hook": [
