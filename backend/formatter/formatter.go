@@ -8,31 +8,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aagat/attic/backend/integrations"
+	"github.com/aagat/attic/backend/config"
 )
 
 // Formatter handles content formatting and PDF generation
 type Formatter struct {
-	pandoc      *integrations.Pandoc
-	poppler     *integrations.Poppler
+	pandoc      *Pandoc
+	poppler     *Poppler
 	storagePath string
 }
 
 // NewFormatter creates a new Formatter instance
-func NewFormatter(storagePath string) (*Formatter, error) {
+func NewFormatter(cfg *config.Config) (*Formatter, error) {
 	if err := checkDependencies(); err != nil {
 		return nil, err
 	}
 
 	return &Formatter{
-		pandoc:      integrations.NewPandoc(),
-		poppler:     integrations.NewPoppler(),
-		storagePath: storagePath,
+		pandoc:      newPandoc(cfg),
+		poppler:     newPoppler(),
+		storagePath: cfg.StoragePath,
 	}, nil
 }
 
 // FormatToPDF converts content to PDF format using Pandoc and saves it to a file
-func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string) (string, error) {
+func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string, profile string) (string, error) {
 	// Ensure metadata exists
 	if metadata == nil {
 		metadata = map[string]string{
@@ -42,6 +42,10 @@ func (f *Formatter) FormatToPDF(content []byte, metadata map[string]string) (str
 		// Ensure Creator is set
 		if _, ok := metadata["Creator"]; !ok {
 			metadata["Creator"] = "Attic Kindle Converter"
+		}
+		// Set profile if provided
+		if profile != "" {
+			metadata["Profile"] = profile
 		}
 	}
 

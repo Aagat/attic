@@ -1,4 +1,4 @@
-package integrations
+package formatter
 
 import (
 	"fmt"
@@ -17,8 +17,8 @@ type Poppler struct {
 	log zerolog.Logger
 }
 
-// NewPoppler creates a new Poppler instance
-func NewPoppler() *Poppler {
+// newPoppler creates a new Poppler instance
+func newPoppler() *Poppler {
 	return &Poppler{
 		log: logger.WithComponent("poppler"),
 	}

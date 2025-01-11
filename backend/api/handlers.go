@@ -48,7 +48,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentExtractor := extractor.NewExtractor(puppeteer, llmClient, cfg)
-	pdfFormatter, err := formatter.NewFormatter(cfg.StoragePath)
+	pdfFormatter, err := formatter.NewFormatter(cfg)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize formatter")
 		respondWithError(w, http.StatusInternalServerError, "Failed to initialize formatter")
@@ -99,7 +99,7 @@ func AddToKindleHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to PDF
 	log.Info().Msg("Converting content to PDF")
-	pdfPath, err := pdfFormatter.FormatToPDF(extracted.Content, extracted.Metadata)
+	pdfPath, err := pdfFormatter.FormatToPDF(extracted.Content, extracted.Metadata, "")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to convert to PDF")
 		respondWithError(w, http.StatusInternalServerError, "Failed to convert to PDF")

@@ -24,6 +24,15 @@ type ArchiveConfig struct {
 	Priority int    `mapstructure:"priority"`
 }
 
+// PDFProfile represents configuration for a specific PDF output format
+type PDFProfile struct {
+	Name        string `mapstructure:"name"`
+	MarginSize  string `mapstructure:"margin_size"`  // e.g. "0.5in"
+	FontSize    string `mapstructure:"font_size"`    // e.g. "12pt"
+	PaperSize   string `mapstructure:"paper_size"`   // e.g. "letter", "a4"
+	ShowNumbers bool   `mapstructure:"show_numbers"` // Whether to show page numbers
+}
+
 // Config represents the application configuration
 type Config struct {
 	StoragePath    string          `mapstructure:"storage_path"`
@@ -35,6 +44,8 @@ type Config struct {
 	SenderEmail    string          `mapstructure:"sender_email"`
 	SenderPassword string          `mapstructure:"sender_password"`
 	Archives       []ArchiveConfig `mapstructure:"archives"`
+	PDFProfiles    []PDFProfile    `mapstructure:"pdf_profiles"`    // Different PDF output profiles
+	DefaultProfile string          `mapstructure:"default_profile"` // Default PDF profile to use
 }
 
 // Load reads configuration from file or environment variables
@@ -45,6 +56,32 @@ func Load() (*Config, error) {
 	viper.SetDefault("server_port", "8080")
 	viper.SetDefault("model", "gemini-2.0-flash-exp")
 	viper.SetDefault("email_enabled", false)
+	viper.SetDefault("default_profile", "kindle_scribe")
+
+	// Default PDF profiles
+	viper.SetDefault("pdf_profiles", []PDFProfile{
+		{
+			Name:        "kindle_scribe",
+			MarginSize:  "0.5in",
+			FontSize:    "12pt",
+			PaperSize:   "letter",
+			ShowNumbers: false,
+		},
+		{
+			Name:        "kindle",
+			MarginSize:  "0.4in",
+			FontSize:    "11pt",
+			PaperSize:   "letter",
+			ShowNumbers: false,
+		},
+		{
+			Name:        "kobo",
+			MarginSize:  "0.45in",
+			FontSize:    "11pt",
+			PaperSize:   "a4",
+			ShowNumbers: true,
+		},
+	})
 
 	// Set default storage path to ./data
 	defaultStoragePath := filepath.Join(".", "data")
