@@ -1,23 +1,21 @@
-package formatter
+package integrations
 
 import (
 	"bytes"
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 
 	"github.com/aagat/attic/backend/config"
 )
 
-// Pandoc provides document conversion capabilities
 type Pandoc struct {
 	profiles       map[string]config.PDFProfile
 	defaultProfile string
 }
 
-// newPandoc creates a new Pandoc instance
-func newPandoc(cfg *config.Config) *Pandoc {
+// NewPandoc creates a new Pandoc instance
+func NewPandoc(cfg *config.Config) *Pandoc {
 	// Create profiles map for quick lookup
 	profiles := make(map[string]config.PDFProfile)
 	for _, profile := range cfg.PDFProfiles {
@@ -30,7 +28,6 @@ func newPandoc(cfg *config.Config) *Pandoc {
 	}
 }
 
-// ConvertToPDF converts content to PDF format
 func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]string) ([]byte, error) {
 	// Get profile name from metadata or use default
 	profileName := p.defaultProfile
@@ -54,8 +51,8 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]s
 		"--variable", fmt.Sprintf("papersize=%s", profile.PaperSize),
 		"--variable", "documentclass=article",
 		"--variable", "block-headings",
-		"--variable", "float-placement-figure=H", // Force figures to be placed exactly where they appear in text
-		"--variable", "header-includes=\\usepackage{float}\\floatplacement{figure}{H}", // Additional float control
+		"--variable", "title-meta=true",
+		"--variable", "header-includes=\\usepackage{titling}\\pretitle{\\begin{center}\\huge\\bfseries}\\posttitle{\\par\\vspace{2.5em}\\end{center}}",
 		"--pdf-engine-opt=-shell-escape",
 	}
 
@@ -67,22 +64,9 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]s
 		)
 	}
 
-	// Add metadata arguments with proper escaping
+	// Add metadata arguments
 	for key, value := range metadata {
-		// Escape special LaTeX characters in metadata
-		escaped := strings.NewReplacer(
-			"\\", "\\textbackslash{}",
-			"&", "\\&",
-			"%", "\\%",
-			"$", "\\$",
-			"#", "\\#",
-			"_", "\\_",
-			"{", "\\{",
-			"}", "\\}",
-			"~", "\\textasciitilde{}",
-			"^", "\\textasciicircum{}",
-		).Replace(value)
-		args = append(args, "--metadata", fmt.Sprintf("%s=%s", key, escaped))
+		args = append(args, "--metadata", fmt.Sprintf("%s=%s", key, value))
 	}
 
 	cmd := exec.Command("pandoc", args...)

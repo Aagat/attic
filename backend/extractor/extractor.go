@@ -177,10 +177,13 @@ func (e *Extractor) extractFromURL(url string) (*ExtractedContent, error) {
 		return &ExtractedContent{
 			Content: []byte(content.Content),
 			Metadata: map[string]string{
-				"Title":   content.Title,
-				"Author":  content.Byline,
-				"Excerpt": content.Excerpt,
-				"Source":  url,
+				"Title":      content.Title,
+				"Author":     content.Byline,
+				"Excerpt":    content.Excerpt,
+				"Source":     url,
+				"SiteName":   content.SiteName,
+				"Length":     fmt.Sprintf("%d", content.Length),
+				"IsReadable": fmt.Sprintf("%t", content.IsReadable),
 			},
 			Screenshot: screenshot,
 		}, nil
