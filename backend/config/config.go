@@ -63,23 +63,23 @@ func Load() (*Config, error) {
 		{
 			Name:        "kindle_scribe",
 			MarginSize:  "0.5in",
-			FontSize:    "12pt",
+			FontSize:    "14pt",
 			PaperSize:   "letter",
 			ShowNumbers: false,
 		},
 		{
 			Name:        "kindle",
 			MarginSize:  "0.4in",
-			FontSize:    "11pt",
+			FontSize:    "12pt",
 			PaperSize:   "letter",
 			ShowNumbers: false,
 		},
 		{
 			Name:        "kobo",
 			MarginSize:  "0.45in",
-			FontSize:    "11pt",
+			FontSize:    "12pt",
 			PaperSize:   "a4",
-			ShowNumbers: true,
+			ShowNumbers: false,
 		},
 	})
 

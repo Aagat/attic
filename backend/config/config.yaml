@@ -42,20 +42,20 @@ pdf_profiles:
   # Kindle Scribe profile - optimized for 10.2" display
   - name: kindle_scribe
     margin_size: "0.5in"
-    font_size: "12pt"
+    font_size: "14pt"
     paper_size: "letter"
     show_numbers: false
 
   # Standard Kindle profile - optimized for 6" display
   - name: kindle
     margin_size: "0.4in"
-    font_size: "11pt"
+    font_size: "12pt"
     paper_size: "letter"
     show_numbers: false
 
   # Kobo profile - optimized for various Kobo devices
   - name: kobo
     margin_size: "0.45in"
-    font_size: "11pt"
+    font_size: "12pt"
     paper_size: "a4"
-    show_numbers: true 
+    show_numbers: false

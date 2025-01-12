@@ -49,21 +49,29 @@ func (p *Pandoc) ConvertToPDF(content []byte, from string, metadata map[string]s
 		"--to", "pdf",
 		"--pdf-engine", "xelatex",
 		"--standalone",
-		"--variable", fmt.Sprintf("geometry:margin=%s", profile.MarginSize),
+		"--wrap=preserve",
+		"--variable", "graphics=true",
+		"--variable", fmt.Sprintf("geometry:margin=%s,includeheadfoot,heightrounded,width=6.5in,textwidth=6.5in", profile.MarginSize),
 		"--variable", fmt.Sprintf("fontsize=%s", profile.FontSize),
 		"--variable", fmt.Sprintf("papersize=%s", profile.PaperSize),
-		"--variable", "documentclass=article",
+		"--variable", "documentclass=extarticle",
 		"--variable", "block-headings",
-		"--variable", "float-placement-figure=H", // Force figures to be placed exactly where they appear in text
-		"--variable", "header-includes=\\usepackage{float}\\floatplacement{figure}{H}", // Additional float control
+		"--variable", "header-includes=\\usepackage[export]{adjustbox}\\usepackage{graphicx}\\makeatletter\\let\\oldincludegraphics\\includegraphics\\renewcommand{\\includegraphics}[2][]{\\oldincludegraphics[width=\\textwidth,keepaspectratio,center]{#2}}\\makeatother\\setlength{\\parindent}{0pt}\\usepackage{float}\\floatplacement{figure}{H}",
+		"--variable", "linkcolor=blue",
 		"--pdf-engine-opt=-shell-escape",
+		"--pdf-engine-opt=-halt-on-error",
+		"--pdf-engine-opt=-interaction=nonstopmode",
+		"--pdf-engine-opt=-extra-mem-top=10000000",
+		"--pdf-engine-opt=-extra-mem-bot=10000000",
+		"--pdf-engine-opt=-pool-size=10000000",
+		"--pdf-engine-opt=-main-memory=100000000",
+		"--pdf-engine-opt=-save-size=100000",
 	}
 
 	// Handle page numbers based on profile
 	if !profile.ShowNumbers {
 		args = append(args,
 			"--variable", "pagestyle=empty",
-			"--variable", "header-includes=\\pagenumbering{gobble}",
 		)
 	}
 
