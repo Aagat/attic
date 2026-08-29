@@ -182,18 +182,24 @@ func TestExtractFromURL(t *testing.T) {
 				},
 			}
 
+			archiveCalls := 0
 			archive := &mockArchiveExtractor{
 				getArchiveURLFunc: func(url string) (string, error) {
+					if archiveCalls > 0 {
+						return "", errors.New("no more archive sources available")
+					}
+					archiveCalls++
 					return tt.archiveURL, tt.archiveURLErr
 				},
 			}
 
 			extractor := &Extractor{
-				puppeteer: puppeteer,
-				llm:       llm,
-				ai:        newAIExtractor(llm, puppeteer),
-				archive:   archive,
-				log:       logger.WithComponent("extractor_test"),
+				puppeteer:   puppeteer,
+				llm:         llm,
+				ai:          newAIExtractor(llm, puppeteer),
+				archive:     archive,
+				log:         logger.WithComponent("extractor_test"),
+				storagePath: t.TempDir(),
 			}
 
 			// Run test

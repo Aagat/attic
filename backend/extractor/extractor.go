@@ -156,16 +156,18 @@ func (e *Extractor) extractFromURL(url string) (*ExtractedContent, error) {
 	content, err := e.puppeteer.ExtractWithReadability(ctx, url)
 	if err == nil {
 		// Decode and save screenshot
-		var screenshotErr error
-		screenshot, screenshotErr = base64.StdEncoding.DecodeString(content.Screenshot)
-		if screenshotErr != nil {
-			e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to decode screenshot")
-		} else {
-			screenshotPath, err := e.saveScreenshot(screenshot, url)
-			if err != nil {
-				e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
-			} else {
-				e.log.Info().Str("path", screenshotPath).Msg("Saved screenshot")
+		if content.Screenshot != "" {
+			var screenshotErr error
+			screenshot, screenshotErr = base64.StdEncoding.DecodeString(content.Screenshot)
+			if screenshotErr != nil {
+				e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to decode screenshot")
+			} else if len(screenshot) > 0 {
+				screenshotPath, err := e.saveScreenshot(screenshot, url)
+				if err != nil {
+					e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
+				} else {
+					e.log.Info().Str("path", screenshotPath).Msg("Saved screenshot")
+				}
 			}
 		}
 
@@ -196,7 +198,7 @@ func (e *Extractor) extractFromURL(url string) (*ExtractedContent, error) {
 		screenshot, screenshotErr = base64.StdEncoding.DecodeString(content.Screenshot)
 		if screenshotErr != nil {
 			e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to decode screenshot from failed attempt")
-		} else {
+		} else if len(screenshot) > 0 {
 			screenshotPath, err := e.saveScreenshot(screenshot, url)
 			if err != nil {
 				e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
@@ -206,8 +208,24 @@ func (e *Extractor) extractFromURL(url string) (*ExtractedContent, error) {
 		}
 	}
 
+	// Capture a screenshot separately when Readability did not return one.
+	if len(screenshot) == 0 {
+		var screenshotErr error
+		screenshot, screenshotErr = e.puppeteer.CaptureScreenshot(ctx, url)
+		if screenshotErr != nil {
+			e.log.Warn().Err(screenshotErr).Str("url", url).Msg("Failed to capture screenshot for fallback extraction")
+		} else if len(screenshot) > 0 {
+			screenshotPath, err := e.saveScreenshot(screenshot, url)
+			if err != nil {
+				e.log.Warn().Err(err).Str("url", url).Msg("Failed to save screenshot")
+			} else {
+				e.log.Info().Str("path", screenshotPath).Msg("Saved fallback screenshot")
+			}
+		}
+	}
+
 	// Try AI extraction with the screenshot we have
-	if screenshot != nil {
+	if len(screenshot) > 0 {
 		e.log.Info().Str("url", url).Msg("Attempting to extract content using AI")
 		aiContent, err := e.ai.extract(ctx, screenshot)
 		if err == nil {

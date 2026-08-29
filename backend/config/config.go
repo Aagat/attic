@@ -63,7 +63,7 @@ func Load() (*Config, error) {
 		{
 			Name:        "kindle_scribe",
 			MarginSize:  "0.5in",
-			FontSize:    "14pt",
+			FontSize:    "16pt",
 			PaperSize:   "letter",
 			ShowNumbers: false,
 		},

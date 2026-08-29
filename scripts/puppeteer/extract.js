@@ -53,6 +53,15 @@ async function extractContent(url) {
     // Create new page
     const page = await browser.newPage();
 
+    // Add script to auto-close popups
+    await page.evaluateOnNewDocument(() => {
+      window.addEventListener('load', () => {
+        // Close common popup/dialog buttons
+        const closeButtons = document.querySelectorAll('[class*="close"], [class*="popup"], [id*="close"], [id*="popup"], button[aria-label*="close"]');
+        closeButtons.forEach(button => button.click());
+      });
+    });
+
     // Set viewport
     await page.setViewport({
       width: 1920,
@@ -67,7 +76,7 @@ async function extractContent(url) {
 
     // Navigate to URL with timeout
     await page.goto(url, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'networkidle2',
       timeout: 30000
     });
 

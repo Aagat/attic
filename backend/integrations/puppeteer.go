@@ -51,20 +51,31 @@ func (p *puppeteerImpl) ExtractWithReadability(ctx context.Context, url string) 
 	p.log.Info().Str("url", url).Msg("Extracting content using Readability")
 
 	cmd := exec.CommandContext(ctx, "node", p.scriptPath, "--url", url)
-	output, err := cmd.Output()
-	if err != nil {
-		var stderr string
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr = string(exitErr.Stderr)
+	output, cmdErr := cmd.Output()
+	var content ReadabilityContent
+	if len(output) > 0 {
+		if err := json.Unmarshal(output, &content); err != nil {
+			p.log.Error().Err(err).Msg("Failed to parse extracted content")
+			if cmdErr != nil {
+				return nil, fmt.Errorf("puppeteer failed: %w", cmdErr)
+			}
+			return nil, fmt.Errorf("failed to parse content: %w", err)
 		}
-		p.log.Error().Err(err).Str("stderr", stderr).Msg("Failed to extract content")
-		return nil, fmt.Errorf("puppeteer failed: %w", err)
 	}
 
-	var content ReadabilityContent
-	if err := json.Unmarshal(output, &content); err != nil {
-		p.log.Error().Err(err).Msg("Failed to parse extracted content")
-		return nil, fmt.Errorf("failed to parse content: %w", err)
+	if cmdErr != nil {
+		var stderr string
+		if exitErr, ok := cmdErr.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		if content.Error != "" {
+			p.log.Error().Str("error", content.Error).Str("stderr", stderr).Msg("Extraction returned error")
+			// Return the content anyway since it might contain a screenshot.
+			return &content, fmt.Errorf("extraction failed: %s", content.Error)
+		}
+		p.log.Error().Err(cmdErr).Str("stderr", stderr).Msg("Failed to extract content")
+		// Return the content anyway since it might contain a screenshot.
+		return &content, fmt.Errorf("puppeteer failed: %w", cmdErr)
 	}
 
 	if content.Error != "" {
@@ -126,9 +137,18 @@ func (p *puppeteerImpl) CaptureScreenshot(ctx context.Context, url string) ([]by
 	p.log.Info().Str("url", url).Msg("Capturing screenshot")
 
 	// Get content which includes screenshot
-	content, err := p.ExtractWithReadability(ctx, url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to capture screenshot: %w", err)
+	content, extractErr := p.ExtractWithReadability(ctx, url)
+	if content == nil {
+		if extractErr != nil {
+			return nil, fmt.Errorf("failed to capture screenshot: %w", extractErr)
+		}
+		return nil, fmt.Errorf("failed to capture screenshot: no content returned")
+	}
+	if content.Screenshot == "" {
+		if extractErr != nil {
+			return nil, fmt.Errorf("failed to capture screenshot: %w", extractErr)
+		}
+		return nil, fmt.Errorf("failed to capture screenshot: no screenshot returned")
 	}
 
 	// Decode base64 screenshot
@@ -136,6 +156,12 @@ func (p *puppeteerImpl) CaptureScreenshot(ctx context.Context, url string) ([]by
 	if err != nil {
 		p.log.Error().Err(err).Msg("Failed to decode screenshot")
 		return nil, fmt.Errorf("failed to decode screenshot: %w", err)
+	}
+	if len(screenshot) == 0 {
+		return nil, fmt.Errorf("failed to capture screenshot: decoded screenshot is empty")
+	}
+	if extractErr != nil {
+		p.log.Warn().Err(extractErr).Msg("Captured screenshot despite extraction error")
 	}
 
 	p.log.Info().
