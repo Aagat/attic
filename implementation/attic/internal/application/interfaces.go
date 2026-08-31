@@ -202,8 +202,9 @@ func (l *Lease) Observe(version uint64, expiresAt time.Time, stage domain.Stage)
 }
 
 type Completion struct {
-	Content  domain.ContentDocument
-	Artifact domain.Artifact
+	Content      domain.ContentDocument
+	Artifact     domain.Artifact
+	CanonicalURL string
 }
 
 // AIAttempt is the provider-safe durable record for one model request. Page
@@ -273,9 +274,10 @@ type ProcessorContext struct {
 }
 
 type ProcessResult struct {
-	Article  ApprovedArticle
-	Filename string
-	PDF      []byte
+	Article      ApprovedArticle
+	CanonicalURL string
+	Filename     string
+	PDF          []byte
 }
 
 // ArticleDraft is the validated logical result returned by an AI-aware
@@ -302,6 +304,13 @@ type ArticleDraft struct {
 type ApprovedArticle struct {
 	draft ArticleDraft
 	valid bool
+}
+
+// Snapshot returns the immutable, AI-approved article data needed by trusted
+// downstream adapters such as the PDF formatter. The zero value remains
+// unusable, so formatting cannot accidentally consume an unapproved draft.
+func (a ApprovedArticle) Snapshot() (ArticleDraft, bool) {
+	return a.draft, a.valid
 }
 
 type ArchiveOptions struct {

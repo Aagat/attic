@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"attic/internal/application"
 	"attic/internal/domain"
@@ -76,8 +77,17 @@ func (a *ArticleApprover) Approve(ctx context.Context, jobID domain.JobID, input
 	}
 	var attemptIDs []string
 	if len(attempts) > 0 {
+		recordCtx := ctx
+		var cancel context.CancelFunc
+		if ctx != nil && ctx.Err() != nil {
+			// The provider call happened and must remain auditable even when
+			// shutdown cancelled the processing context. Detach only this small,
+			// bounded metadata write; no page or provider body is persisted.
+			recordCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+		}
 		var err error
-		attemptIDs, err = a.recorder.RecordAIAttempts(ctx, jobID, attempts)
+		attemptIDs, err = a.recorder.RecordAIAttempts(recordCtx, jobID, attempts)
 		if err != nil || len(attemptIDs) != len(attempts) {
 			return application.ApprovedArticle{}, application.NewProcessingError(string(domain.FailureStorageFailed), "AI attempt metadata could not be committed", true)
 		}

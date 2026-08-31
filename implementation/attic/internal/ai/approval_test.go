@@ -178,6 +178,38 @@ func TestArticleApproverTreatsAttemptPersistenceFailureAsRetryableStorageFailure
 	}
 }
 
+type contextRecorder struct {
+	active bool
+}
+
+func (r *contextRecorder) RecordAIAttempts(ctx context.Context, _ domain.JobID, attempts []application.AIAttempt) ([]string, error) {
+	r.active = ctx != nil && ctx.Err() == nil
+	return []string{"cancelled-attempt"}, nil
+}
+
+func TestArticleApproverRecordsCancelledProviderAttemptWithBoundedDetachedContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	recorder := &contextRecorder{}
+	analyzer := analyzerFunc(func(context.Context, ai.AnalyzeRequest) (ai.Approved, []ai.Attempt, error) {
+		cancel()
+		return ai.Approved{}, []ai.Attempt{{
+			Number: 1, Model: "fake", PromptVersion: "v1", Status: ai.AttemptFailed,
+			ErrorCode: ai.CodeAICanceled, CreatedAt: time.Now(),
+		}}, context.Canceled
+	})
+	approver, err := ai.NewArticleApprover(analyzer, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = approver.Approve(ctx, "job", ai.ApprovalInput{}, func(application.ArticleDraft) (application.ApprovedArticle, error) {
+		t.Fatal("approval callback called after cancellation")
+		return application.ApprovedArticle{}, nil
+	})
+	if !errors.Is(err, context.Canceled) || !recorder.active {
+		t.Fatalf("error=%v recorder active=%v", err, recorder.active)
+	}
+}
+
 func TestArticleApproverRejectsReplacementWhoseOnlyTextIsUnsafe(t *testing.T) {
 	recorder := &attemptRecorder{}
 	analyzer := analyzerFunc(func(context.Context, ai.AnalyzeRequest) (ai.Approved, []ai.Attempt, error) {

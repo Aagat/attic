@@ -112,7 +112,11 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	cancelProcess()
 	heartbeatErr := <-heartbeatDone
 	if heartbeatErr != nil && (errors.Is(heartbeatErr, ErrLeaseLost) || processErr == nil || errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded)) {
-		processErr = heartbeatErr
+		if errors.Is(heartbeatErr, ErrLeaseLost) {
+			processErr = heartbeatErr
+		} else {
+			processErr = NewProcessingError(string(domain.FailureStorageFailed), "The processing lease could not be renewed", true)
+		}
 	}
 	if processErr != nil {
 		if errors.Is(processErr, ErrLeaseLost) {
@@ -138,12 +142,14 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if err != nil {
 		return true, w.handleProcessingError(ctx, lease, NewProcessingError(string(domain.FailureStorageFailed), "Artifact storage is unavailable", true), now)
 	}
-	content, ok := result.Article.content(lease.Job, w.newContentID(), now)
+	contentJob := lease.Job
+	contentJob.CanonicalURL = result.CanonicalURL
+	content, ok := result.Article.content(contentJob, w.newContentID(), now)
 	if !ok {
 		_ = w.artifacts.Delete(ctx, artifact)
 		return true, w.handleProcessingError(ctx, lease, NewProcessingError(string(domain.FailureAIInvalidResponse), "The processor returned invalid article content", false), now)
 	}
-	if err := w.store.Complete(ctx, lease, Completion{Content: content, Artifact: artifact}, now); err != nil {
+	if err := w.store.Complete(ctx, lease, Completion{Content: content, Artifact: artifact, CanonicalURL: result.CanonicalURL}, now); err != nil {
 		_ = w.artifacts.Delete(ctx, artifact)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return true, err

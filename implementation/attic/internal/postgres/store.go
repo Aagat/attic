@@ -746,11 +746,11 @@ func (s *Store) Complete(ctx context.Context, lease *application.Lease, completi
 		return mapDBError("persist artifact", err)
 	}
 	result, err := tx.ExecContext(ctx, `
-		UPDATE jobs SET display_title = $2, status = 'ready', stage = NULL,
+		UPDATE jobs SET display_title = $2, canonical_url = NULLIF($7, ''), status = 'ready', stage = NULL,
 			lease_token = NULL, lease_expires_at = NULL, completed_at = $3,
 			updated_at = $3, version = version + 1
 		WHERE id = $1 AND status = 'processing' AND lease_token = $4
-		  AND version = $5 AND lease_expires_at > $6`, string(lease.Job.ID), completion.Content.Title, now, lease.Token, version, leaseNow)
+		  AND version = $5 AND lease_expires_at > $6`, string(lease.Job.ID), completion.Content.Title, now, lease.Token, version, leaseNow, completion.CanonicalURL)
 	if err != nil {
 		return mapDBError("complete job", err)
 	}

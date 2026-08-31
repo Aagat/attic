@@ -344,6 +344,7 @@ func (s *Store) Complete(ctx context.Context, lease *application.Lease, completi
 	content := completion.Content
 	content.JobID = job.ID
 	job.Content = &content
+	job.CanonicalURL = completion.CanonicalURL
 	artifact := completion.Artifact
 	job.Artifact = &artifact
 	job.AIConfidence = content.AIConfidence

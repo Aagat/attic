@@ -12,12 +12,15 @@ import (
 	"syscall"
 	"time"
 
+	"attic/internal/acquisition"
 	"attic/internal/ai"
 	"attic/internal/application"
 	"attic/internal/config"
 	"attic/internal/filesystem"
+	"attic/internal/formatter"
 	"attic/internal/httpapi"
 	"attic/internal/postgres"
+	"attic/internal/processing"
 )
 
 const (
@@ -80,14 +83,41 @@ func runServer(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
-		DefaultProfile: cfg.DefaultProfile,
-		Profiles:       cfg.Profiles,
+	renderer, err := acquisition.NewChromiumRenderer(acquisition.ChromiumConfig{
+		Executable: cfg.Browser.Executable, NavigationTimeout: cfg.Browser.NavigationTimeout,
+		RenderTimeout: cfg.Browser.RenderTimeout, MaxDOMBytes: cfg.Browser.MaxDOMBytes,
+		MaxDOMNodes: cfg.Browser.MaxDOMNodes, MaxScreenshotBytes: cfg.Browser.MaxScreenshotBytes,
+		ScreenshotWidth: cfg.Browser.ScreenshotWidth, ScreenshotHeight: cfg.Browser.ScreenshotHeight,
+		MaxTransferredBytes: cfg.Browser.MaxTransferredBytes, MaxRedirects: int64(cfg.Browser.MaxRedirects),
 	})
 	if err != nil {
 		return err
 	}
-	worker, err := application.NewWorker(archive, application.WorkerOptions{})
+	aiClient, err := ai.NewClient(ai.Config{BaseURL: cfg.AI.BaseURL, APIKey: cfg.AI.APIKey, Model: cfg.AI.Model,
+		ReasoningEffort: cfg.AI.ReasoningEffort, OmitReasoningEffort: cfg.AI.OmitReasoningEffort,
+		OmitResponseFormat: cfg.AI.OmitResponseFormat, Timeout: cfg.AI.Timeout})
+	if err != nil {
+		return fmt.Errorf("AI configuration failed: %s", ai.CodeOf(err))
+	}
+	approver, err := ai.NewArticleApprover(aiClient, store)
+	if err != nil {
+		return fmt.Errorf("AI approval configuration failed: %s", ai.CodeOf(err))
+	}
+	pdf := formatter.PDF{MaxBytes: cfg.PDF.MaxBytes, Timeout: cfg.PDF.Timeout, ChromiumPath: cfg.Browser.Executable,
+		MarginMM: cfg.PDF.MarginMM, BodyFontPT: cfg.PDF.BodyFontPT, LineHeight: cfg.PDF.LineHeight}
+	processor, err := processing.New(renderer, approver, pdf)
+	if err != nil {
+		return err
+	}
+	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
+		DefaultProfile: cfg.DefaultProfile,
+		Profiles:       cfg.Profiles,
+		Processor:      processor,
+	})
+	if err != nil {
+		return err
+	}
+	worker, err := application.NewWorker(archive, application.WorkerOptions{Processor: processor, MaxAttempts: cfg.AI.MaxRetries + 1})
 	if err != nil {
 		return err
 	}

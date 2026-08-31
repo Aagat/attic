@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -100,6 +101,9 @@ type PDF struct {
 	ChromiumPath string
 	TempDir      string
 	Executor     Executor
+	MarginMM     float64
+	BodyFontPT   float64
+	LineHeight   float64
 }
 
 func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
@@ -117,7 +121,17 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %v", ErrInvalidArticle, err)
 	}
-	document := renderHTML(article, clean)
+	margin, fontSize, lineHeight := p.MarginMM, p.BodyFontPT, p.LineHeight
+	if margin <= 0 {
+		margin = 10
+	}
+	if fontSize <= 0 {
+		fontSize = 11
+	}
+	if lineHeight <= 0 {
+		lineHeight = 1.4
+	}
+	document := renderHTML(article, clean, margin, fontSize, lineHeight)
 
 	tempDir, err := os.MkdirTemp(p.TempDir, "attic-pdf-*")
 	if err != nil {
@@ -173,6 +187,7 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 func chromiumArgs(tempDir, htmlPath, outputPath string) []string {
 	return []string{
 		"--headless",
+		"--disable-dev-shm-usage",
 		"--disable-gpu",
 		"--disable-background-networking",
 		"--disable-component-update",
@@ -265,7 +280,7 @@ func min(a, b int) int {
 	return b
 }
 
-func renderHTML(article Article, clean string) string {
+func renderHTML(article Article, clean string, marginMM, bodyFontPT, lineHeight float64) string {
 	var metadata []string
 	for _, value := range []string{article.Author, article.SiteName, article.PublicationDate} {
 		if value = strings.TrimSpace(value); value != "" {
@@ -287,8 +302,8 @@ func renderHTML(article Article, clean string) string {
 <html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
 <style>
-@page { size: A5 portrait; margin: 10mm; }
-html { font-family: Georgia, "Noto Serif", "DejaVu Serif", serif; font-size: 11pt; line-height: 1.4; color: #111; }
+@page { size: A5 portrait; margin: ` + cssNumber(marginMM) + `mm; }
+html { font-family: Georgia, "Noto Serif", "DejaVu Serif", serif; font-size: ` + cssNumber(bodyFontPT) + `pt; line-height: ` + cssNumber(lineHeight) + `; color: #111; }
 body { margin: 0; overflow-wrap: anywhere; }
 h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 4mm; }
 h2 { font-size: 16pt; } h3 { font-size: 13pt; }
@@ -303,6 +318,8 @@ a { color: inherit; text-decoration: underline; }
 </style></head><body><header><h1>` + html.EscapeString(strings.TrimSpace(article.Title)) + `</h1>` +
 		conditionalParagraph("metadata", strings.Join(metadata, " · ")) + `</header><main>` + clean + `</main>` + source + generated + `</body></html>`
 }
+
+func cssNumber(value float64) string { return strconv.FormatFloat(value, 'f', -1, 64) }
 
 func conditionalParagraph(class, value string) string {
 	if value == "" {

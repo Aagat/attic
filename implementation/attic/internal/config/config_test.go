@@ -28,6 +28,34 @@ func TestLoadAppliesSafeDefaults(t *testing.T) {
 	}
 }
 
+func TestOpenAIAPIKeyCompatibilityAlias(t *testing.T) {
+	values := map[string]string{"BEARER_TOKEN": "token", "DATABASE_URL": "postgres://db/attic", "AI_BASE_URL": "https://provider.example/v1", "OPENAI_API_KEY": "alias-secret"}
+	cfg, err := LoadFrom(func(key string) string { return values[key] })
+	if err != nil || cfg.AI.APIKey != "alias-secret" {
+		t.Fatalf("alias config = %#v, %v", cfg.AI, err)
+	}
+	values["AI_API_KEY"] = "preferred-secret"
+	cfg, err = LoadFrom(func(key string) string { return values[key] })
+	if err != nil || cfg.AI.APIKey != "preferred-secret" {
+		t.Fatalf("preferred config = %#v, %v", cfg.AI, err)
+	}
+}
+
+func TestBrowserAndPDFLimitsAreParsedAndValidated(t *testing.T) {
+	values := map[string]string{"BEARER_TOKEN": "token", "DATABASE_URL": "postgres://db/attic", "AI_BASE_URL": "https://provider.example/v1", "AI_API_KEY": "key", "BROWSER_RENDER_TIMEOUT": "25s", "BROWSER_MAX_DOM_BYTES": "12345", "PDF_MAX_BYTES": "54321", "PDF_TIMEOUT": "12s"}
+	cfg, err := LoadFrom(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Browser.RenderTimeout != 25*time.Second || cfg.Browser.MaxDOMBytes != 12345 || cfg.PDF.MaxBytes != 54321 || cfg.PDF.Timeout != 12*time.Second {
+		t.Fatalf("runtime config = %#v %#v", cfg.Browser, cfg.PDF)
+	}
+	values["BROWSER_SCREENSHOT_WIDTH"] = "5000"
+	if _, err := LoadFrom(func(key string) string { return values[key] }); err == nil || !strings.Contains(err.Error(), "BROWSER_SCREENSHOT_DIMENSIONS") {
+		t.Fatalf("invalid dimensions = %v", err)
+	}
+}
+
 func TestAICompatibilityOptionsAreParsedAndBounded(t *testing.T) {
 	values := map[string]string{
 		"BEARER_TOKEN":            "token",

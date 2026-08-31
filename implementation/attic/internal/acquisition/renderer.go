@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
@@ -22,6 +23,7 @@ var (
 	ErrRenderTimeout      = errors.New("browser rendering exceeded its deadline")
 	ErrDOMTooLarge        = errors.New("rendered DOM exceeds configured limit")
 	ErrScreenshotTooLarge = errors.New("screenshot exceeds configured limit")
+	ErrRequestLimit       = errors.New("browser request count exceeds configured limit")
 )
 
 // Renderer is the acquisition boundary consumed by workers. Implementations
@@ -135,8 +137,14 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 	if err != nil {
 		return result, fmt.Errorf("start browser policy proxy: %w", err)
 	}
+	budget := requestBudget{maximum: r.config.MaxRequests}
+	var interceptionBlocked atomic.Int64
 	defer func() {
 		result.Diagnostics = proxy.diagnostics()
+		if intercepted := budget.count.Load(); intercepted > result.Diagnostics.Requests {
+			result.Diagnostics.Requests = intercepted
+		}
+		result.Diagnostics.BlockedRequests += interceptionBlocked.Load()
 		if closeErr := proxy.Close(); err == nil && closeErr != nil {
 			err = fmt.Errorf("close browser policy proxy: %w", closeErr)
 		}
@@ -147,6 +155,7 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	opts = append(opts,
 		chromedp.ExecPath(r.config.Executable),
+		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.ProxyServer(proxy.URL()),
 		chromedp.Flag("proxy-bypass-list", "<-loopback>"),
 		chromedp.Flag("disable-quic", true),
@@ -184,6 +193,9 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 				executorCtx := cdp.WithExecutor(browserCtx, targetContext.Target)
 				target, parseErr := url.Parse(e.Request.URL)
 				policyMu.Lock()
+				if budget.exceeded() && policyErr == nil {
+					policyErr = ErrRequestLimit
+				}
 				if e.RedirectedRequestID != "" {
 					redirects++
 					if redirects > r.config.MaxRedirects && policyErr == nil {
@@ -196,6 +208,7 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 				}
 				policyMu.Unlock()
 				if blocked {
+					interceptionBlocked.Add(1)
 					_ = fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executorCtx)
 					return
 				}
@@ -275,10 +288,25 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 	policyMu.Lock()
 	blockedErr := policyErr
 	policyMu.Unlock()
+	// Blocking an unsafe subresource does not invalidate an otherwise complete
+	// public document. Exhausting a configured resource/redirect budget does:
+	// continuing would send a knowingly truncated render to the AI stage.
+	if errors.Is(blockedErr, ErrRequestLimit) || errors.Is(blockedErr, ErrTooManyRedirects) {
+		return result, blockedErr
+	}
 	if blockedErr != nil && result.FinalURL == "" {
 		return result, blockedErr
 	}
 	return result, nil
+}
+
+type requestBudget struct {
+	maximum int64
+	count   atomic.Int64
+}
+
+func (b *requestBudget) exceeded() bool {
+	return b != nil && b.count.Add(1) > b.maximum
 }
 
 func (r *ChromiumRenderer) renderError(parent, operation context.Context, err error) error {

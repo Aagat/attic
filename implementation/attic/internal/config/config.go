@@ -33,8 +33,24 @@ type Config struct {
 	DefaultProfile string
 	Profiles       map[string]struct{}
 
-	AI   AIConfig
-	SMTP SMTPConfig
+	AI      AIConfig
+	Browser BrowserConfig
+	PDF     PDFConfig
+	SMTP    SMTPConfig
+}
+
+type BrowserConfig struct {
+	Executable                                                              string
+	NavigationTimeout, RenderTimeout                                        time.Duration
+	Concurrency, MaxRedirects, MaxDOMBytes, MaxDOMNodes, MaxScreenshotBytes int
+	MaxTransferredBytes                                                     int64
+	ScreenshotWidth, ScreenshotHeight                                       int64
+}
+
+type PDFConfig struct {
+	MaxBytes                         int
+	Timeout                          time.Duration
+	MarginMM, BodyFontPT, LineHeight float64
 }
 
 type AIConfig struct {
@@ -86,6 +102,10 @@ func LoadFrom(get func(string) string) (Config, error) {
 	if omitReasoningEffort {
 		reasoningEffort = ""
 	}
+	aiAPIKey := get("AI_API_KEY")
+	if strings.TrimSpace(aiAPIKey) == "" {
+		aiAPIKey = get("OPENAI_API_KEY")
+	}
 	config := Config{
 		ListenAddress:  valueOr(get("LISTEN_ADDRESS"), ":8080"),
 		PublicBaseURL:  valueOr(get("PUBLIC_BASE_URL"), "http://localhost:8080"),
@@ -99,13 +119,15 @@ func LoadFrom(get func(string) string) (Config, error) {
 		Profiles:       map[string]struct{}{"a5": {}},
 		AI: AIConfig{
 			BaseURL:             get("AI_BASE_URL"),
-			APIKey:              get("AI_API_KEY"),
+			APIKey:              aiAPIKey,
 			Model:               valueOr(get("AI_MODEL"), DefaultAIModel),
 			ReasoningEffort:     reasoningEffort,
 			OmitReasoningEffort: omitReasoningEffort,
 			Timeout:             90 * time.Second,
 			MaxRetries:          2,
 		},
+		Browser: BrowserConfig{Executable: valueOr(get("BROWSER_EXECUTABLE"), "/usr/bin/chromium"), NavigationTimeout: 30 * time.Second, RenderTimeout: 45 * time.Second, Concurrency: 1, MaxRedirects: 5, MaxDOMBytes: 10_000_000, MaxDOMNodes: 100_000, MaxScreenshotBytes: 5_000_000, MaxTransferredBytes: 20_000_000, ScreenshotWidth: 1280, ScreenshotHeight: 1600},
+		PDF:     PDFConfig{MaxBytes: 25_000_000, Timeout: 45 * time.Second, MarginMM: 10, BodyFontPT: 11, LineHeight: 1.4},
 		SMTP: SMTPConfig{
 			Host:        get("SMTP_HOST"),
 			Port:        587,
@@ -115,6 +137,86 @@ func LoadFrom(get func(string) string) (Config, error) {
 			Sender:      get("SMTP_SENDER"),
 			Destination: get("SMTP_DESTINATION"),
 		},
+	}
+	parseDuration := func(key string, target *time.Duration) error {
+		raw := strings.TrimSpace(get(key))
+		if raw == "" {
+			return nil
+		}
+		value, err := time.ParseDuration(raw)
+		if err != nil {
+			return &ValidationError{Fields: []string{key}}
+		}
+		*target = value
+		return nil
+	}
+	parseInt := func(key string, target *int) error {
+		raw := strings.TrimSpace(get(key))
+		if raw == "" {
+			return nil
+		}
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return &ValidationError{Fields: []string{key}}
+		}
+		*target = value
+		return nil
+	}
+	parseInt64 := func(key string, target *int64) error {
+		raw := strings.TrimSpace(get(key))
+		if raw == "" {
+			return nil
+		}
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return &ValidationError{Fields: []string{key}}
+		}
+		*target = value
+		return nil
+	}
+	parseFloat := func(key string, target *float64) error {
+		raw := strings.TrimSpace(get(key))
+		if raw == "" {
+			return nil
+		}
+		value, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return &ValidationError{Fields: []string{key}}
+		}
+		*target = value
+		return nil
+	}
+	for _, item := range []struct {
+		key    string
+		target *time.Duration
+	}{{"BROWSER_NAVIGATION_TIMEOUT", &config.Browser.NavigationTimeout}, {"BROWSER_RENDER_TIMEOUT", &config.Browser.RenderTimeout}, {"PDF_TIMEOUT", &config.PDF.Timeout}} {
+		if err := parseDuration(item.key, item.target); err != nil {
+			return Config{}, err
+		}
+	}
+	for _, item := range []struct {
+		key    string
+		target *int
+	}{{"BROWSER_CONCURRENCY", &config.Browser.Concurrency}, {"BROWSER_MAX_REDIRECTS", &config.Browser.MaxRedirects}, {"BROWSER_MAX_DOM_BYTES", &config.Browser.MaxDOMBytes}, {"BROWSER_MAX_DOM_NODES", &config.Browser.MaxDOMNodes}, {"BROWSER_MAX_SCREENSHOT_BYTES", &config.Browser.MaxScreenshotBytes}, {"PDF_MAX_BYTES", &config.PDF.MaxBytes}} {
+		if err := parseInt(item.key, item.target); err != nil {
+			return Config{}, err
+		}
+	}
+	for _, item := range []struct {
+		key    string
+		target *int64
+	}{{"BROWSER_MAX_RESPONSE_BYTES", &config.Browser.MaxTransferredBytes}, {"BROWSER_SCREENSHOT_WIDTH", &config.Browser.ScreenshotWidth}, {"BROWSER_SCREENSHOT_HEIGHT", &config.Browser.ScreenshotHeight}} {
+		if err := parseInt64(item.key, item.target); err != nil {
+			return Config{}, err
+		}
+	}
+	for _, item := range []struct {
+		key    string
+		target *float64
+	}{{"PDF_MARGIN_MM", &config.PDF.MarginMM}, {"PDF_BODY_FONT_PT", &config.PDF.BodyFontPT}, {"PDF_LINE_HEIGHT", &config.PDF.LineHeight}} {
+		if err := parseFloat(item.key, item.target); err != nil {
+			return Config{}, err
+		}
 	}
 	if rawTimeout := strings.TrimSpace(get("AI_TIMEOUT")); rawTimeout != "" {
 		timeout, parseErr := time.ParseDuration(rawTimeout)
@@ -217,6 +319,24 @@ func (c Config) Validate() error {
 	}
 	if c.AI.MaxRetries < 0 || c.AI.MaxRetries > 10 {
 		fields = append(fields, "AI_MAX_RETRIES")
+	}
+	if strings.TrimSpace(c.Browser.Executable) == "" {
+		fields = append(fields, "BROWSER_EXECUTABLE")
+	}
+	if c.Browser.NavigationTimeout <= 0 || c.Browser.RenderTimeout <= 0 {
+		fields = append(fields, "BROWSER_NAVIGATION_TIMEOUT", "BROWSER_RENDER_TIMEOUT")
+	}
+	if c.Browser.Concurrency != 1 {
+		fields = append(fields, "BROWSER_CONCURRENCY")
+	}
+	if c.Browser.MaxRedirects < 1 || c.Browser.MaxRedirects > 20 || c.Browser.MaxDOMBytes < 1 || c.Browser.MaxDOMNodes < 1 || c.Browser.MaxScreenshotBytes < 1 || c.Browser.MaxTransferredBytes < 1 {
+		fields = append(fields, "BROWSER_LIMITS")
+	}
+	if c.Browser.ScreenshotWidth < 1 || c.Browser.ScreenshotWidth > 4096 || c.Browser.ScreenshotHeight < 1 || c.Browser.ScreenshotHeight > 4096 {
+		fields = append(fields, "BROWSER_SCREENSHOT_DIMENSIONS")
+	}
+	if c.PDF.MaxBytes < 1 || c.PDF.Timeout <= 0 || c.PDF.MarginMM <= 0 || c.PDF.MarginMM > 50 || c.PDF.BodyFontPT < 6 || c.PDF.BodyFontPT > 30 || c.PDF.LineHeight < 1 || c.PDF.LineHeight > 3 {
+		fields = append(fields, "PDF_LIMITS")
 	}
 	if c.SMTP.Enabled {
 		require("SMTP_HOST", c.SMTP.Host)
