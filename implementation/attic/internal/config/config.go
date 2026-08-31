@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -37,10 +38,14 @@ type Config struct {
 }
 
 type AIConfig struct {
-	BaseURL         string
-	APIKey          string
-	Model           string
-	ReasoningEffort string
+	BaseURL             string
+	APIKey              string
+	Model               string
+	ReasoningEffort     string
+	OmitReasoningEffort bool
+	OmitResponseFormat  bool
+	Timeout             time.Duration
+	MaxRetries          int
 }
 
 type SMTPConfig struct {
@@ -73,6 +78,14 @@ func LoadFrom(get func(string) string) (Config, error) {
 	if get == nil {
 		get = func(string) string { return "" }
 	}
+	reasoningEffort := strings.TrimSpace(get("AI_REASONING_EFFORT"))
+	omitReasoningEffort := reasoningEffort == "off" || reasoningEffort == "none" || reasoningEffort == "disabled"
+	if reasoningEffort == "" {
+		reasoningEffort = "medium"
+	}
+	if omitReasoningEffort {
+		reasoningEffort = ""
+	}
 	config := Config{
 		ListenAddress:  valueOr(get("LISTEN_ADDRESS"), ":8080"),
 		PublicBaseURL:  valueOr(get("PUBLIC_BASE_URL"), "http://localhost:8080"),
@@ -85,10 +98,13 @@ func LoadFrom(get func(string) string) (Config, error) {
 		DefaultProfile: valueOr(get("PDF_PROFILE"), "a5"),
 		Profiles:       map[string]struct{}{"a5": {}},
 		AI: AIConfig{
-			BaseURL:         get("AI_BASE_URL"),
-			APIKey:          get("AI_API_KEY"),
-			Model:           valueOr(get("AI_MODEL"), DefaultAIModel),
-			ReasoningEffort: valueOr(get("AI_REASONING_EFFORT"), "medium"),
+			BaseURL:             get("AI_BASE_URL"),
+			APIKey:              get("AI_API_KEY"),
+			Model:               valueOr(get("AI_MODEL"), DefaultAIModel),
+			ReasoningEffort:     reasoningEffort,
+			OmitReasoningEffort: omitReasoningEffort,
+			Timeout:             90 * time.Second,
+			MaxRetries:          2,
 		},
 		SMTP: SMTPConfig{
 			Host:        get("SMTP_HOST"),
@@ -100,6 +116,25 @@ func LoadFrom(get func(string) string) (Config, error) {
 			Destination: get("SMTP_DESTINATION"),
 		},
 	}
+	if rawTimeout := strings.TrimSpace(get("AI_TIMEOUT")); rawTimeout != "" {
+		timeout, parseErr := time.ParseDuration(rawTimeout)
+		if parseErr != nil {
+			return Config{}, &ValidationError{Fields: []string{"AI_TIMEOUT"}}
+		}
+		config.AI.Timeout = timeout
+	}
+	if rawRetries := strings.TrimSpace(get("AI_MAX_RETRIES")); rawRetries != "" {
+		retries, parseErr := strconv.Atoi(rawRetries)
+		if parseErr != nil {
+			return Config{}, &ValidationError{Fields: []string{"AI_MAX_RETRIES"}}
+		}
+		config.AI.MaxRetries = retries
+	}
+	omitResponseFormat, err := parseBool(get("AI_OMIT_RESPONSE_FORMAT"), false)
+	if err != nil {
+		return Config{}, &ValidationError{Fields: []string{"AI_OMIT_RESPONSE_FORMAT"}}
+	}
+	config.AI.OmitResponseFormat = omitResponseFormat
 	if rawPort := strings.TrimSpace(get("SMTP_PORT")); rawPort != "" {
 		port, parseErr := strconv.Atoi(rawPort)
 		if parseErr != nil {
@@ -176,6 +211,12 @@ func (c Config) Validate() error {
 	}
 	if c.DBPoolMin > c.DBPoolMax {
 		fields = append(fields, "DB_POOL_MIN", "DB_POOL_MAX")
+	}
+	if c.AI.Timeout <= 0 || c.AI.Timeout > 10*time.Minute {
+		fields = append(fields, "AI_TIMEOUT")
+	}
+	if c.AI.MaxRetries < 0 || c.AI.MaxRetries > 10 {
+		fields = append(fields, "AI_MAX_RETRIES")
 	}
 	if c.SMTP.Enabled {
 		require("SMTP_HOST", c.SMTP.Host)

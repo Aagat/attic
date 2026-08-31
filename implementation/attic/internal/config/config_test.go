@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadAppliesSafeDefaults(t *testing.T) {
@@ -19,8 +20,41 @@ func TestLoadAppliesSafeDefaults(t *testing.T) {
 	if cfg.AI.Model != DefaultAIModel || cfg.AI.ReasoningEffort != "medium" || cfg.DefaultProfile != "a5" || cfg.SMTP.Enabled {
 		t.Fatalf("defaults = %#v", cfg)
 	}
+	if cfg.AI.Timeout != 90*time.Second || cfg.AI.MaxRetries != 2 || cfg.AI.OmitReasoningEffort || cfg.AI.OmitResponseFormat {
+		t.Fatalf("AI defaults = %#v", cfg.AI)
+	}
 	if cfg.MigrationsDir != "/app/migrations" || cfg.DBPoolMin != 1 || cfg.DBPoolMax != 5 {
 		t.Fatalf("database defaults = %#v", cfg)
+	}
+}
+
+func TestAICompatibilityOptionsAreParsedAndBounded(t *testing.T) {
+	values := map[string]string{
+		"BEARER_TOKEN":            "token",
+		"DATABASE_URL":            "postgres://db/attic",
+		"AI_BASE_URL":             "https://provider.example/v1",
+		"AI_API_KEY":              "key",
+		"AI_REASONING_EFFORT":     "disabled",
+		"AI_OMIT_RESPONSE_FORMAT": "true",
+		"AI_TIMEOUT":              "45s",
+		"AI_MAX_RETRIES":          "4",
+	}
+	cfg, err := LoadFrom(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.AI.OmitReasoningEffort || cfg.AI.ReasoningEffort != "" || !cfg.AI.OmitResponseFormat || cfg.AI.Timeout != 45*time.Second || cfg.AI.MaxRetries != 4 {
+		t.Fatalf("AI options = %#v", cfg.AI)
+	}
+
+	values["AI_TIMEOUT"] = "0s"
+	if _, err := LoadFrom(func(key string) string { return values[key] }); err == nil || !strings.Contains(err.Error(), "AI_TIMEOUT") {
+		t.Fatalf("invalid AI timeout = %v", err)
+	}
+	values["AI_TIMEOUT"] = "45s"
+	values["AI_MAX_RETRIES"] = "11"
+	if _, err := LoadFrom(func(key string) string { return values[key] }); err == nil || !strings.Contains(err.Error(), "AI_MAX_RETRIES") {
+		t.Fatalf("invalid AI retries = %v", err)
 	}
 }
 
