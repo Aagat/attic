@@ -36,14 +36,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:${RUNTIME_ALPINE_VERSION} AS runtime
 
-LABEL org.opencontainers.image.title="Attic deployable foundation"
-LABEL org.opencontainers.image.description="Clean-room Attic V1 foundation image; browser/PDF processing is not included yet"
+LABEL org.opencontainers.image.title="Attic"
+LABEL org.opencontainers.image.description="Clean-room Attic V1 article processing runtime"
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-cjk ttf-dejavu \
     && addgroup -S -g 10001 attic \
     && adduser -S -D -H -u 10001 -G attic attic \
-    && mkdir -p /data/artifacts /tmp/attic \
-    && chown -R attic:attic /data /tmp/attic
+    && mkdir -p /data/artifacts \
+    && chown -R attic:attic /data
 
 COPY --from=build --chown=attic:attic /out/attic /usr/local/bin/attic
 # The migration runner consumes a directory. Keep that directory in the
@@ -53,8 +53,9 @@ RUN chmod -R a-w /app/migrations
 
 ENV LISTEN_ADDRESS=0.0.0.0:8080 \
     ARTIFACT_ROOT=/data/artifacts \
-    TMPDIR=/tmp/attic \
-    HOME=/tmp/attic
+    BROWSER_EXECUTABLE=/usr/bin/chromium-browser \
+    TMPDIR=/tmp \
+    HOME=/tmp
 
 WORKDIR /app
 USER 10001:10001

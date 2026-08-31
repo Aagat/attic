@@ -3,21 +3,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: attic:foundation
+    image: attic:latest
     restart: unless-stopped
     init: true
     read_only: true
     user: "10001:10001"
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
+    # Chromium's namespace/setuid sandbox needs these two capabilities during
+    # sandbox setup. The browser itself remains non-root and the root
+    # filesystem remains read-only; do not add --no-sandbox.
+    cap_add:
+      - SYS_ADMIN
+      - SYS_CHROOT
     env_file:
       - .env
     environment:
       ARTIFACT_ROOT: /data/artifacts
-      TMPDIR: /tmp/attic
+      TMPDIR: /tmp
       LISTEN_ADDRESS: 0.0.0.0:8080
+      BROWSER_EXECUTABLE: /usr/bin/chromium-browser
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -25,7 +30,11 @@ services:
     # Migration SQL is baked into the image at read-only /app/migrations;
     # the migration runner consumes that directory.
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=128m
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
+      - /dev/shm:rw,noexec,nosuid,nodev,size=256m
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2.0
     stop_grace_period: 30s
     healthcheck:
       test:

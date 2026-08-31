@@ -1,28 +1,20 @@
-# Attic V1 deployable foundation
+# Attic V1
 
 This directory packages the clean-room Go implementation as a non-root,
 read-only-compatible container. It builds `./cmd/attic` into
 `/usr/local/bin/attic`. The current composition wires external PostgreSQL,
 ordered migrations, durable jobs, filesystem artifacts under `/data`, the
-worker, and readiness/HTTP health endpoints; `/tmp` is the ephemeral
-workspace.
-
-This is deliberately a **deployable foundation**, not a claim that V1 article
-processing is complete. The processor is unavailable, the current image does
-not install a headless browser or PDF runtime, the AI adapter is not composed,
-and SMTP delivery is not composed. It must therefore not be represented as an
-end-to-end extraction or e-reader delivery release. The AI and SMTP
-configuration below reserves the V1 deployment contract; configuration alone
-does not make those unavailable stages successful.
+worker, browser rendering, deterministic extraction, mandatory durable AI
+approval, PDF formatting, and readiness/HTTP health endpoints. `/tmp` is the
+bounded ephemeral workspace. SMTP delivery remains deferred; completed PDFs
+end in `ready` and are available through the authenticated artifact endpoint.
 
 ## Prerequisites
 
 - Linux with Docker Engine and Compose v2 (or another OCI-compatible runtime).
 - An existing PostgreSQL 14+ instance reachable through `DATABASE_URL`.
 - A persistent volume for `/data`.
-- Outbound HTTPS access to submitted sites and the configured AI provider when
-  the browser and AI processing stages are composed.
-- Outbound SMTP access when the SMTP delivery adapter is composed and enabled.
+- Outbound HTTPS access to submitted sites and the configured AI provider.
 - HTTPS termination at a trusted reverse proxy or at the application.
 
 The example intentionally has no PostgreSQL container. PostgreSQL is external
@@ -35,7 +27,7 @@ Run these commands from this directory:
 ```sh
 cp .env.example .env
 $EDITOR .env
-docker build --file Dockerfile --tag attic:foundation .
+docker build --file Dockerfile --tag attic:latest .
 ```
 
 The multistage build downloads Go modules in the builder, compiles a static
@@ -59,20 +51,20 @@ Important settings include:
 - `DATABASE_URL`: the existing PostgreSQL 14+ connection string;
 - `BEARER_TOKEN`: the one-owner bearer credential;
 - `ARTIFACT_ROOT=/data/artifacts`;
-- `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL=gpt-5.6-luna` (the AI adapter is
-  not composed in this foundation);
+- `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL=gpt-5.6-luna`; `OPENAI_API_KEY`
+  is accepted only as a compatibility alias when `AI_API_KEY` is empty;
 - `AI_REASONING_EFFORT=medium`, which may be disabled for providers that reject
   the optional parameter; and
 - `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS_MODE`, credentials,
   sender, and destination for the reserved delivery configuration. Keep
   `SMTP_ENABLED=false` until the SMTP adapter is composed.
 
-SMTP must use implicit TLS or STARTTLS with certificate verification. Plaintext
-SMTP is rejected. When the AI adapter is composed, submitted page content and
-screenshots will be sent to the explicitly configured AI provider; review that
-data flow before supplying the provider key.
+SMTP must use implicit TLS or STARTTLS with certificate verification when its
+deferred adapter lands. Submitted page content and bounded screenshots are sent
+to the explicitly configured AI provider; review that data flow before
+supplying the provider key.
 
-Start the foundation with Compose:
+Start Attic with Compose:
 
 ```sh
 docker compose -f compose.example.yaml up -d --build
@@ -81,12 +73,17 @@ docker compose -f compose.example.yaml logs -f attic
 
 The service binds to `127.0.0.1:8080` in the example so a reverse proxy or
 private network can provide external HTTPS. The container runs as UID/GID
-`10001`, drops Linux capabilities, uses `no-new-privileges`, and has a
-read-only root filesystem. Only `/data` and the `/tmp` tmpfs are writable.
+`10001`, drops Linux capabilities except `SYS_ADMIN` and `SYS_CHROOT`, which
+Chromium needs while establishing its namespace/setuid sandbox, and has a
+read-only root filesystem. Do not enable `no-new-privileges` or pass Chromium
+`--no-sandbox`. Only `/data`, `/tmp`, and `/dev/shm` are writable.
+Chromium and Unicode fonts are installed in the runtime image; browser/PDF
+subprocesses run with Chromium's process sandbox enabled as the same non-root
+user under CPU, memory, and PID limits.
 
 ## Migrations and readiness
 
-This foundation image packages the migration SQL at the read-only path
+The image packages the migration SQL at the read-only path
 `/app/migrations` and includes the health-check contract. The migration runner
 consumes that directory and applies ordered migrations against the external
 PostgreSQL database while holding the migration lock. The current composition
@@ -96,9 +93,8 @@ schema version, and writable artifact storage.
 A migration failure stops startup, prevents readiness, and must not create or
 initialize a second database.
 
-AI and SMTP reachability are not readiness dependencies because either provider
-can be temporarily unavailable; the corresponding adapters are not composed in
-this foundation.
+AI reachability is not a readiness dependency because provider outages must not
+remove the API from service. SMTP remains disabled.
 
 Check the container and health endpoints:
 
@@ -108,19 +104,12 @@ curl -fsS http://127.0.0.1:8080/health/live
 curl -fsS http://127.0.0.1:8080/health/ready
 ```
 
-The eventual processing implementation should provide an explicit AI
-compatibility-check command. The AI adapter is not composed in this foundation,
-so `check-ai` is not currently available. When that command is present, run it
-against the configured endpoint without enabling billable processing, for
-example:
+Run the explicit compatibility check against the configured endpoint before
+submitting jobs. It performs a small real provider request and may be billable:
 
 ```sh
 docker compose -f compose.example.yaml run --rm attic check-ai
 ```
-
-This foundation package does not claim that the check or article processing
-will succeed before the AI adapter, processor, browser, and PDF stages are
-implemented.
 
 ## Backup and restore
 
@@ -214,14 +203,45 @@ If the schema is not backward-compatible, stop the service and restore both
 PostgreSQL and `/data` from the pre-upgrade backup before starting the previous
 image. Keep the previous image tag until the upgrade has been verified.
 
+## Browser acquisition boundary
+
+`internal/acquisition.NewChromiumRenderer` creates a fresh Chromium process and
+temporary profile for every render. It captures a configured-size viewport
+screenshot and a rendered DOM only after enforcing byte, node, request,
+redirect, transfer, navigation, and total-render limits. Cancellation tears
+down the process through the executable allocator and waits for cleanup.
+
+Chromium sends HTTP and HTTPS through a loopback policy proxy. The proxy
+resolves every hostname, rejects the entire answer set if any address is
+non-public, and connects to a validated IP rather than resolving again. CDP
+request interception separately rejects non-HTTP(S) requests; downloads and
+popups are denied, QUIC is disabled, and non-proxied WebRTC UDP is disabled.
+The static `Fetcher` uses the same resolve-validate-connect rule and has no
+public arbitrary-transport escape hatch.
+
+There is one unresolved defense-in-depth gap: the renderer does not create its
+own kernel network namespace. Its outbound guarantee depends on Chromium
+honoring the configured proxy and feature-disable flags. A future browser
+feature that bypasses both would not be stopped inside this Go package. Run the
+container with a default-deny egress policy or an outbound gateway that permits
+only the loopback policy proxy for kernel-enforced isolation. Container CPU,
+memory, PID, and filesystem limits are likewise still deployment controls;
+deadlines and output limits do not replace them.
+
+The deterministic suite does not start a browser or require network access.
+An explicit host integration check uses installed Chromium and public
+`example.com`:
+
+```sh
+ATTIC_CHROMIUM_INTEGRATION=1 go test ./internal/acquisition -run TestChromiumRendererIntegration
+```
+
 ## Runtime limits and later processing stages
 
 The Compose example gives the process a bounded `/tmp` tmpfs and persistent
 `/data`. Durable jobs, PostgreSQL persistence, filesystem artifacts, migration
 startup, readiness, health endpoints, and the worker are supplied by the
-current application composition. Browser subprocess limits, outbound-address
-policy, screenshot/DOM limits, PDF processing, mandatory AI analysis, and SMTP
-delivery are not available in this foundation because the processor, browser/
-PDF runtime, AI adapter, and SMTP adapter are not composed. When those stages
-land, add their runtime dependencies without changing the external PostgreSQL
-and artifact-volume contract.
+current application composition. Browser subprocess, outbound-address,
+screenshot, DOM, AI input, and PDF output limits are validated at startup and
+enforced by their owning modules. SMTP delivery is the remaining deferred
+pipeline stage and does not change the PostgreSQL or artifact-volume contract.
