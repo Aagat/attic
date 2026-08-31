@@ -20,6 +20,22 @@ end in `ready` and are available through the authenticated artifact endpoint.
 The example intentionally has no PostgreSQL container. PostgreSQL is external
 and remains the system of record.
 
+## One-command launch
+
+From the repository root, run:
+
+```sh
+./launch.sh
+```
+
+The launcher verifies Docker Compose, securely asks for the PostgreSQL URL,
+reuses `OPENAI_API_KEY` from the ignored root `.env` when available, generates
+an owner bearer token, builds the image, starts Attic, and waits for database-
+backed readiness. It writes the resulting configuration to the ignored,
+owner-readable `implementation/attic/.env`; rerunning the command preserves
+the existing values. If PostgreSQL runs directly on the Docker host, use
+`host.docker.internal` as the URL hostname.
+
 ## Build
 
 Run these commands from this directory:

@@ -3,6 +3,7 @@ scripts/puppeteer/extensions
 scripts/puppeteer/node_modules
 data
 /.env
+/implementation/attic/.env
 
 # macOS metadata
 .DS_Store

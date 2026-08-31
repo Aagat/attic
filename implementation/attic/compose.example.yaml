@@ -25,6 +25,9 @@ services:
       BROWSER_EXECUTABLE: /usr/bin/chromium-browser
     ports:
       - "127.0.0.1:8080:8080"
+    extra_hosts:
+      # Lets DATABASE_URL reach PostgreSQL installed directly on this host.
+      - "host.docker.internal:host-gateway"
     volumes:
       - attic-data:/data
     # Migration SQL is baked into the image at read-only /app/migrations;
