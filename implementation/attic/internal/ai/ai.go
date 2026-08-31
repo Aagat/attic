@@ -110,6 +110,7 @@ type Attempt struct {
 	ProviderRequestID string
 	InputTokens       int
 	OutputTokens      int
+	UsageReported     bool
 	Status            AttemptStatus
 	ErrorCode         Code
 }
@@ -439,6 +440,7 @@ func (c *Client) call(ctx context.Context, body []byte, number int) (content str
 	if completion.Usage != nil {
 		attempt.InputTokens = completion.Usage.PromptTokens
 		attempt.OutputTokens = completion.Usage.CompletionTokens
+		attempt.UsageReported = true
 	}
 	if attempt.ProviderRequestID == "" {
 		attempt.ProviderRequestID = safeRequestID(completion.ID)

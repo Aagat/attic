@@ -99,6 +99,81 @@ func (s *Store) Ping(ctx context.Context) error {
 }
 
 var _ application.JobStore = (*Store)(nil)
+var _ application.AIAttemptRecorder = (*Store)(nil)
+
+// RecordAIAttempts stores only the bounded operational metadata allowed by
+// application.AIAttempt. Locking the owning job makes per-purpose numbering
+// deterministic across durable job retries and concurrent workers.
+func (s *Store) RecordAIAttempts(ctx context.Context, jobID domain.JobID, attempts []application.AIAttempt) ([]string, error) {
+	ctx = nonNilContext(ctx)
+	if err := contextErr(ctx); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(string(jobID)) == "" || len(attempts) == 0 {
+		return nil, &databaseFailure{operation: "record AI attempts"}
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, mapDBError("begin AI attempts", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var exists string
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM jobs WHERE id = $1 FOR UPDATE`, string(jobID)).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, application.ErrLeaseLost
+		}
+		return nil, mapDBError("lock AI attempt job", err)
+	}
+	next := make(map[string]int)
+	ids := make([]string, 0, len(attempts))
+	for _, attempt := range attempts {
+		purpose := strings.TrimSpace(attempt.Purpose)
+		if purpose != "analysis" && purpose != "repair" {
+			return nil, &databaseFailure{operation: "record AI attempts"}
+		}
+		if next[purpose] == 0 {
+			var number int
+			if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(attempt_number), 0) + 1 FROM ai_attempts WHERE job_id = $1 AND purpose = $2`, string(jobID), purpose).Scan(&number); err != nil {
+				return nil, mapDBError("number AI attempt", err)
+			}
+			next[purpose] = number
+		}
+		id := randomToken()
+		createdAt := attempt.CreatedAt.UTC()
+		if createdAt.IsZero() {
+			createdAt = s.now().UTC()
+		}
+		latencyMS := attempt.Latency.Milliseconds()
+		if latencyMS < 0 {
+			latencyMS = 0
+		}
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO ai_attempts (
+				id, job_id, purpose, attempt_number, model_identifier,
+				prompt_version, latency_ms, provider_request_id, input_tokens,
+				output_tokens, result_status, error_category, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+			id, string(jobID), purpose, next[purpose], attempt.Model, attempt.PromptVersion,
+			latencyMS, nullableString(attempt.ProviderRequestID), nullableTokenCount(attempt.InputTokens, attempt.UsageReported),
+			nullableTokenCount(attempt.OutputTokens, attempt.UsageReported), attempt.Status, nullableString(attempt.ErrorCategory), createdAt)
+		if err != nil {
+			return nil, mapDBError("record AI attempt", err)
+		}
+		next[purpose]++
+		ids = append(ids, id)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, mapDBError("commit AI attempts", err)
+	}
+	return ids, nil
+}
+
+func nullableTokenCount(value int, reported bool) any {
+	if !reported || value < 0 {
+		return nil
+	}
+	return value
+}
 
 func (s *Store) CreateOrReuse(ctx context.Context, command application.CreateJob) (application.CreateOutcome, error) {
 	ctx = nonNilContext(ctx)
@@ -245,7 +320,7 @@ func (s *Store) List(ctx context.Context, request application.StoreListRequest) 
 			j.version, j.next_attempt_at, j.failure_category, j.correlation_id,
 			j.created_at, j.completed_at,
 			c.id, c.title, c.author, c.site_name, c.publication_date,
-			c.description, c.detected_language, c.ai_confidence,
+			c.description, c.detected_language, c.ai_confidence, c.ai_completeness,
 			a.id, a.safe_filename, a.media_type, a.byte_size,
 			a.checksum_sha256, a.availability, a.created_at
 		FROM jobs j
@@ -645,13 +720,13 @@ func (s *Store) Complete(ctx context.Context, lease *application.Lease, completi
 		INSERT INTO content_documents (
 			id, job_id, title, author, site_name, publication_date, description,
 			source_url, semantic_html, plain_text, extraction_method,
-			ai_confidence, detected_language, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
+			ai_confidence, ai_completeness, detected_language, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)`,
 		string(completion.Content.ID), string(lease.Job.ID), completion.Content.Title,
 		nullableString(completion.Content.Author), nullableString(completion.Content.SiteName), publicationDate,
 		nullableString(completion.Content.Description), completion.Content.SourceURL,
 		completion.Content.SemanticHTML, completion.Content.PlainText,
-		completion.Content.ExtractionMethod, completion.Content.AIConfidence,
+		completion.Content.ExtractionMethod, completion.Content.AIConfidence, completion.Content.AICompleteness,
 		nullableString(completion.Content.Language), now); err != nil {
 		return mapDBError("persist content", err)
 	}
@@ -774,7 +849,7 @@ const jobSelect = `
 		j.completed_at, j.lease_token, j.lease_expires_at,
 		c.id, c.job_id, c.title, c.author, c.site_name, c.publication_date,
 		c.description, c.source_url, c.semantic_html, c.plain_text,
-		c.extraction_method, c.ai_confidence, c.detected_language, c.created_at,
+		c.extraction_method, c.ai_confidence, c.ai_completeness, c.detected_language, c.created_at,
 		c.updated_at,
 		a.id, a.storage_relative_path, a.safe_filename, a.media_type,
 		a.byte_size, a.checksum_sha256, a.availability, a.created_at,
@@ -811,7 +886,7 @@ func scanJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		publicationDate                                                   sql.NullTime
 		contentDescription, contentSourceURL, semanticHTML, plainText     sql.NullString
 		extractionMethod, detectedLanguage                                sql.NullString
-		confidence                                                        sql.NullString
+		confidence, completeness                                          sql.NullString
 		contentCreatedAt, contentUpdatedAt                                sql.NullTime
 
 		artifactID, artifactKey, artifactFilename, artifactMediaType sql.NullString
@@ -828,7 +903,7 @@ func scanJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		&leaseToken, &leaseExpiry,
 		&contentID, &contentJobID, &contentTitle, &contentAuthor, &contentSite,
 		&publicationDate, &contentDescription, &contentSourceURL, &semanticHTML,
-		&plainText, &extractionMethod, &confidence, &detectedLanguage,
+		&plainText, &extractionMethod, &confidence, &completeness, &detectedLanguage,
 		&contentCreatedAt, &contentUpdatedAt,
 		&artifactID, &artifactKey, &artifactFilename, &artifactMediaType,
 		&artifactSize, &artifactChecksum, &artifactAvailability, &artifactCreatedAt,
@@ -882,6 +957,7 @@ func scanJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 			PlainText:        plainText.String,
 			ExtractionMethod: extractionMethod.String,
 			AIConfidence:     parseFloat(confidence.String),
+			AICompleteness:   parseFloat(completeness.String),
 			Language:         detectedLanguage.String,
 			CreatedAt:        contentCreatedAt.Time.UTC(),
 			UpdatedAt:        contentUpdatedAt.Time.UTC(),
@@ -919,7 +995,7 @@ func scanListJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		createdAt, completedAt, nextAttemptAt                                                   sql.NullTime
 		contentID, contentTitle, contentAuthor, contentSite, description, language              sql.NullString
 		publicationDate                                                                         sql.NullTime
-		confidence                                                                              sql.NullString
+		confidence, completeness                                                                sql.NullString
 		artifactID, artifactFilename, artifactMediaType, artifactChecksum, artifactAvailability sql.NullString
 		artifactSize                                                                            sql.NullInt64
 		artifactCreatedAt                                                                       sql.NullTime
@@ -929,7 +1005,7 @@ func scanListJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		&stage, &attemptCount, &version, &nextAttemptAt, &failureCategory, &correlation,
 		&createdAt, &completedAt,
 		&contentID, &contentTitle, &contentAuthor, &contentSite, &publicationDate,
-		&description, &language, &confidence, &artifactID, &artifactFilename,
+		&description, &language, &confidence, &completeness, &artifactID, &artifactFilename,
 		&artifactMediaType, &artifactSize, &artifactChecksum, &artifactAvailability,
 		&artifactCreatedAt)
 	if err != nil {
@@ -960,7 +1036,7 @@ func scanListJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		job.Failure = &domain.Failure{Category: domain.FailureCategory(failureCategory.String), Message: safeFailureMessage(domain.FailureCategory(failureCategory.String)), CorrelationID: correlation}
 	}
 	if contentID.Valid {
-		content := domain.ContentDocument{ID: domain.ContentID(contentID.String), JobID: job.ID, Title: contentTitle.String, Author: contentAuthor.String, SiteName: contentSite.String, Description: description.String, Language: language.String, AIConfidence: parseFloat(confidence.String)}
+		content := domain.ContentDocument{ID: domain.ContentID(contentID.String), JobID: job.ID, Title: contentTitle.String, Author: contentAuthor.String, SiteName: contentSite.String, Description: description.String, Language: language.String, AIConfidence: parseFloat(confidence.String), AICompleteness: parseFloat(completeness.String)}
 		if publicationDate.Valid {
 			content.PublicationDate = publicationDate.Time.UTC().Format(time.RFC3339)
 		}

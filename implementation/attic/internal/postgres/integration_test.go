@@ -131,6 +131,20 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatalf("skipped SetStage() error = %v, want ErrInvalidStage", err)
 	}
 	for _, stage := range []domain.Stage{domain.StageExtracting, domain.StageAIAnalyzing, domain.StageFormatting, domain.StagePersisting} {
+		if stage == domain.StageFormatting {
+			attemptIDs, recordErr := store.RecordAIAttempts(ctx, jobID, []application.AIAttempt{{
+				Purpose: "analysis", Model: "gpt-5.6-luna", PromptVersion: "attic-v1",
+				Latency: 17 * time.Millisecond, ProviderRequestID: "safe-request-id",
+				InputTokens: 12, OutputTokens: 8, UsageReported: true, Status: "succeeded", CreatedAt: time.Now().UTC(),
+			}})
+			if recordErr != nil || len(attemptIDs) != 1 || strings.TrimSpace(attemptIDs[0]) == "" {
+				t.Fatalf("RecordAIAttempts() = %#v, %v", attemptIDs, recordErr)
+			}
+			var attempts int
+			if err := db.QueryRowContext(ctx, `SELECT count(*) FROM ai_attempts WHERE job_id = $1 AND model_identifier = 'gpt-5.6-luna' AND prompt_version = 'attic-v1' AND result_status = 'succeeded' AND error_category IS NULL`, string(jobID)).Scan(&attempts); err != nil || attempts != 1 {
+				t.Fatalf("durable safe AI attempts = %d, %v", attempts, err)
+			}
+		}
 		if err := store.SetStage(ctx, lease, stage); err != nil {
 			t.Fatalf("SetStage(%s) error = %v", stage, err)
 		}
@@ -145,6 +159,7 @@ func TestPostgresIntegration(t *testing.T) {
 			PlainText:        "integration content",
 			ExtractionMethod: "integration",
 			AIConfidence:     0.95,
+			AICompleteness:   0.91,
 		},
 		Artifact: domain.Artifact{
 			Key:       "integration/" + prefix + "/article.pdf",
@@ -171,6 +186,10 @@ func TestPostgresIntegration(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("create delivery job error = %v", err)
+	}
+	completed, err := store.Get(ctx, jobID)
+	if err != nil || completed.Content == nil || completed.Content.AICompleteness != 0.91 {
+		t.Fatalf("completed AI completeness = %#v, %v", completed.Content, err)
 	}
 	deliveryLeaseUntil := time.Now().UTC().Add(-time.Second)
 	if _, err := db.ExecContext(ctx, `

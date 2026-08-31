@@ -103,6 +103,22 @@ func TestAtticMigrationPersistsJobVersionAndSchedule(t *testing.T) {
 	}
 }
 
+func TestAIAttemptCategoryMigrationIsAdditive(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "..", "migrations", "0002_ai_attempt_error_categories.up.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlText := string(contents)
+	for _, category := range []string{"invalid_input", "input_too_large", "fetch_failed"} {
+		if !strings.Contains(sqlText, "'"+category+"'") {
+			t.Fatalf("AI-attempt category %q is not accepted by the additive migration", category)
+		}
+	}
+	if strings.Contains(strings.ToUpper(sqlText), "DROP TABLE") {
+		t.Fatal("AI-attempt category migration must preserve durable attempt records")
+	}
+}
+
 func TestMigrationErrorDoesNotExposeDatabaseCause(t *testing.T) {
 	err := migrationFailure(7, "unsafe_name", &databaseFailure{operation: "execute migration"})
 	if !strings.Contains(err.Error(), "migration 7 (unsafe_name) failed") {

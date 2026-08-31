@@ -26,6 +26,10 @@ normalized metadata are sufficient for a later full rebuild of a search index.
 
 ## Schema choices
 
+Migration `0002` expands the AI-attempt error-category check without rewriting
+or dropping attempt rows. Its down migration preserves rows and maps only the
+new categories to the conservative V1 `ai_invalid_response` category.
+
 `jobs` is the durable state machine. `status` and `stage` use text checks rather
 than PostgreSQL enums so future input/output adapters can add values through a
 normal migration without changing an enum type. The constraints enforce that

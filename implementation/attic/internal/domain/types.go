@@ -124,6 +124,7 @@ type ContentDocument struct {
 	PlainText        string
 	ExtractionMethod string
 	AIConfidence     float64
+	AICompleteness   float64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

@@ -549,6 +549,9 @@ func (a *Archive) approveArticle(draft ArticleDraft) (ApprovedArticle, error) {
 	if draft.AIConfidence < 0 || draft.AIConfidence > 1 {
 		return ApprovedArticle{}, NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI confidence value is invalid", false)
 	}
+	if draft.AICompleteness < 0 || draft.AICompleteness > 1 {
+		return ApprovedArticle{}, NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI completeness value is invalid", false)
+	}
 	draft.AIAttemptID = strings.TrimSpace(draft.AIAttemptID)
 	if draft.AIAttemptID == "" {
 		return ApprovedArticle{}, NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI attempt is not recorded", false)
@@ -589,6 +592,7 @@ func (a ApprovedArticle) content(job domain.Job, id domain.ContentID, now time.T
 		PlainText:        a.draft.PlainText,
 		ExtractionMethod: a.draft.ExtractionMethod,
 		AIConfidence:     a.draft.AIConfidence,
+		AICompleteness:   a.draft.AICompleteness,
 		CreatedAt:        now.UTC(),
 		UpdatedAt:        now.UTC(),
 	}, true

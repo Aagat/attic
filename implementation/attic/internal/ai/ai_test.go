@@ -144,7 +144,7 @@ func TestAnalyzeParsesMetadataUsageAndProviderRequestID(t *testing.T) {
 		t.Fatalf("attempts = %#v", attempts)
 	}
 	attempt := attempts[0]
-	if attempt.ProviderRequestID != "provider-request-1" || attempt.InputTokens != 17 || attempt.OutputTokens != 23 || attempt.PromptVersion != "prompt-7" {
+	if attempt.ProviderRequestID != "provider-request-1" || attempt.InputTokens != 17 || attempt.OutputTokens != 23 || !attempt.UsageReported || attempt.PromptVersion != "prompt-7" {
 		t.Fatalf("attempt = %#v", attempt)
 	}
 }

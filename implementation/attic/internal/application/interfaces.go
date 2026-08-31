@@ -206,6 +206,30 @@ type Completion struct {
 	Artifact domain.Artifact
 }
 
+// AIAttempt is the provider-safe durable record for one model request. Page
+// content, prompts, screenshots, response bodies, credentials, and headers do
+// not belong at this seam.
+type AIAttempt struct {
+	Purpose           string
+	Model             string
+	PromptVersion     string
+	Latency           time.Duration
+	ProviderRequestID string
+	InputTokens       int
+	OutputTokens      int
+	UsageReported     bool
+	Status            string
+	ErrorCategory     string
+	CreatedAt         time.Time
+}
+
+// AIAttemptRecorder durably records a complete provider call sequence. The
+// returned IDs correspond positionally to attempts and are created by the
+// adapter. Implementations must commit the sequence atomically.
+type AIAttemptRecorder interface {
+	RecordAIAttempts(context.Context, domain.JobID, []AIAttempt) ([]string, error)
+}
+
 // JobStore is the PostgreSQL seam.  The implementation owns transactions,
 // locking, migrations, leases, and durable checkpoints; none leak through
 // JobArchive.
@@ -269,6 +293,7 @@ type ArticleDraft struct {
 	PlainText        string
 	ExtractionMethod string
 	AIConfidence     float64
+	AICompleteness   float64
 	AIAttemptID      string
 }
 
