@@ -1,0 +1,21 @@
+# The Dockerfile is built with implementation/attic as its context.
+# Keep the context limited to clean-room runtime inputs.
+.git
+.git/**
+.gitignore
+.env
+.env.*
+!.env.example
+
+README.md
+compose.example.yaml
+tests
+testdata
+**/tests
+**/testdata
+coverage
+coverage.*
+*.test
+*.out
+tmp
+dist

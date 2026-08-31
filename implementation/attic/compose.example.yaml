@@ -1,0 +1,44 @@
+services:
+  attic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: attic:foundation
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    env_file:
+      - .env
+    environment:
+      ARTIFACT_ROOT: /data/artifacts
+      TMPDIR: /tmp/attic
+      LISTEN_ADDRESS: 0.0.0.0:8080
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - attic-data:/data
+    # Migration SQL is baked into the image at read-only /app/migrations;
+    # the migration runner consumes that directory.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # There is deliberately no PostgreSQL service here. DATABASE_URL must
+    # point to the operator's existing PostgreSQL 14+ instance.
+
+volumes:
+  attic-data:
+    name: attic-data
