@@ -1,7 +1,7 @@
 # Attic V1 Product Requirements Document
 
-Status: Final draft for clean-room implementation  
-Version: 1.1  
+Status: Final draft for clean-room implementation
+Version: 1.1
 Date: 2026-08-31
 
 ## 1. Release objective
