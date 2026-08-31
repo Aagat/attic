@@ -2,6 +2,7 @@ config.yaml
 scripts/puppeteer/extensions
 scripts/puppeteer/node_modules
 data
+/.env
 
 # macOS metadata
 .DS_Store
