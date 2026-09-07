@@ -102,13 +102,15 @@ The supported deployment contract is:
 - Multiple users, destinations, or SMTP accounts.
 - Multiple active PDF profiles per deployment.
 - OCR-only documents and multi-screenshot reconstruction of very long pages.
-- Automatic retrieval from third-party web archives.
+- Additional archive providers beyond Archive.today and Wayback.
 
 ### 4.3 Guardrails
 
 Attic V1 processes content available to a new, unauthenticated browser session.
 It does not import cookies, execute login flows, bypass bot challenges, defeat
-paywalls, or use archives to recover restricted content. It does not republish
+paywalls on the original site. As requested on 2026-09-08, it may retrieve
+existing publicly accessible archive copies as a fallback, subject to the same
+content approval and PDF checks. It does not republish
 stored content or expose it without authentication.
 
 ## 5. Product decisions

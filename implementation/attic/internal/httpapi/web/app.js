@@ -4,8 +4,8 @@ let jobs = new Map(), cursor = '', loadedMore = false, filter = 'all', signedIn 
 let previewURL = '', previewFile = null, previewGeneration = 0;
 const active = job => ['queued','processing','delivering'].includes(job.status);
 const failed = job => ['failed','delivery_failed','cancelled'].includes(job.status);
-const stages = {queued:'Waiting in the queue',fetching:'Opening the article',extracting:'Finding the article',ai_analyzing:'Checking the source content',formatting:'Typesetting and checking the PDF',persisting:'Saving your PDF',delivering:'Sending to Kindle'};
-const failures = {access_denied:'The website denied access. Try a publicly accessible article.',paywall_detected:'This article requires access that Attic does not have.',pdf_quality_failed:'The PDF did not pass its quality checks. It has not been published.',format_failed:'This article could not be turned into a PDF.',fetch_failed:'The article could not be retrieved.',unsupported_content:'This page does not appear to be a readable article.',ai_auth_failed:'The server’s ChatGPT connection needs attention.'};
+const stages = {queued:'Waiting in the queue',fetching:'Opening the article or an archive',extracting:'Finding the article',ai_analyzing:'Checking the source content',formatting:'Typesetting and checking the PDF',persisting:'Saving your PDF',delivering:'Sending to Kindle'};
+const failures = {access_denied:'The original website and available archive sources could not provide a readable article.',paywall_detected:'The article is paywalled, and no usable archive copy was found.',pdf_quality_failed:'The PDF did not pass its quality checks. It has not been published.',format_failed:'This article could not be turned into a PDF.',fetch_failed:'The article could not be retrieved.',unsupported_content:'This page does not appear to be a readable article.',ai_auth_failed:'The server’s ChatGPT connection needs attention.'};
 function notice(text, error=false) { $('notice').textContent=text; $('notice').classList.toggle('error',error); }
 function showLogin() { signedIn=false; $('library').hidden=true; $('login').hidden=false; $('signout').hidden=true; closePreview(); }
 function showLibrary() { signedIn=true; $('login').hidden=true; $('library').hidden=false; $('signout').hidden=false; }
@@ -57,13 +57,15 @@ function closePreview() {
  previewURL='';previewFile=null;
 }
 async function openPreview(job) {
- closePreview();const generation=previewGeneration;$('reader-title').textContent=job.title||'Article';$('reader-meta').textContent=job.source_host||'';$('reader-status').textContent='Opening PDF…';$('kindle-help').hidden=true;$('share').hidden=true;$('reader').showModal();
+ closePreview();$('archive-source').hidden=true;const generation=previewGeneration;$('reader-title').textContent=job.title||'Article';$('reader-meta').textContent=job.source_host||'';$('reader-status').textContent='Opening PDF…';$('kindle-help').hidden=true;$('share').hidden=true;$('reader').showModal();
  try {
   const detail=await api('/jobs/'+encodeURIComponent(job.id));
   if(generation!==previewGeneration)return;
   $('reader-title').textContent=detail.title||'Article';
   $('reader-meta').textContent=[detail.metadata?.author,detail.metadata?.site_name,detail.metadata?.publication_date?.slice(0,10)].filter(Boolean).join(' · ');
-  $('original').href=detail.canonical_url||detail.submitted_url;
+  $('original').href=detail.submitted_url;
+  const archived=/^https?:\/\/(?:web\.archive\.org|archive\.(?:ph|is|today|md|fo|li|vn))\//i.test(detail.canonical_url||'');
+  $('archive-source').hidden=!archived;$('archive-source').href=archived?detail.canonical_url:'#';
   const path='/api/v1/jobs/'+encodeURIComponent(job.id)+'/artifact';$('download').href=path;
   const response=await fetch(path,{credentials:'same-origin'});
   if(!response.ok)throw new Error('Could not open this PDF. Try downloading it again.');

@@ -231,6 +231,33 @@ browser local storage or URLs. Sessions expire after 30 days, on sign-out, or
 when the server restarts. API clients can continue using bearer authentication.
 Use HTTPS when exposing the service outside your trusted private network.
 
+## Automatic source recovery
+
+If the original page is paywalled, denies access, cannot be fetched, has
+insufficient article content, or cannot produce a valid PDF, Attic tries existing
+public archive copies before failing. It tries Archive.today's `archive.ph`
+endpoint, its `archive.is` mirror, and the latest available matching Wayback
+snapshot. No new snapshot is submitted. Discovery uses the
+[Wayback availability API](https://archive.org/help/wayback_api.php) and
+[Archive.today's documented newest-snapshot links](https://archive.ph/faq).
+
+Recovery runs automatically within the same job. There are at most three archive
+attempts with a shared eight-minute recovery deadline, in addition to existing
+browser, AI and formatter limits. Every source must pass AI approval and PDF
+verification. The AI receives both the requested URL and retrieved URL, and must
+reject archive search pages, challenges and unrelated articles. Snapshot URLs
+from Wayback must match the requested host, path and query. The original link
+stays available in the reader, with an additional archived-source link when an
+archive supplies the PDF. PDF source metadata records the retrieved snapshot.
+
+Recovery attempts log the job ID, archive provider and failure category without
+page bodies. AI calls remain durably recorded. Source lists reset for each job;
+submitted archive URLs are not recursively archived. Authentication, storage,
+and cancellation failures stop recovery. Existing durable retries still handle
+transient service failures. If all sources fail, the original failure category
+is retained. Archive availability is not guaranteed; inaccessible sources do not
+cause the pipeline to invent content or publish a partial article.
+
 ## Automatic PDF checks
 
 Every new PDF is inspected with Poppler before it can become a stored, ready
