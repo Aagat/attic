@@ -101,6 +101,10 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 		if ctx.Err() != nil {
 			return application.ProcessResult{}, ctx.Err()
 		}
+		var quality *formatter.QualityError
+		if errors.As(err, &quality) {
+			return application.ProcessResult{}, processingError(domain.FailurePDFQualityFailed, false)
+		}
 		return application.ProcessResult{}, processingError(domain.FailureFormatFailed, false)
 	}
 	return application.ProcessResult{Article: approved, CanonicalURL: canonicalURL, Filename: draft.Title + ".pdf", PDF: result.PDF}, nil

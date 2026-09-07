@@ -49,6 +49,8 @@ RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-c
     && mkdir -p /data/artifacts \
     && chown -R attic:attic /data
 
+RUN apk add --no-cache poppler-utils
+
 COPY --from=build --chown=attic:attic /out/attic /usr/local/bin/attic
 # The migration runner consumes a directory. Keep that directory in the
 # runtime image, but make it immutable for the non-root process.

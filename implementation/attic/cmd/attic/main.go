@@ -116,7 +116,7 @@ func runServer(cfg config.Config) error {
 	}
 	pdf := formatter.PDF{MaxBytes: cfg.PDF.MaxBytes, Timeout: cfg.PDF.Timeout, PandocPath: "/usr/bin/pandoc",
 		MarginMM: cfg.PDF.MarginMM, BodyFontPT: cfg.PDF.BodyFontPT, LineHeight: cfg.PDF.LineHeight}
-	processor, err := processing.New(renderer, approver, pdf)
+	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf})
 	if err != nil {
 		return err
 	}

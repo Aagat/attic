@@ -160,3 +160,43 @@ func processorContext() application.ProcessorContext {
 		},
 	}
 }
+
+func TestQualityFailureNeverPublishesAnArtifact(t *testing.T) {
+	body := strings.Repeat("A readable article sentence. ", 30)
+	renderer := rendererFunc(func(context.Context, string) (acquisition.RenderedPage, error) {
+		return acquisition.RenderedPage{FinalURL: "https://example.test/article", Title: "Article", Screenshot: []byte("png"), DOM: []byte("<article><p>" + body + "</p></article>")}, nil
+	})
+	approver := approverFunc(func(_ context.Context, _ domain.JobID, in ai.ApprovalInput, approve func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		return approve(application.ArticleDraft{Classification: "article", Decision: "accept_candidate", Title: "Article", SemanticHTML: in.CandidateHTML, PlainText: in.CandidateText, ExtractionMethod: "deterministic", AIConfidence: 1, AICompleteness: 1, AIAttemptID: "attempt"})
+	})
+	pdf := formatterFunc(func(context.Context, formatter.Article) (formatter.Result, error) {
+		return formatter.Result{}, &formatter.QualityError{Reason: "missing_images"}
+	})
+	processor, err := processing.New(renderer, approver, pdf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := memory.NewStore()
+	archive, err := application.NewArchive(store, memory.NewArtifactStore(), application.ArchiveOptions{Processor: processor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.test/article"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := application.NewWorker(archive, application.WorkerOptions{Processor: processor, MaxAttempts: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := archive.GetJob(context.Background(), accepted.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Status != domain.StatusFailed || detail.HasArtifact || detail.Failure == nil || detail.Failure.Category != "pdf_quality_failed" {
+		t.Fatalf("unsafe quality outcome: %+v", detail)
+	}
+}

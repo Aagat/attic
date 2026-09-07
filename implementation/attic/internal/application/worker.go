@@ -261,6 +261,8 @@ func safeJobMessage(category, message string) string {
 		return "The page is not a supported article"
 	case string(domain.FailureInsufficientContent):
 		return "The page did not contain enough readable content"
+	case string(domain.FailurePDFQualityFailed):
+		return "The PDF failed automatic quality checks and was not published"
 	case string(domain.FailureFormatFailed):
 		return "The PDF could not be generated"
 	case string(domain.FailureStorageFailed):

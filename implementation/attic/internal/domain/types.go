@@ -78,6 +78,7 @@ const (
 	FailureAIModelUnsupported  FailureCategory = "ai_model_unsupported"
 	FailureAIInvalidResponse   FailureCategory = "ai_invalid_response"
 	FailureFormatFailed        FailureCategory = "format_failed"
+	FailurePDFQualityFailed    FailureCategory = "pdf_quality_failed"
 	FailureStorageFailed       FailureCategory = "storage_failed"
 	FailureDeliveryRejected    FailureCategory = "delivery_rejected"
 	FailureDeliveryTimeout     FailureCategory = "delivery_timeout"
