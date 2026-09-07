@@ -2,6 +2,7 @@ package acquisition
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -252,8 +254,8 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 		TooLarge bool   `json:"tooLarge"`
 	}
 	var dom capture
-	expression := fmt.Sprintf(`(() => { const maxNodes=%d,maxBytes=%d; const w=document.createTreeWalker(document,NodeFilter.SHOW_ALL); let n=0; while(w.nextNode()){if(++n>maxNodes)return {nodes:n,tooLarge:true,html:""};} const h=document.documentElement.outerHTML; return {nodes:n,tooLarge:(new TextEncoder().encode(h).length>maxBytes),html:(new TextEncoder().encode(h).length>maxBytes?"":h)}; })()`, r.config.MaxDOMNodes, r.config.MaxDOMBytes)
-	if err = chromedp.Run(browserCtx, chromedp.Evaluate(expression, &dom)); err != nil {
+	expression := fmt.Sprintf(captureScript, r.config.MaxDOMNodes, r.config.MaxDOMBytes)
+	if err = chromedp.Run(browserCtx, chromedp.Evaluate(expression, &dom, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
 		return result, r.renderError(ctx, operationCtx, err)
 	}
 	if dom.TooLarge || len([]byte(dom.HTML)) > r.config.MaxDOMBytes {
@@ -320,3 +322,6 @@ func (r *ChromiumRenderer) renderError(parent, operation context.Context, err er
 }
 
 var _ Renderer = (*ChromiumRenderer)(nil)
+
+//go:embed capture.js
+var captureScript string

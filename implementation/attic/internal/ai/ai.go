@@ -28,7 +28,7 @@ const (
 	// omitted in Config.
 	DefaultReasoningEffort = "medium"
 	// DefaultPromptVersion identifies the application-owned instruction.
-	DefaultPromptVersion = "attic-v1"
+	DefaultPromptVersion = "attic-v2-images"
 
 	defaultTimeout         = 90 * time.Second
 	defaultMaxResponseSize = 2 << 20 // 2 MiB
@@ -496,7 +496,7 @@ type responseFormat struct {
 const repairInstruction = "The previous assistant output did not match the required schema. Return only one JSON object conforming to the requested schema. Do not use Markdown fences or commentary."
 
 const defaultSystemInstruction = `You analyze a rendered public web page for Attic. Classify it and return exactly one JSON object, with no Markdown or commentary.
-The object must contain classification, decision, title, completeness, confidence, and decision_reason. classification must be one of article, paywall, access_denied, error_page, interactive, non_article. decision must be one of accept_candidate, replace_candidate, reject. For replace_candidate, cleaned_html must contain the cleaned semantic article. completeness and confidence must be numbers from 0 to 1. Optional metadata fields are author, site_name, publication_date, description, and language.`
+The object must contain classification, decision, title, completeness, confidence, and decision_reason. classification must be one of article, paywall, access_denied, error_page, interactive, non_article. decision must be one of accept_candidate, replace_candidate, reject. For replace_candidate, cleaned_html must contain the cleaned semantic article. completeness and confidence must be numbers from 0 to 1. Optional metadata fields are author, site_name, publication_date, description, and language. Image src values beginning attic-image: refer to captured article images; preserve those references verbatim in replacement HTML. Preserve code, tables, captions and the complete article; do not summarize.`
 
 func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, followup string) ([]byte, error) {
 	imageDataURL := request.ScreenshotDataURL
@@ -511,9 +511,10 @@ func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, follow
 		"description":      request.Description,
 		"language":         request.Language,
 	}
+	candidateHTML, _ := imageReferences(request.CandidateHTML)
 	candidate := map[string]string{
 		"text": request.CandidateText,
-		"html": request.CandidateHTML,
+		"html": candidateHTML,
 	}
 	input := map[string]interface{}{
 		"source_url": request.SourceURL,
@@ -871,7 +872,7 @@ func parseApproved(content string, request AnalyzeRequest) (Approved, bool, erro
 	return Approved{
 		Classification:  classification,
 		Decision:        decision,
-		ContentHTML:     contentHTML,
+		ContentHTML:     restoreImages(contentHTML, request.CandidateHTML),
 		Title:           title,
 		Author:          metadata("author", request.Author),
 		SiteName:        metadata("site_name", request.SiteName),
