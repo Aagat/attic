@@ -9,6 +9,15 @@ approval, PDF formatting, and readiness/HTTP health endpoints. `/tmp` is the
 bounded ephemeral workspace. SMTP delivery remains deferred; completed PDFs
 end in `ready` and are available through the authenticated artifact endpoint.
 
+## Chromium extension
+
+Download `/attic-chromium.zip` from your running server, extract it, then use
+**Load unpacked** in `chrome://extensions` (Developer mode enabled). Connect
+with your server address and Attic access key in the extension's Options,
+then pin **Save to Attic**. The toolbar saves the current article; the link
+context menu saves a linked article. Both queue the normal processing pipeline.
+See [installation and permissions](internal/httpapi/extension/README.md).
+
 ## Prerequisites
 
 - Linux with Docker Engine and Compose v2 (or another OCI-compatible runtime).

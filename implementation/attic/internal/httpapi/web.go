@@ -18,6 +18,9 @@ import (
 var webAssets embed.FS
 
 func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
+	if s.serveExtension(w, r) {
+		return true
+	}
 	path := r.URL.Path
 	if path != "/" && path != "/app.js" && path != "/app.css" {
 		return false

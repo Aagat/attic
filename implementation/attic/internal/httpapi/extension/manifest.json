@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Attic",
+  "version": "0.1.0",
+  "description": "Save the current article or a link to your own Attic reading library.",
+  "permissions": ["activeTab", "storage", "contextMenus"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": {"default_title": "Save to Attic", "default_icon": "icon-192.png"},
+  "icons": {"192": "icon-192.png"},
+  "background": {"service_worker": "background.js"},
+  "options_page": "options.html"
+}
