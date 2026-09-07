@@ -175,7 +175,8 @@ Chromium needs while establishing its namespace/setuid sandbox, and has a
 read-only root filesystem. Do not enable `no-new-privileges` or pass Chromium
 `--no-sandbox`. Only `/data`, `/tmp`, and `/dev/shm` are writable.
 Chromium handles acquisition with its process sandbox enabled. PDFs are typeset
-by Pandoc and XeLaTeX using Latin Modern fonts. All subprocesses run as the same
+by Pandoc and XeLaTeX using Latin Modern fonts with a subtle stroke-weight
+increase (`FakeBold=0.35`) for e-ink readability. All subprocesses run as the same
 non-root user under CPU, memory, and PID limits. The formatter uses sanitized
 HTML, a private template, disabled TeX shell escape, restricted TeX file access,
 a deadline, and a bounded output file.

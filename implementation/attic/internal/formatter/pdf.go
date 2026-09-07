@@ -293,6 +293,8 @@ func number(value float64) string { return strconv.FormatFloat(value, 'f', -1, 6
 const latexTemplate = `\documentclass[11pt]{article}
 \usepackage[paperwidth=@@WIDTH@@mm,paperheight=210mm,margin=@@MARGIN@@mm,includefoot,footskip=7mm]{geometry}
 \usepackage{fontspec}
+% A light stroke increase improves small text on e-ink without changing metrics.
+\defaultfontfeatures{FakeBold=0.35}
 \setmainfont{Latin Modern Roman}
 \setsansfont{Latin Modern Sans}
 \setmonofont{Latin Modern Mono}
