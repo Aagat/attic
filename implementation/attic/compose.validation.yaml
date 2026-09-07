@@ -4,7 +4,7 @@
 services:
   attic:
     ports: !override
-      - "127.0.0.1:18080:8080"
+      - "0.0.0.0:18080:8080"
     depends_on:
       validation-db:
         condition: service_healthy

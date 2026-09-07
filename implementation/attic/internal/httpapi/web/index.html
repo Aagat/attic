@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#233c32"><title>Attic — Your reading library</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body>
+<header class="topbar"><a class="brand" href="/">Attic<span>Your reading library</span></a><button id="signout" class="quiet" hidden>Sign out</button></header>
+<main>
+<section id="login" class="login" hidden><p class="eyebrow">WELCOME TO ATTIC</p><h1>A quieter place<br>for your reading.</h1><p>Save an article. Get a clean PDF, made for your Kindle.</p><form id="login-form"><label for="access-key">Access key</label><input id="access-key" type="password" autocomplete="current-password" required placeholder="Your Attic access key"><button type="submit">Open my library</button><p class="hint">Use the access key configured for this Attic server. It is separate from your ChatGPT login.</p><p id="login-error" role="alert"></p></form></section>
+<section id="library" hidden>
+<div class="intro"><div><p class="eyebrow">SAVE NOW, READ LATER</p><h1>Good reading, without the clutter.</h1><p>Turn an article into a comfortable read for your Kindle Scribe.</p></div><span class="device">Kindle Scribe · PDF</span></div>
+<form id="submit-form" class="submit"><label class="sr-only" for="article-url">Article URL</label><input id="article-url" type="url" inputmode="url" autocomplete="url" placeholder="Paste an article link…" required><button type="submit">Save article <span aria-hidden="true">↗</span></button></form>
+<p id="notice" role="status" aria-live="polite"></p>
+<div class="library-heading"><h2>Your articles</h2><label class="search"><span class="sr-only">Search loaded articles</span><input id="search" type="search" placeholder="Search articles"></label></div>
+<div class="filters" role="group" aria-label="Filter articles"><button data-filter="all" aria-pressed="true">All articles</button><button data-filter="ready" aria-pressed="false">Ready to read</button><button data-filter="active" aria-pressed="false">In progress</button><button data-filter="failed" aria-pressed="false">Needs attention</button></div>
+<div id="articles" class="articles" aria-live="polite"></div><button id="more" class="secondary more" hidden>Load more articles</button>
+<footer><strong>From the web to your Kindle.</strong><p>Open an article to preview its PDF, download it, or use Send to Kindle. New PDFs are checked for missing content and layout problems before they become ready.</p></footer>
+</section>
+</main>
+<dialog id="reader"><div class="reader-top"><div><h2 id="reader-title">Article</h2><p id="reader-meta"></p></div><button id="close-reader" class="quiet" aria-label="Close preview">Close ✕</button></div><div class="reader-actions"><a id="download" class="button" href="#">Download PDF</a><button id="share" class="secondary" hidden>Share PDF</button><button id="kindle" class="secondary">Send to Kindle</button><a id="original" target="_blank" rel="noreferrer">Original article ↗</a></div><div id="kindle-help" hidden><strong>Send this PDF to your Kindle</strong><p>Download the PDF, then upload it on Amazon’s Send to Kindle page and choose your Scribe. On a supported phone, “Share PDF” can also open the Kindle app.</p><a href="https://www.amazon.com/sendtokindle" target="_blank" rel="noreferrer" class="button">Open Send to Kindle ↗</a></div><p id="reader-status" role="status"></p><iframe id="pdf-frame" title="Article PDF preview"></iframe></dialog>
+</body></html>

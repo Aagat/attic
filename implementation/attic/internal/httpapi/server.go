@@ -48,6 +48,8 @@ type Server struct {
 	authFailures       *authFailureLimiter
 	maxRequestURIBytes int
 	now                func() time.Time
+	sessionsMu         sync.Mutex
+	sessions           map[[32]byte]time.Time
 }
 
 func NewServer(archive application.JobArchive, readiness application.Readiness, bearerToken string) *Server {
@@ -74,6 +76,7 @@ func NewServerWithOptions(archive application.JobArchive, readiness application.
 		options.MaxRequestURIBytes = defaultMaxRequestURIBytes
 	}
 	return &Server{
+		sessions:           make(map[[32]byte]time.Time),
 		archive:            archive,
 		readiness:          readiness,
 		bearerToken:        bearerToken,
@@ -98,6 +101,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleReady(w, r, correlationID)
 		return
 	}
+	if s.serveWeb(w, r) {
+		return
+	}
 	if !strings.HasPrefix(r.URL.Path, "/api/v1/") && r.URL.Path != "/api/v1/jobs" {
 		writeError(w, application.NewSafeError("not_found", 404, "Route was not found"), correlationID)
 		return
@@ -115,6 +121,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.authFailures.clear(remoteIP)
+	if r.URL.Path == "/api/v1/session" {
+		s.handleSession(w, r, correlationID)
+		return
+	}
 	s.handleAPI(w, r, correlationID)
 }
 
@@ -133,7 +143,7 @@ func (s *Server) authorized(r *http.Request) bool {
 	const prefix = "Bearer "
 	header := r.Header.Get("Authorization")
 	if !strings.HasPrefix(header, prefix) {
-		return false
+		return s.authorizedSession(r)
 	}
 	presented := strings.TrimSpace(strings.TrimPrefix(header, prefix))
 	if presented == "" {

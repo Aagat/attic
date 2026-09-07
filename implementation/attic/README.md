@@ -91,7 +91,8 @@ verifies credentials, image input, and the article-response protocol.
 ### Local validation deployment
 
 `compose.validation.yaml` adds an isolated PostgreSQL container and publishes
-Attic at `http://127.0.0.1:18080`, for machines where port 8080 is occupied.
+Attic on all interfaces at port `18080`, for machines where port 8080 is occupied.
+Open `http://<server-address>:18080/` from another device on your private network.
 Use it with the base Compose file, from this directory:
 
 ```sh
@@ -207,6 +208,55 @@ runtime fonts and Poppler utilities:
 
 ```sh
 ATTIC_LATEX_INTEGRATION=1 go test ./internal/formatter -run TestPandocPDFIntegration
+```
+
+## Reading library
+
+Open `/` on the running server and sign in with the `BEARER_TOKEN` value from
+`implementation/attic/.env`. This is the Attic access key, separate from your
+ChatGPT login. Paste an article URL to submit it, then follow its progress in
+the library. Search and status filters help find articles; failed jobs can be
+retried, and unwanted jobs can be cancelled or removed. Search covers the
+loaded articles; use **Load more** to include older entries.
+
+**Read PDF** opens an authenticated preview with author/source details, download,
+and a **Send to Kindle** handoff. Download the file and follow the Amazon upload
+link, or use native file sharing when the browser supports it (usually over
+HTTPS). Automatic email delivery is not connected. The interface works on
+phones and desktops. `/?url=<encoded-article-url>` can prefill the submission
+field without automatically submitting it.
+
+Sign-in uses a random HttpOnly, SameSite cookie; the access key is not stored in
+browser local storage or URLs. Sessions expire after 30 days, on sign-out, or
+when the server restarts. API clients can continue using bearer authentication.
+Use HTTPS when exposing the service outside your trusted private network.
+
+## Automatic PDF checks
+
+Every new PDF is inspected with Poppler before it can become a stored, ready
+artifact. Checks cover title/author/source metadata, configured page geometry,
+text outside page bounds, blank pages, missing images by count, and preservation
+of substantive headings, paragraphs, code blocks and table cells. Comparison
+normalizes whitespace, punctuation and Unicode ligatures and uses both raw and
+layout text extraction. These are mechanical checks against the approved article;
+they do not establish that extraction preserved everything on the original site,
+identify image substitutions, or replace visual review of typography.
+
+A failed check withholds the artifact and produces `pdf_quality_failed`, shown
+as **Needs attention** in the library. Inspection has a 30-second deadline and
+bounded subprocess output. Existing PDFs are not checked retroactively.
+The container includes the required `pdfinfo`, `pdftotext`, and `pdfimages` tools.
+
+The deterministic tests cover representative inspection failures and confirm
+that failed inspection cannot publish an artifact. To inspect a saved article
+and PDF with the real tools:
+
+```sh
+ATTIC_QUALITY_HTML=/path/to/approved.html \
+ATTIC_QUALITY_PDF=/path/to/article.pdf \
+ATTIC_QUALITY_TITLE='Article title' \
+ATTIC_QUALITY_AUTHOR='Article author' \
+go test ./internal/formatter -run TestQualityInspectionOfSavedArticle -v
 ```
 
 ## Migrations and readiness
