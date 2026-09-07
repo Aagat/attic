@@ -4,6 +4,7 @@ package formatter
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -146,6 +147,10 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 	htmlPath := filepath.Join(tempDir, "article.html")
 	outputPath := filepath.Join(tempDir, "article.pdf")
 	templatePath := filepath.Join(tempDir, "template.tex")
+	filterPath := filepath.Join(tempDir, "tables.lua")
+	if err := os.WriteFile(filterPath, []byte(tableFilter), 0o600); err != nil {
+		return Result{}, err
+	}
 	if err := os.WriteFile(templatePath, []byte(renderTemplate(article, margin, fontSize, lineHeight)), 0o600); err != nil {
 		return Result{}, err
 	}
@@ -169,7 +174,7 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 		HTMLPath:     htmlPath,
 		TemplatePath: templatePath,
 		OutputPath:   outputPath,
-		Args:         []string{"--from=html", "--to=latex", "--standalone", "--sandbox", "--no-highlight", "--template=" + templatePath, "--pdf-engine=/usr/bin/xelatex", "--pdf-engine-opt=-no-shell-escape", "--pdf-engine-opt=-halt-on-error", "--output=" + outputPath, htmlPath},
+		Args:         []string{"--from=html", "--to=latex", "--standalone", "--sandbox", "--lua-filter=" + filterPath, "--no-highlight", "--template=" + templatePath, "--pdf-engine=/usr/bin/xelatex", "--pdf-engine-opt=-no-shell-escape", "--pdf-engine-opt=-halt-on-error", "--output=" + outputPath, htmlPath},
 	}
 	executor := p.Executor
 	if executor == nil {
@@ -296,8 +301,15 @@ const latexTemplate = `\documentclass[11pt]{article}
 \usepackage{microtype,amsmath,amssymb,graphicx,longtable,booktabs,array,calc,xcolor,fvextra}
 \usepackage{hyperref}
 \hypersetup{hidelinks,unicode=true,pdftitle={@@TITLE@@},pdfauthor={@@AUTHOR@@},pdfsubject={@@SUBJECT@@},pdfcreator={Attic}}
-\usepackage{bookmark,needspace,etoolbox}
-\usepackage{adjustbox}
+\pdfstringdefDisableCommands{\def\atticcode#1{#1}\def\atticword#1{#1}}
+\usepackage{bookmark,needspace,etoolbox,newunicodechar}
+\newfontfamily\symbolfont{DejaVu Sans}
+\newunicodechar{✓}{{\symbolfont\char"2713}}
+\newunicodechar{✗}{{\symbolfont\char"2717}}
+\usepackage{adjustbox,seqsplit,float}
+\floatplacement{figure}{H}
+\DeclareRobustCommand{\atticword}[1]{\seqsplit{#1}}
+\DeclareRobustCommand{\atticcode}[1]{\texttt{\seqsplit{#1}}}
 \usepackage{titlesec}
 \titleformat{\section}{\large\bfseries}{}{0pt}{}
 \titleformat{\subsection}{\normalsize\bfseries}{}{0pt}{}
@@ -314,6 +326,8 @@ const latexTemplate = `\documentclass[11pt]{article}
 \newcommand{\NormalTok}[1]{#1}
 \fvset{fontsize=\footnotesize,breaklines=true,breakanywhere=true,breakautoindent=true,breakindent=1em}
 \RecustomVerbatimEnvironment{verbatim}{Verbatim}{fontsize=\footnotesize,breaklines=true,breakanywhere=true,breakautoindent=true,breakindent=1em,frame=leftline,framesep=5pt,rulecolor=\color{gray},baselinestretch=1}
+\BeforeBeginEnvironment{longtable}{\footnotesize}
+\AfterEndEnvironment{longtable}{\fontsize{@@FONT@@}{@@LEADING@@}\selectfont}
 \BeforeBeginEnvironment{verbatim}{\Needspace{60pt}}
 \BeforeBeginEnvironment{Shaded}{\Needspace{60pt}}
 \begin{document}
@@ -332,3 +346,6 @@ func safeURL(raw string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }
+
+//go:embed tables.lua
+var tableFilter string

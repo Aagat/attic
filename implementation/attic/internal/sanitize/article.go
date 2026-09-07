@@ -66,8 +66,11 @@ func ArticleHTML(input, title string) (string, error) {
 						}
 					}
 				}
-				if c.Data == "figure" && !hasElement(c, "img") { c.Data = "div"; c.DataAtom = 0 }
- if c.Data == "pre" {
+				if c.Data == "figure" && !hasElement(c, "img") {
+					c.Data = "div"
+					c.DataAtom = 0
+				}
+				if c.Data == "pre" {
 					value := articleText(c)
 					for child := c.FirstChild; child != nil; {
 						after := child.NextSibling
@@ -122,7 +125,13 @@ func hasHeading(n *html.Node) bool {
 }
 
 func hasElement(n *html.Node, tag string) bool {
- if n.Type == html.ElementNode && n.Data == tag { return true }
- for c:=n.FirstChild;c!=nil;c=c.NextSibling { if hasElement(c,tag) { return true } }
- return false
+	if n.Type == html.ElementNode && n.Data == tag {
+		return true
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if hasElement(c, tag) {
+			return true
+		}
+	}
+	return false
 }

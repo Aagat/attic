@@ -40,3 +40,13 @@ func TestArticleHTMLKeepsContentDisclosuresAndDistinctHeadings(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeFiguresStayInArticleFlow(t *testing.T) {
+	clean, err := ArticleHTML(`<article><p>Before</p><figure><pre>print(1)</pre></figure><p>After</p></article>`, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(clean, "<figure") || !strings.Contains(clean, "<pre>print(1)</pre>") {
+		t.Fatalf("code became a floating figure: %s", clean)
+	}
+}

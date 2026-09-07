@@ -3,10 +3,16 @@ package formatter
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -193,12 +199,28 @@ func TestPandocPDFIntegration(t *testing.T) {
 	if os.Getenv("ATTIC_LATEX_INTEGRATION") != "1" {
 		t.Skip("set ATTIC_LATEX_INTEGRATION=1 to run the real Pandoc PDF test")
 	}
-	for _, tool := range []string{"/usr/bin/pandoc", "/usr/bin/xelatex", "pdfinfo", "pdftotext"} {
+	for _, tool := range []string{"/usr/bin/pandoc", "/usr/bin/xelatex", "pdfinfo", "pdftotext", "pdfimages"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skipf("%s is unavailable", tool)
 		}
 	}
 
+	var imageBytes bytes.Buffer
+	diagram := image.NewRGBA(image.Rect(0, 0, 64, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 64; x++ {
+			diagram.Set(x, y, color.RGBA{R: 200, A: 255})
+		}
+	}
+	if err := png.Encode(&imageBytes, diagram); err != nil {
+		t.Fatal(err)
+	}
+	figure := `<figure><img alt="Regression diagram" src="data:image/png;base64,` + base64.StdEncoding.EncodeToString(imageBytes.Bytes()) + `"></figure>`
+	table := `<table><thead><tr><th>Model</th>`
+	for _, label := range []string{"One", "Two", "Three", "Four", "Five", "Six", "Seven"} {
+		table += "<th>" + label + "</th>"
+	}
+	table += `</tr></thead><tbody><tr><td>Long model identifier</td>` + strings.Repeat("<td>12345</td>", 7) + "</tr></tbody></table>"
 	result, err := (PDF{PandocPath: "/usr/bin/pandoc", Timeout: 30 * time.Second, Executor: executorFunc(func(ctx context.Context, inv Invocation) error {
 		cmd := exec.CommandContext(ctx, inv.Executable, inv.Args...)
 		cmd.Env = append(os.Environ(), "openin_any=p", "openout_any=p")
@@ -214,11 +236,11 @@ func TestPandocPDFIntegration(t *testing.T) {
 		SiteName:        "Example Journal",
 		PublicationDate: "2026-08-23",
 		SourceURL:       "https://example.test/clickable",
-		SemanticHTML: `<article><header><h1>Unicode integration</h1><p>Unwanted metadata</p></header><h2>Heading</h2><p>Selectable résumé 東京</p><p><a href="https://example.test/linked">linked text</a></p><pre><code>cat README.md | sed 's/a/b/'
+		SemanticHTML: `<article><header><h1>Unicode integration</h1><p>Unwanted metadata</p></header><h2>Heading <code>long-model/identifier-for-heading</code></h2><p>✓ ✗</p><p>Selectable résumé 東京</p><p><a href="https://example.test/linked">linked text</a></p><pre><code>cat README.md | sed 's/a/b/'
     indented_code()
 \end{verbatim}
 \input{/etc/passwd}
-</code></pre></article>`,
+</code></pre>` + figure + table + `</article>`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -244,13 +266,40 @@ func TestPandocPDFIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pdftotext: %v\n%s", err, text)
 	}
-	for _, want := range []string{"Unicode integration", "Selectable résumé", "東京", "linked text", "cat README.md", "indented_code()", `\input{/etc/passwd}`} {
+	for _, want := range []string{"Unicode integration", "Selectable résumé", "東京", "linked text", "cat README.md", "indented_code()", "✓", "✗", `\input{/etc/passwd}`} {
 		if !strings.Contains(string(text), want) {
 			t.Errorf("selectable PDF text missing %q:\n%s", want, text)
 		}
 	}
 	if strings.Count(string(text), "Unicode integration") != 1 || strings.Contains(string(text), "Unwanted metadata") {
 		t.Fatalf("duplicate title or page chrome: %s", text)
+	}
+	if strings.Count(string(text), "12345") != 7 {
+		t.Fatalf("wide table lost or duplicated cells: %s", text)
+	}
+	images, err := exec.Command("pdfimages", "-list", path).CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundImage := false
+	for _, line := range strings.Split(string(images), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 5 && fields[2] == "image" && fields[3] == "64" && fields[4] == "32" {
+			foundImage = true
+		}
+	}
+	if !foundImage {
+		t.Fatalf("embedded diagram missing: %s", images)
+	}
+	bounds, err := exec.Command("pdftotext", "-bbox", path, "-").CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, match := range regexp.MustCompile(`xMax="([0-9.]+)"`).FindAllStringSubmatch(string(bounds), -1) {
+		x, _ := strconv.ParseFloat(match[1], 64)
+		if x > 436 {
+			t.Fatalf("content extends beyond Scribe page: %v", x)
+		}
 	}
 	urls, err := exec.Command("pdfinfo", "-url", path).CombinedOutput()
 	if err != nil {

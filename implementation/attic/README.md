@@ -186,7 +186,20 @@ remains supported and is the default when no profile is configured. One profile
 is enabled per deployment. `PDF_MARGIN_MM`, `PDF_BODY_FONT_PT` and
 `PDF_LINE_HEIGHT` tune reading size and spacing. Article headers, navigation,
 metadata widgets and tables of contents are removed before AI approval; the
-PDF supplies a single title and byline.
+PDF supplies a single title and byline. PDF properties include title, author,
+publication/source details, and the Attic creator name. Attribution is extracted
+from article meta tags, Article/BlogPosting JSON-LD, and explicit byline markup
+before header cleanup.
+
+Article images, including lazy-loaded SVG diagrams, are captured as bounded PNGs
+in the browser (up to 32 images, 1200 × 1600 pixels each, 4 MB combined encoded
+image data). Cross-origin images without canvas permission cannot be embedded.
+AI receives stable image references instead of base64 text, and approved
+references are restored before sanitization. Code remains in article order;
+wide simple tables repeat their row labels across groups of columns to fit the
+portrait page. Merged-cell tables wrap without column splitting. Interactive
+controls become static content; a large data appendix can substantially increase
+page count.
 
 The optional real formatter integration test requires Pandoc, XeLaTeX, the
 runtime fonts and Poppler utilities:
