@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,5 +51,34 @@ func TestWebSessionsProtectLibraryAndMutations(t *testing.T) {
 	}
 	if got := do("GET", "/api/v1/jobs", ""); got.Code != 401 {
 		t.Fatal("logged-out session remains valid")
+	}
+}
+
+func TestSharingAssetsArePublicButCannotSubmitJobs(t *testing.T) {
+	server, _, _ := testServer(t)
+	for _, path := range []string{"/share.js", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png"} {
+		response := request(server, "GET", path, "", "")
+		if response.Code != 200 {
+			t.Fatalf("%s: %d", path, response.Code)
+		}
+	}
+	manifest := request(server, "GET", "/manifest.webmanifest", "", "")
+	var config struct {
+		Share struct{ Action, Method string } `json:"share_target"`
+	}
+	if err := json.Unmarshal(manifest.Body.Bytes(), &config); err != nil || config.Share.Action != "/" || config.Share.Method != "GET" {
+		t.Fatalf("invalid share manifest: %v", err)
+	}
+	// A shared URL only renders the public application shell. It never creates a job.
+	response := request(server, "GET", "/?text=Read+https%3A%2F%2Fexample.com%2Farticle", "", "")
+	if response.Code != 200 {
+		t.Fatal("share landing unavailable")
+	}
+	page := request(server, "GET", "/api/v1/jobs", "", "secret-token")
+	if !strings.Contains(page.Body.String(), `"items":[]`) {
+		t.Fatalf("share mutated library: %s", page.Body.String())
+	}
+	if response := request(server, "POST", "/", "url=https://example.com", ""); response.Code != 405 {
+		t.Fatal("share bypassed authenticated API")
 	}
 }

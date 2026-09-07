@@ -77,7 +77,7 @@ async function openPreview(job) {
 }
 $('login-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;$('login-error').textContent='';try{await api('/session',{method:'POST',headers:{Authorization:'Bearer '+$('access-key').value.trim()}});$('access-key').value='';showLibrary();await refresh();}catch(error){$('login-error').textContent=error.message;}finally{button.disabled=false;}});
 $('signout').addEventListener('click',async()=>{try{await api('/session',{method:'DELETE'});jobs.clear();cursor='';loadedMore=false;showLogin();}catch(error){notice(error.message,true);}});
-$('submit-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;try{const next=await api('/jobs',{method:'POST',body:JSON.stringify({url:$('article-url').value.trim()})});$('article-url').value='';filter='all';document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));notice('Saved. Your PDF is on its way.');await refresh();}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
+$('submit-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;try{const next=await api('/jobs',{method:'POST',body:JSON.stringify({url:$('article-url').value.trim()})});$('article-url').value='';history.replaceState(null,'',location.pathname);filter='all';document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));notice('Saved. Your PDF is on its way.');await refresh();}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
 $('search').addEventListener('input',render);
 $('more').addEventListener('click',()=>refresh(true));
 for(const button of document.querySelectorAll('[data-filter]'))button.addEventListener('click',()=>{filter=button.dataset.filter;document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();});
@@ -85,6 +85,10 @@ $('close-reader').addEventListener('click',closePreview);
 $('reader').addEventListener('cancel',event=>{event.preventDefault();closePreview();});
 $('kindle').addEventListener('click',()=>{$('kindle-help').hidden=!$('kindle-help').hidden;});
 $('share').addEventListener('click',async()=>{if(!previewFile)return;try{await navigator.share({files:[previewFile],title:$('reader-title').textContent});}catch(error){if(error.name!=='AbortError')$('reader-status').textContent='Sharing is unavailable. Download the PDF and use Send to Kindle instead.';}});
-const params=new URLSearchParams(location.search);const url=params.get('url')||params.get('text');if(url&&/^https?:\/\//i.test(url))$('article-url').value=url;
+const params=new URLSearchParams(location.search);
+const shared=AtticShare.parse(params);
+if(shared){$('article-url').value=shared;notice('Shared link ready. Tap Save article to add it to your library.');}
+else if(['url','text','title'].some(key=>params.has(key))){notice('No web link was found in the shared content. Paste an article link to save it.',true);}
+if('serviceWorker' in navigator&&isSecureContext)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 (async()=>{try{await api('/session');showLibrary();await refresh();}catch{showLogin();}})();
 setInterval(()=>{if(signedIn&&!document.hidden)refresh();},4000);

@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#233c32"><title>Attic — Your reading library</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#233c32"><title>Attic — Your reading library</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="stylesheet" href="/app.css"><script src="/share.js" defer></script><script src="/app.js" defer></script></head>
 <body>
-<header class="topbar"><a class="brand" href="/">Attic<span>Your reading library</span></a><button id="signout" class="quiet" hidden>Sign out</button></header>
+<header class="topbar"><a class="brand" href="/">Attic<span>Your reading library</span></a><nav><a href="/connect.html">Save from anywhere</a><button id="signout" class="quiet" hidden>Sign out</button></nav></header>
 <main>
 <section id="login" class="login" hidden><p class="eyebrow">WELCOME TO ATTIC</p><h1>A quieter place<br>for your reading.</h1><p>Save an article. Get a clean PDF, made for your Kindle.</p><form id="login-form"><label for="access-key">Access key</label><input id="access-key" type="password" autocomplete="current-password" required placeholder="Your Attic access key"><button type="submit">Open my library</button><p class="hint">Use the access key configured for this Attic server. It is separate from your ChatGPT login.</p><p id="login-error" role="alert"></p></form></section>
 <section id="library" hidden>

@@ -22,7 +22,9 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	path := r.URL.Path
-	if path != "/" && path != "/app.js" && path != "/app.css" {
+	switch path {
+	case "/", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
+	default:
 		return false
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -33,6 +35,9 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
+	if path == "/manifest.webmanifest" {
+		w.Header().Set("Content-Type", "application/manifest+json")
+	}
 	files, _ := fs.Sub(webAssets, "web")
 	http.FileServer(http.FS(files)).ServeHTTP(w, r)
 	return true

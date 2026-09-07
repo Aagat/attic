@@ -240,6 +240,52 @@ browser local storage or URLs. Sessions expire after 30 days, on sign-out, or
 when the server restarts. API clients can continue using bearer authentication.
 Use HTTPS when exposing the service outside your trusted private network.
 
+## Mobile PWA and sharing
+
+Open **Save from anywhere** in the library (`/connect.html`) for installation and
+connection instructions. Addresses on this page come from the current origin;
+there is no machine-specific hostname in the application or extension.
+
+On Android, open the server over HTTPS in Chrome and install Attic using
+**Add to Home screen → Install**. The installed PWA registers as a share target:
+**Share → Attic → Save article**. The shared URL can arrive in the URL, text, or
+title field; Attic extracts a web link and preserves it through sign-in. Incoming
+shares only prefill the form. They cannot create jobs until the user confirms
+through the authenticated API. Successful submission clears the share parameters
+from the address so reloading does not restore an already-saved link.
+
+On iOS, add the library to the Home Screen from Safari. iOS does not currently
+support the PWA share-target mechanism, so the setup page includes a **Save to
+Attic** Apple Shortcut recipe. That shortcut receives a shared URL, submits it
+with the user's configured Attic access key, and checks for a returned job ID
+before confirming success. The user must create this shortcut in Shortcuts;
+there is no native app, developer-account requirement, or signed shortcut bundle.
+
+The PWA includes a manifest, icons, and a service worker. Only a public offline
+message is cached. If navigation fails, it explains that the article has not
+been saved and offers a reload; the shared link remains in the address. Job
+metadata, credentials and PDFs are not cached by the service worker. Offline
+queueing, background submission and offline PDF reading are not implemented.
+HTTPS (or localhost during development) is required for service workers and
+installation; a home-screen bookmark from a remote HTTP address is insufficient.
+
+Validation:
+
+```sh
+node tests/share.test.mjs
+ATTIC_WEB_INTEGRATION=1 go test ./internal/httpapi -run TestPWABrowserIntegration -v
+```
+
+The opt-in integration check requires `/usr/bin/chromium` and uses an isolated
+in-memory HTTP server, without external articles or AI calls. It exercises mobile
+layout, shared-link sign-in/submission, and service-worker offline navigation.
+Physical Android installation/share-sheet registration and the user-created iOS
+Shortcut still need a device check.
+
+References: [Chrome share targets](https://developer.chrome.com/docs/capabilities/web-apis/web-share-target),
+[Apple share-sheet shortcuts](https://support.apple.com/guide/shortcuts/launch-a-shortcut-from-another-app-apd163eb9f95/ios),
+[Apple API requests](https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios).
+
 ## Automatic source recovery
 
 If the original page is paywalled, denies access, cannot be fetched, has
