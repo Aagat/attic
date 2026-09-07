@@ -58,14 +58,14 @@ func NewArchive(store JobStore, artifacts ArtifactStore, options ArchiveOptions)
 	for name := range options.Profiles {
 		name = strings.TrimSpace(name)
 		if name != "" {
-			if name != defaultProfile {
+			if name != defaultProfile && name != "kindle-scribe" {
 				return nil, NewSafeError("invalid_configuration", 500, "The configured PDF profile is not supported")
 			}
 			profiles[name] = struct{}{}
 		}
 	}
 	if len(profiles) == 0 {
-		if profile != defaultProfile {
+		if profile != defaultProfile && profile != "kindle-scribe" {
 			return nil, NewSafeError("invalid_configuration", 500, "The configured PDF profile is not supported")
 		}
 		profiles[profile] = struct{}{}

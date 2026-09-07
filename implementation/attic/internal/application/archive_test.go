@@ -470,3 +470,14 @@ func (s *trackingArtifactStore) Delete(ctx context.Context, artifact domain.Arti
 	s.deleteCalls++
 	return s.ArtifactStore.Delete(ctx, artifact)
 }
+
+func TestScribeDeploymentAcceptsDefaultProfile(t *testing.T) {
+	archive, err := application.NewArchive(memory.NewStore(), memory.NewArtifactStore(), application.ArchiveOptions{DefaultProfile: "kindle-scribe", Profiles: map[string]struct{}{"kindle-scribe": {}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.test/article"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+}

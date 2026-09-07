@@ -171,3 +171,14 @@ func TestSubscriptionProviderDoesNotRequireAPIKey(t *testing.T) {
 		t.Fatal("API credentials no longer required")
 	}
 }
+
+func TestKindleScribeProfile(t *testing.T) {
+	values := map[string]string{"BEARER_TOKEN": "token", "DATABASE_URL": "postgres://db/attic", "AI_PROVIDER": "chatgpt", "PDF_PROFILE": "kindle-scribe"}
+	cfg, err := LoadFrom(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Profiles["kindle-scribe"]; !ok || cfg.DefaultProfile != "kindle-scribe" {
+		t.Fatal("Scribe profile not activated")
+	}
+}

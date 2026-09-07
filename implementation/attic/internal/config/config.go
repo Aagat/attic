@@ -118,7 +118,7 @@ func LoadFrom(get func(string) string) (Config, error) {
 		DBPoolMax:      defaultDBPoolMax,
 		ArtifactRoot:   valueOr(get("ARTIFACT_ROOT"), "/data/artifacts"),
 		DefaultProfile: valueOr(get("PDF_PROFILE"), "a5"),
-		Profiles:       map[string]struct{}{"a5": {}},
+		Profiles:       map[string]struct{}{valueOr(get("PDF_PROFILE"), "a5"): {}},
 		AI: AIConfig{
 			Provider:            valueOr(get("AI_PROVIDER"), "api"),
 			AuthFile:            valueOr(get("CHATGPT_AUTH_FILE"), "/data/auth/chatgpt.json"),
@@ -131,7 +131,7 @@ func LoadFrom(get func(string) string) (Config, error) {
 			MaxRetries:          2,
 		},
 		Browser: BrowserConfig{Executable: valueOr(get("BROWSER_EXECUTABLE"), "/usr/bin/chromium"), NavigationTimeout: 30 * time.Second, RenderTimeout: 45 * time.Second, Concurrency: 1, MaxRedirects: 5, MaxDOMBytes: 10_000_000, MaxDOMNodes: 100_000, MaxScreenshotBytes: 5_000_000, MaxTransferredBytes: 20_000_000, ScreenshotWidth: 1280, ScreenshotHeight: 1600},
-		PDF:     PDFConfig{MaxBytes: 25_000_000, Timeout: 45 * time.Second, MarginMM: 10, BodyFontPT: 11, LineHeight: 1.4},
+		PDF:     PDFConfig{MaxBytes: 25_000_000, Timeout: 45 * time.Second, MarginMM: 12, BodyFontPT: 11, LineHeight: 1.25},
 		SMTP: SMTPConfig{
 			Host:        get("SMTP_HOST"),
 			Port:        587,
@@ -305,14 +305,14 @@ func (c Config) Validate() error {
 			fields = append(fields, "PUBLIC_BASE_URL")
 		}
 	}
-	if strings.TrimSpace(c.DefaultProfile) == "" || c.DefaultProfile != knownPDFProfile {
+	if strings.TrimSpace(c.DefaultProfile) == "" || (c.DefaultProfile != knownPDFProfile && c.DefaultProfile != "kindle-scribe") {
 		fields = append(fields, "PDF_PROFILE")
 	}
 	if len(c.Profiles) == 0 {
 		fields = append(fields, "PDF_PROFILE")
 	}
 	for profile := range c.Profiles {
-		if profile != knownPDFProfile {
+		if profile != knownPDFProfile && profile != "kindle-scribe" {
 			fields = append(fields, "PDF_PROFILE")
 		}
 	}

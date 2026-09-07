@@ -40,6 +40,10 @@ LABEL org.opencontainers.image.title="Attic"
 LABEL org.opencontainers.image.description="Clean-room Attic V1 article processing runtime"
 
 RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-cjk ttf-dejavu \
+    pandoc-cli texlive-xetex texmf-dist-xetex texmf-dist-latexextra texmf-dist-fontsrecommended texmf-dist-langchinese \
+    && mktexlsr \
+    && ln -s /usr/share/texmf-dist/fonts/opentype/public/lm /usr/share/fonts/latin-modern \
+    && fc-cache -f \
     && addgroup -S -g 10001 attic \
     && adduser -S -D -H -u 10001 -G attic attic \
     && mkdir -p /data/artifacts \

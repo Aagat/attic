@@ -21,9 +21,9 @@ func (f executorFunc) Run(ctx context.Context, invocation Invocation) error {
 	return f(ctx, invocation)
 }
 
-func TestPDFUsesPrivateSanitizedA5HTMLAndChromiumArguments(t *testing.T) {
+func TestPDFUsesPrivateSanitizedA5HTMLAndPandocArguments(t *testing.T) {
 	var captured Invocation
-	var document string
+	var document, template string
 	var htmlMode, dirMode os.FileMode
 	executor := executorFunc(func(_ context.Context, invocation Invocation) error {
 		captured = invocation
@@ -32,6 +32,11 @@ func TestPDFUsesPrivateSanitizedA5HTMLAndChromiumArguments(t *testing.T) {
 			return err
 		}
 		document = string(contents)
+		tmpl, err := os.ReadFile(invocation.TemplatePath)
+		if err != nil {
+			return err
+		}
+		template = string(tmpl)
 		htmlInfo, err := os.Stat(invocation.HTMLPath)
 		if err != nil {
 			return err
@@ -44,7 +49,7 @@ func TestPDFUsesPrivateSanitizedA5HTMLAndChromiumArguments(t *testing.T) {
 		return os.WriteFile(invocation.OutputPath, validPDF, 0o600)
 	})
 
-	result, err := (PDF{Executor: executor, ChromiumPath: "/test/chromium"}).Format(context.Background(), Article{
+	result, err := (PDF{Executor: executor, PandocPath: "/test/pandoc"}).Format(context.Background(), Article{
 		Profile:         "a5",
 		Title:           `Title </h1><script>titleEvil()</script>`,
 		Author:          `A & B`,
@@ -60,30 +65,26 @@ func TestPDFUsesPrivateSanitizedA5HTMLAndChromiumArguments(t *testing.T) {
 	if result.Profile != "a5" || !bytes.Equal(result.PDF, validPDF) {
 		t.Fatalf("result = %#v", result)
 	}
-	if captured.Executable != "/test/chromium" {
+	if captured.Executable != "/test/pandoc" {
 		t.Fatalf("executable = %q", captured.Executable)
 	}
 	args := strings.Join(captured.Args, "\n")
-	for _, want := range []string{"--headless", "--disable-javascript", "--no-pdf-header-footer", "--print-to-pdf=" + captured.OutputPath, "file://"} {
+	for _, want := range []string{"--from=html", "--sandbox", "--pdf-engine=/usr/bin/xelatex", "--pdf-engine-opt=-no-shell-escape", "--output=" + captured.OutputPath} {
 		if !strings.Contains(args, want) {
-			t.Errorf("Chromium args missing %q: %s", want, args)
+			t.Errorf("Pandoc args missing %q", want)
 		}
 	}
-	for _, want := range []string{
-		`@page { size: A5 portrait; margin: 10mm; }`,
-		`font-size: 11pt; line-height: 1.4`,
-		`default-src 'none'; img-src data:`,
-		`Readable <strong>Unicode 東京</strong>`,
-		`href="https://example.test/linked"`,
-		`href="https://example.test/article?a=1&amp;b=2"`,
-		`A &amp; B · Example · 2026-08-31`,
-		`Generated 2026-08-31T10:00:00Z`,
-		`&lt;script&gt;titleEvil()&lt;/script&gt;`,
-	} {
+	for _, want := range []string{`Readable <strong>Unicode 東京</strong>`, `href="https://example.test/linked"`} {
 		if !strings.Contains(document, want) {
-			t.Errorf("rendered HTML missing %q", want)
+			t.Errorf("HTML missing %q", want)
 		}
 	}
+	for _, want := range []string{`paperwidth=148mm,paperheight=210mm,margin=12mm`, `Latin Modern Roman`, `breaklines=true`, `A \& B`, `https://example.test/article?a=1\&b=2`} {
+		if !strings.Contains(template, want) {
+			t.Errorf("template missing %q", want)
+		}
+	}
+
 	for _, forbidden := range []string{"bodyEvil", "<script"} {
 		if strings.Contains(document, forbidden) {
 			t.Errorf("rendered HTML contains unsafe %q", forbidden)
@@ -188,20 +189,36 @@ func TestPDFRejectsUnsupportedProfileAndUnsafeArticle(t *testing.T) {
 	}
 }
 
-func TestChromiumPDFIntegration(t *testing.T) {
-	if os.Getenv("ATTIC_CHROMIUM_INTEGRATION") != "1" {
-		t.Skip("set ATTIC_CHROMIUM_INTEGRATION=1 to run the real Chromium PDF test")
+func TestPandocPDFIntegration(t *testing.T) {
+	if os.Getenv("ATTIC_LATEX_INTEGRATION") != "1" {
+		t.Skip("set ATTIC_LATEX_INTEGRATION=1 to run the real Pandoc PDF test")
 	}
-	for _, tool := range []string{"/usr/bin/chromium", "pdfinfo", "pdftotext"} {
+	for _, tool := range []string{"/usr/bin/pandoc", "/usr/bin/xelatex", "pdfinfo", "pdftotext"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skipf("%s is unavailable", tool)
 		}
 	}
 
-	result, err := (PDF{ChromiumPath: "/usr/bin/chromium", Timeout: 30 * time.Second}).Format(context.Background(), Article{
-		Title:        "Unicode integration",
-		SourceURL:    "https://example.test/clickable",
-		SemanticHTML: `<article><h2>Heading</h2><p>Selectable résumé 東京</p><p><a href="https://example.test/linked">linked text</a></p></article>`,
+	result, err := (PDF{PandocPath: "/usr/bin/pandoc", Timeout: 30 * time.Second, Executor: executorFunc(func(ctx context.Context, inv Invocation) error {
+		cmd := exec.CommandContext(ctx, inv.Executable, inv.Args...)
+		cmd.Env = append(os.Environ(), "openin_any=p", "openout_any=p")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("synthetic fixture typesetting: %s", output)
+		}
+		return err
+	})}).Format(context.Background(), Article{
+		Profile:         "kindle-scribe",
+		Title:           "Unicode integration",
+		Author:          "Ada & René",
+		SiteName:        "Example Journal",
+		PublicationDate: "2026-08-23",
+		SourceURL:       "https://example.test/clickable",
+		SemanticHTML: `<article><header><h1>Unicode integration</h1><p>Unwanted metadata</p></header><h2>Heading</h2><p>Selectable résumé 東京</p><p><a href="https://example.test/linked">linked text</a></p><pre><code>cat README.md | sed 's/a/b/'
+    indented_code()
+\end{verbatim}
+\input{/etc/passwd}
+</code></pre></article>`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -215,17 +232,25 @@ func TestChromiumPDFIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pdfinfo: %v\n%s", err, info)
 	}
-	if !strings.Contains(string(info), "Page size:") || !strings.Contains(string(info), "(A5)") {
-		t.Fatalf("PDF is not A5 according to pdfinfo:\n%s", info)
+	if !strings.Contains(string(info), "Page size:") || !strings.Contains(string(info), "446.46 x 595.28 pts") {
+		t.Fatalf("PDF does not match Kindle Scribe geometry according to pdfinfo:\n%s", info)
+	}
+	for _, want := range []string{"Title:           Unicode integration", "Author:          Ada & René", "Subject:", "Example Journal", "2026-08-23", "Creator:         Attic"} {
+		if !strings.Contains(string(info), want) {
+			t.Errorf("PDF metadata missing %q:\n%s", want, info)
+		}
 	}
 	text, err := exec.Command("pdftotext", path, "-").CombinedOutput()
 	if err != nil {
 		t.Fatalf("pdftotext: %v\n%s", err, text)
 	}
-	for _, want := range []string{"Unicode integration", "Selectable résumé", "東京", "linked text"} {
+	for _, want := range []string{"Unicode integration", "Selectable résumé", "東京", "linked text", "cat README.md", "indented_code()", `\input{/etc/passwd}`} {
 		if !strings.Contains(string(text), want) {
 			t.Errorf("selectable PDF text missing %q:\n%s", want, text)
 		}
+	}
+	if strings.Count(string(text), "Unicode integration") != 1 || strings.Contains(string(text), "Unwanted metadata") {
+		t.Fatalf("duplicate title or page chrome: %s", text)
 	}
 	urls, err := exec.Command("pdfinfo", "-url", path).CombinedOutput()
 	if err != nil {

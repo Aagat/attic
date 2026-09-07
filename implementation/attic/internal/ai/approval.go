@@ -104,7 +104,7 @@ func (a *ArticleApprover) Approve(ctx context.Context, jobID domain.JobID, input
 	plainText := input.CandidateText
 	extractionMethod := strings.TrimSpace(input.ExtractionMethod)
 	if result.Decision == "replace_candidate" {
-		cleanedHTML, err := sanitize.SanitizeHTML(result.ContentHTML)
+		cleanedHTML, err := sanitize.ArticleHTML(result.ContentHTML, result.Title)
 		if err != nil {
 			category := domain.FailureAIInvalidResponse
 			if errors.Is(err, sanitize.ErrNoSemanticContent) {

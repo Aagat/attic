@@ -174,9 +174,26 @@ private network can provide external HTTPS. The container runs as UID/GID
 Chromium needs while establishing its namespace/setuid sandbox, and has a
 read-only root filesystem. Do not enable `no-new-privileges` or pass Chromium
 `--no-sandbox`. Only `/data`, `/tmp`, and `/dev/shm` are writable.
-Chromium and Unicode fonts are installed in the runtime image; browser/PDF
-subprocesses run with Chromium's process sandbox enabled as the same non-root
-user under CPU, memory, and PID limits.
+Chromium handles acquisition with its process sandbox enabled. PDFs are typeset
+by Pandoc and XeLaTeX using Latin Modern fonts. All subprocesses run as the same
+non-root user under CPU, memory, and PID limits. The formatter uses sanitized
+HTML, a private template, disabled TeX shell escape, restricted TeX file access,
+a deadline, and a bounded output file.
+
+Set `PDF_PROFILE=kindle-scribe` for a 157.5 × 210 mm (3:4) portrait page, with
+12 mm margins, 11 pt body text and smaller, wrapping monospaced code. `a5`
+remains supported and is the default when no profile is configured. One profile
+is enabled per deployment. `PDF_MARGIN_MM`, `PDF_BODY_FONT_PT` and
+`PDF_LINE_HEIGHT` tune reading size and spacing. Article headers, navigation,
+metadata widgets and tables of contents are removed before AI approval; the
+PDF supplies a single title and byline.
+
+The optional real formatter integration test requires Pandoc, XeLaTeX, the
+runtime fonts and Poppler utilities:
+
+```sh
+ATTIC_LATEX_INTEGRATION=1 go test ./internal/formatter -run TestPandocPDFIntegration
+```
 
 ## Migrations and readiness
 

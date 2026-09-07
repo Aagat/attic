@@ -295,3 +295,19 @@ func TestChromiumRendererIntegration(t *testing.T) {
 		t.Fatalf("incomplete render: %+v", page)
 	}
 }
+
+func TestExtractStructuredBylineBeforeHeaderCleanup(t *testing.T) {
+	body := strings.Repeat("A complete primary article sentence. ", 5)
+	for _, markup := range []string{
+		`<script type="application/ld+json">{"@graph":[{"@type":"WebSite","author":{"name":"Wrong author"}},{"@type":"BlogPosting","author":[{"name":"Ada Lovelace"},{"name":"Grace Hopper"}],"publisher":{"name":"Example Journal"},"datePublished":"2026-08-23"}]}</script><article><h1>Title</h1><p>` + body + `</p></article>`,
+		`<article><header><h1>Title</h1><a rel="author">Ada Lovelace</a><a rel="author">Grace Hopper</a><time itemprop="datePublished" datetime="2026-08-23">August 23</time></header><p>` + body + `</p></article>`,
+	} {
+		c, err := Extract(Page{FinalURL: "https://example.test/article", HTML: []byte(markup)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Author != "Ada Lovelace, Grace Hopper" || c.PublicationDate != "2026-08-23" {
+			t.Fatalf("lost byline: author=%q date=%q", c.Author, c.PublicationDate)
+		}
+	}
+}

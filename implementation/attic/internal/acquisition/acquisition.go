@@ -305,14 +305,15 @@ func Extract(p Page) (Candidate, error) {
 		}
 	}
 	metadata(doc)
+	extraAuthor, extraPublisher, extraDate := supplementalMetadata(doc)
 	headingTitle := firstElementText(best, "h1")
 	c.Title = boundedMetadata(firstNonEmpty(openGraphTitle, twitterTitle, standardMetaTitle, documentTitle, headingTitle), maxMetadataTitleRunes)
-	c.Author = boundedMetadata(firstNonEmpty(articleAuthor, standardAuthor), maxMetadataAuthorRunes)
-	c.SiteName = boundedMetadata(firstNonEmpty(openGraphSiteName, standardSiteName), maxMetadataSiteNameRunes)
-	c.PublicationDate = boundedMetadata(firstNonEmpty(articlePublicationDate, standardPublicationDate), maxMetadataDateRunes)
+	c.Author = boundedMetadata(firstNonEmpty(articleAuthor, extraAuthor, standardAuthor), maxMetadataAuthorRunes)
+	c.SiteName = boundedMetadata(firstNonEmpty(openGraphSiteName, extraPublisher, standardSiteName), maxMetadataSiteNameRunes)
+	c.PublicationDate = boundedMetadata(firstNonEmpty(articlePublicationDate, extraDate, standardPublicationDate), maxMetadataDateRunes)
 	c.Description = boundedMetadata(firstNonEmpty(openGraphDescription, standardDescription), maxMetadataDescriptionRunes)
 	c.Language = boundedMetadata(firstNonEmpty(htmlLanguage, openGraphLanguage), maxMetadataLanguageRunes)
-	safe, err := sanitize.SanitizeHTML(render(best))
+	safe, err := sanitize.ArticleHTML(render(best), c.Title)
 	if err != nil {
 		return Candidate{}, err
 	}

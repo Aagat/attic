@@ -1,4 +1,4 @@
-// Package formatter renders sanitized articles as PDFs through headless Chromium.
+// Package formatter renders sanitized articles as PDFs through Pandoc and XeLaTeX.
 package formatter
 
 import (
@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net/url"
 	"os"
@@ -21,16 +20,16 @@ import (
 )
 
 const (
-	MaxOutputBytes  = 16 << 20
-	defaultTimeout  = 45 * time.Second
-	defaultChromium = "/usr/bin/chromium"
+	MaxOutputBytes = 16 << 20
+	defaultTimeout = 45 * time.Second
+	defaultPandoc  = "/usr/bin/pandoc"
 )
 
 var (
 	ErrUnsupportedProfile = errors.New("unsupported PDF profile")
 	ErrInvalidArticle     = errors.New("invalid semantic article")
 	ErrOutputTooLarge     = errors.New("PDF output exceeds configured limit")
-	ErrInvalidPDF         = errors.New("Chromium produced an invalid PDF")
+	ErrInvalidPDF         = errors.New("Pandoc produced an invalid PDF")
 )
 
 type Article struct {
@@ -54,27 +53,29 @@ type Formatter interface {
 }
 
 // Invocation is deliberately small so tests can provide an executor without
-// starting a browser. Executors must return after ctx is cancelled.
+// starting a typesetter. Executors must return after ctx is cancelled.
 type Invocation struct {
-	Executable string
-	Args       []string
-	HTMLPath   string
-	OutputPath string
+	Executable   string
+	Args         []string
+	HTMLPath     string
+	OutputPath   string
+	TemplatePath string
 }
 
 type Executor interface {
 	Run(context.Context, Invocation) error
 }
 
-// CommandExecutor starts Chromium in its own process group. Cancelling the
+// CommandExecutor starts Pandoc in its own process group. Cancelling the
 // context kills the entire group and still waits for the process to be reaped.
 type CommandExecutor struct{}
 
 func (CommandExecutor) Run(ctx context.Context, invocation Invocation) error {
 	cmd := exec.Command(invocation.Executable, invocation.Args...)
+	cmd.Env = append(os.Environ(), "openin_any=p", "openout_any=p")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start Chromium: %w", err)
+		return fmt.Errorf("start Pandoc: %w", err)
 	}
 
 	done := make(chan error, 1)
@@ -82,13 +83,13 @@ func (CommandExecutor) Run(ctx context.Context, invocation Invocation) error {
 	select {
 	case err := <-done:
 		if err != nil {
-			return fmt.Errorf("Chromium render: %w", err)
+			return fmt.Errorf("Pandoc render: %w", err)
 		}
 		return nil
 	case <-ctx.Done():
 		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
 			<-done
-			return fmt.Errorf("terminate Chromium: %w", err)
+			return fmt.Errorf("terminate Pandoc: %w", err)
 		}
 		<-done
 		return ctx.Err()
@@ -96,14 +97,14 @@ func (CommandExecutor) Run(ctx context.Context, invocation Invocation) error {
 }
 
 type PDF struct {
-	MaxBytes     int
-	Timeout      time.Duration
-	ChromiumPath string
-	TempDir      string
-	Executor     Executor
-	MarginMM     float64
-	BodyFontPT   float64
-	LineHeight   float64
+	MaxBytes   int
+	Timeout    time.Duration
+	PandocPath string
+	TempDir    string
+	Executor   Executor
+	MarginMM   float64
+	BodyFontPT float64
+	LineHeight float64
 }
 
 func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
@@ -113,25 +114,25 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 	if article.Profile == "" {
 		article.Profile = "a5"
 	}
-	if article.Profile != "a5" {
+	if article.Profile != "a5" && article.Profile != "kindle-scribe" {
 		return Result{}, ErrUnsupportedProfile
 	}
 
-	clean, err := sanitize.SanitizeHTML(article.SemanticHTML)
+	clean, err := sanitize.ArticleHTML(article.SemanticHTML, article.Title)
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %v", ErrInvalidArticle, err)
 	}
 	margin, fontSize, lineHeight := p.MarginMM, p.BodyFontPT, p.LineHeight
 	if margin <= 0 {
-		margin = 10
+		margin = 12
 	}
 	if fontSize <= 0 {
 		fontSize = 11
 	}
 	if lineHeight <= 0 {
-		lineHeight = 1.4
+		lineHeight = 1.25
 	}
-	document := renderHTML(article, clean, margin, fontSize, lineHeight)
+	document := "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>" + clean + "</body></html>"
 
 	tempDir, err := os.MkdirTemp(p.TempDir, "attic-pdf-*")
 	if err != nil {
@@ -144,6 +145,10 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 
 	htmlPath := filepath.Join(tempDir, "article.html")
 	outputPath := filepath.Join(tempDir, "article.pdf")
+	templatePath := filepath.Join(tempDir, "template.tex")
+	if err := os.WriteFile(templatePath, []byte(renderTemplate(article, margin, fontSize, lineHeight)), 0o600); err != nil {
+		return Result{}, err
+	}
 	if err := os.WriteFile(htmlPath, []byte(document), 0o600); err != nil {
 		return Result{}, fmt.Errorf("write private article HTML: %w", err)
 	}
@@ -155,15 +160,16 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 	renderCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	executable := p.ChromiumPath
+	executable := p.PandocPath
 	if executable == "" {
-		executable = defaultChromium
+		executable = defaultPandoc
 	}
 	invocation := Invocation{
-		Executable: executable,
-		HTMLPath:   htmlPath,
-		OutputPath: outputPath,
-		Args:       chromiumArgs(tempDir, htmlPath, outputPath),
+		Executable:   executable,
+		HTMLPath:     htmlPath,
+		TemplatePath: templatePath,
+		OutputPath:   outputPath,
+		Args:         []string{"--from=html", "--to=latex", "--standalone", "--sandbox", "--no-highlight", "--template=" + templatePath, "--pdf-engine=/usr/bin/xelatex", "--pdf-engine-opt=-no-shell-escape", "--pdf-engine-opt=-halt-on-error", "--output=" + outputPath, htmlPath},
 	}
 	executor := p.Executor
 	if executor == nil {
@@ -182,30 +188,6 @@ func (p PDF) Format(ctx context.Context, article Article) (Result, error) {
 		return Result{}, err
 	}
 	return Result{PDF: pdf, Profile: article.Profile}, nil
-}
-
-func chromiumArgs(tempDir, htmlPath, outputPath string) []string {
-	return []string{
-		"--headless",
-		"--disable-dev-shm-usage",
-		"--disable-gpu",
-		"--disable-background-networking",
-		"--disable-component-update",
-		"--disable-default-apps",
-		"--disable-javascript",
-		"--disable-sync",
-		"--metrics-recording-only",
-		"--no-first-run",
-		"--no-default-browser-check",
-		"--no-pdf-header-footer",
-		"--user-data-dir=" + filepath.Join(tempDir, "chromium-profile"),
-		"--print-to-pdf=" + outputPath,
-		fileURL(htmlPath),
-	}
-}
-
-func fileURL(path string) string {
-	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
 }
 
 func runBounded(ctx context.Context, cancel context.CancelFunc, executor Executor, invocation Invocation, outputPath string, maxBytes int64) error {
@@ -246,12 +228,12 @@ func runBounded(ctx context.Context, cancel context.CancelFunc, executor Executo
 func readAndVerifyPDF(path string, maxBytes int) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open Chromium PDF: %w", err)
+		return nil, fmt.Errorf("open Pandoc PDF: %w", err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("inspect Chromium PDF: %w", err)
+		return nil, fmt.Errorf("inspect Pandoc PDF: %w", err)
 	}
 	if !info.Mode().IsRegular() {
 		return nil, ErrInvalidPDF
@@ -261,7 +243,7 @@ func readAndVerifyPDF(path string, maxBytes int) ([]byte, error) {
 	}
 	pdf, err := io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
 	if err != nil {
-		return nil, fmt.Errorf("read Chromium PDF: %w", err)
+		return nil, fmt.Errorf("read Pandoc PDF: %w", err)
 	}
 	if len(pdf) > maxBytes {
 		return nil, ErrOutputTooLarge
@@ -280,53 +262,71 @@ func min(a, b int) int {
 	return b
 }
 
-func renderHTML(article Article, clean string, marginMM, bodyFontPT, lineHeight float64) string {
+func renderTemplate(article Article, marginMM, bodyFontPT, lineHeight float64) string {
+	width := "148"
+	if article.Profile == "kindle-scribe" {
+		width = "157.5"
+	}
 	var metadata []string
-	for _, value := range []string{article.Author, article.SiteName, article.PublicationDate} {
-		if value = strings.TrimSpace(value); value != "" {
-			metadata = append(metadata, html.EscapeString(value))
+	for _, v := range []string{article.Author, article.SiteName, article.PublicationDate} {
+		if strings.TrimSpace(v) != "" {
+			metadata = append(metadata, latexEscape(v))
 		}
 	}
-
-	var source string
 	if safeURL(article.SourceURL) {
-		escaped := html.EscapeString(strings.TrimSpace(article.SourceURL))
-		source = `<p class="source">Source: <a href="` + escaped + `">` + escaped + `</a></p>`
+		metadata = append(metadata, `\href{`+latexEscape(article.SourceURL)+`}{Original article}`)
 	}
-	var generated string
-	if !article.GeneratedAt.IsZero() {
-		generated = `<p class="generated">Generated ` + html.EscapeString(article.GeneratedAt.UTC().Format(time.RFC3339)) + `</p>`
-	}
-
-	return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
-<style>
-@page { size: A5 portrait; margin: ` + cssNumber(marginMM) + `mm; }
-html { font-family: Georgia, "Noto Serif", "DejaVu Serif", serif; font-size: ` + cssNumber(bodyFontPT) + `pt; line-height: ` + cssNumber(lineHeight) + `; color: #111; }
-body { margin: 0; overflow-wrap: anywhere; }
-h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 4mm; }
-h2 { font-size: 16pt; } h3 { font-size: 13pt; }
-h1, h2, h3, h4, h5, h6 { break-after: avoid; }
-p, blockquote, figure, table, pre { orphans: 3; widows: 3; }
-img { display: block; max-width: 100%; max-height: 240mm; height: auto; object-fit: contain; break-inside: avoid; }
-table { width: 100%; border-collapse: collapse; } th, td { border: .2mm solid #aaa; padding: 1.5mm; }
-pre, code { font-family: "DejaVu Sans Mono", monospace; white-space: pre-wrap; }
-a { color: inherit; text-decoration: underline; }
-.metadata, .source, .generated { color: #555; font-size: 9pt; }
-.metadata { margin: 0 0 6mm; } .source { margin-top: 8mm; } .generated { margin-top: 2mm; }
-</style></head><body><header><h1>` + html.EscapeString(strings.TrimSpace(article.Title)) + `</h1>` +
-		conditionalParagraph("metadata", strings.Join(metadata, " · ")) + `</header><main>` + clean + `</main>` + source + generated + `</body></html>`
+	return strings.NewReplacer("@@WIDTH@@", width, "@@MARGIN@@", number(marginMM), "@@FONT@@", number(bodyFontPT), "@@LEADING@@", number(bodyFontPT*lineHeight), "@@TITLE@@", latexEscape(article.Title), "@@AUTHOR@@", latexEscape(article.Author), "@@SUBJECT@@", latexEscape(strings.Join([]string{article.SiteName, article.PublicationDate, article.SourceURL}, " | ")), "@@META@@", strings.Join(metadata, ` \textperiodcentered{} `)).Replace(latexTemplate)
 }
 
-func cssNumber(value float64) string { return strconv.FormatFloat(value, 'f', -1, 64) }
-
-func conditionalParagraph(class, value string) string {
-	if value == "" {
-		return ""
-	}
-	return `<p class="` + class + `">` + value + `</p>`
+// Template dollar signs are escaped separately from TeX's special characters.
+func latexEscape(value string) string {
+	return strings.NewReplacer(`\`, `\textbackslash{}`, `{`, `\{`, `}`, `\}`, `$`, `\$$`, `&`, `\&`, `#`, `\#`, `%`, `\%`, `_`, `\_`, `~`, `\textasciitilde{}`, `^`, `\textasciicircum{}`).Replace(strings.TrimSpace(value))
 }
+func number(value float64) string { return strconv.FormatFloat(value, 'f', -1, 64) }
+
+const latexTemplate = `\documentclass[11pt]{article}
+\usepackage[paperwidth=@@WIDTH@@mm,paperheight=210mm,margin=@@MARGIN@@mm,includefoot,footskip=7mm]{geometry}
+\usepackage{fontspec}
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+\usepackage{microtype,amsmath,amssymb,graphicx,longtable,booktabs,array,calc,xcolor,fvextra}
+\usepackage{hyperref}
+\hypersetup{hidelinks,unicode=true,pdftitle={@@TITLE@@},pdfauthor={@@AUTHOR@@},pdfsubject={@@SUBJECT@@},pdfcreator={Attic}}
+\usepackage{bookmark,needspace,etoolbox}
+\usepackage{adjustbox}
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{}{0pt}{}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{1.2em}{.4em}
+\titlespacing*{\subsection}{0pt}{1em}{.3em}
+\setcounter{secnumdepth}{0}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{.3em}
+\setlength{\emergencystretch}{2em}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\pandocbounded}[1]{\begin{adjustbox}{max width=\linewidth,max totalheight=.85\textheight}#1\end{adjustbox}}
+\newenvironment{Shaded}{}{}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+\newcommand{\NormalTok}[1]{#1}
+\fvset{fontsize=\footnotesize,breaklines=true,breakanywhere=true,breakautoindent=true,breakindent=1em}
+\RecustomVerbatimEnvironment{verbatim}{Verbatim}{fontsize=\footnotesize,breaklines=true,breakanywhere=true,breakautoindent=true,breakindent=1em,frame=leftline,framesep=5pt,rulecolor=\color{gray},baselinestretch=1}
+\BeforeBeginEnvironment{verbatim}{\Needspace{60pt}}
+\BeforeBeginEnvironment{Shaded}{\Needspace{60pt}}
+\begin{document}
+\fontsize{@@FONT@@}{@@LEADING@@}\selectfont
+\begin{center}
+{\LARGE\bfseries @@TITLE@@\par}
+\vspace{.7em}
+{\small @@META@@\par}
+\end{center}
+\vspace{.5em}
+$body$
+\end{document}
+`
 
 func safeURL(raw string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
