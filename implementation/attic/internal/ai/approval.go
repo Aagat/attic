@@ -21,6 +21,7 @@ type Analyzer interface {
 // ApprovalInput is the complete, bounded handoff from deterministic
 // extraction. ScreenshotDataURL is required even when Candidate is empty.
 type ApprovalInput struct {
+	RetrievedURL      string
 	SourceURL         string
 	CandidateText     string
 	CandidateHTML     string
@@ -56,7 +57,7 @@ func (a *ArticleApprover) Approve(ctx context.Context, jobID domain.JobID, input
 		return application.ApprovedArticle{}, application.NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI pipeline is not configured", false)
 	}
 	request := AnalyzeRequest{
-		SourceURL: input.SourceURL, CandidateText: input.CandidateText, CandidateHTML: input.CandidateHTML,
+		SourceURL: input.SourceURL, RetrievedURL: input.RetrievedURL, CandidateText: input.CandidateText, CandidateHTML: input.CandidateHTML,
 		Title: input.Title, Author: input.Author, SiteName: input.SiteName,
 		PublicationDate: input.PublicationDate, Description: input.Description, Language: input.Language,
 		ScreenshotDataURL: input.ScreenshotDataURL,

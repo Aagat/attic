@@ -158,6 +158,15 @@ func isPublic(b []byte) bool {
 }
 
 func (f *Fetcher) Fetch(ctx context.Context, raw string) (Page, error) {
+	return f.fetch(ctx, raw, false)
+}
+
+// FetchJSON uses the same address, redirect, time and size limits as page fetching.
+func (f *Fetcher) FetchJSON(ctx context.Context, raw string) (Page, error) {
+	return f.fetch(ctx, raw, true)
+}
+
+func (f *Fetcher) fetch(ctx context.Context, raw string, jsonResponse bool) (Page, error) {
 	if f == nil || f.client == nil {
 		return Page{}, errors.New("nil fetcher")
 	}
@@ -173,6 +182,9 @@ func (f *Fetcher) Fetch(ctx context.Context, raw string) (Page, error) {
 		return Page{}, err
 	}
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	if jsonResponse {
+		req.Header.Set("Accept", "application/json")
+	}
 	resp, err := f.client.Do(req)
 	if err != nil {
 		return Page{}, fmt.Errorf("fetch: %w", err)
@@ -182,7 +194,7 @@ func (f *Fetcher) Fetch(ctx context.Context, raw string) (Page, error) {
 		return Page{}, fmt.Errorf("fetch status %d", resp.StatusCode)
 	}
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
-	if ct != "" && !strings.Contains(ct, "text/html") && !strings.Contains(ct, "application/xhtml+xml") {
+	if (jsonResponse && !strings.Contains(ct, "application/json")) || (!jsonResponse && ct != "" && !strings.Contains(ct, "text/html") && !strings.Contains(ct, "application/xhtml+xml")) {
 		return Page{}, errors.New("unsupported content type")
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, f.maxBytes+1))

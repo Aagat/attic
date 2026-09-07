@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,25 +26,108 @@ type Approver interface {
 // Processor is a deep module: callers supply a job and stage callbacks while
 // it owns ordering, intermediate-data lifetime, error mapping, and the durable
 // approval invariant.
+type ArchiveResolver interface {
+	Candidates(context.Context, string) []string
+}
+
+// WithArchives enables bounded recovery using existing public snapshots.
+func WithArchives(resolver ArchiveResolver) func(*Processor) {
+	return func(p *Processor) { p.archives = resolver }
+}
+
 type Processor struct {
+	archives  ArchiveResolver
 	renderer  acquisition.Renderer
 	approver  Approver
 	formatter formatter.Formatter
 }
 
-func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatter) (*Processor, error) {
+func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatter, options ...func(*Processor)) (*Processor, error) {
 	if renderer == nil || approver == nil || pdf == nil {
 		return nil, errors.New("renderer, AI approver, and formatter are required")
 	}
-	return &Processor{renderer: renderer, approver: approver, formatter: pdf}, nil
+	p := &Processor{renderer: renderer, approver: approver, formatter: pdf}
+	for _, option := range options {
+		option(p)
+	}
+	return p, nil
 }
 
 func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.ProcessorContext) (application.ProcessResult, error) {
 	if p == nil || p.renderer == nil || p.approver == nil || p.formatter == nil || pc.SetStage == nil || pc.ApproveArticle == nil {
 		return application.ProcessResult{}, processingError(domain.FailureInternalError, false)
 	}
+	result, originalErr := p.processSource(ctx, job, pc, job.SubmittedURL, false)
+	if originalErr == nil || p.archives == nil || !recoverable(originalErr) || ctx.Err() != nil {
+		return result, originalErr
+	}
+	// Discovery and all source attempts share a total deadline; individual browser,
+	// AI and formatter limits remain in force as well.
+	recoveryCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
+	defer cancel()
+	slog.Info("article recovery started", "job_id", job.ID)
+	sources := p.archives.Candidates(recoveryCtx, job.SubmittedURL)
+	seen := map[string]bool{job.SubmittedURL: true}
+	transientArchiveFailure := false
+	for i, source := range sources {
+		if i >= 3 || recoveryCtx.Err() != nil {
+			break
+		}
+		if seen[source] {
+			continue
+		}
+		seen[source] = true
+		if err := pc.SetStage(domain.StageFetching); err != nil {
+			return application.ProcessResult{}, err
+		}
+		u, _ := url.Parse(source)
+		host := ""
+		if u != nil {
+			host = u.Hostname()
+		}
+		slog.Info("trying article archive", "job_id", job.ID, "provider", host, "source_attempt", i+1)
+		result, err := p.processSource(recoveryCtx, job, pc, source, true)
+		if err == nil {
+			return result, nil
+		}
+		var failure *application.ProcessingError
+		blockedArchive := errors.As(err, &failure) && failure.Category == string(domain.FailureBlockedTarget)
+		if failure != nil {
+			transientArchiveFailure = transientArchiveFailure || failure.Retryable
+			slog.Info("archive attempt failed", "job_id", job.ID, "provider", host, "category", failure.Category)
+		}
+		if !recoverable(err) && !blockedArchive && recoveryCtx.Err() == nil {
+			return application.ProcessResult{}, err
+		}
+	}
+	if ctx.Err() != nil {
+		return application.ProcessResult{}, ctx.Err()
+	}
+	// Let the existing durable retry budget retry temporary archive outages too.
+	var originalFailure *application.ProcessingError
+	if transientArchiveFailure && errors.As(originalErr, &originalFailure) {
+		return application.ProcessResult{}, application.NewProcessingError(originalFailure.Category, originalFailure.Error(), true)
+	}
+	return application.ProcessResult{}, originalErr
+}
+
+func recoverable(err error) bool {
+	var failure *application.ProcessingError
+	if !errors.As(err, &failure) {
+		return false
+	}
+	switch domain.FailureCategory(failure.Category) {
+	case domain.FailurePaywallDetected, domain.FailureAccessDenied, domain.FailureFetchFailed,
+		domain.FailureRenderTimeout, domain.FailureInsufficientContent, domain.FailureUnsupportedContent,
+		domain.FailurePDFQualityFailed, domain.FailureFormatFailed:
+		return true
+	}
+	return false
+}
+
+func (p *Processor) processSource(ctx context.Context, job domain.Job, pc application.ProcessorContext, requestedURL string, archived bool) (application.ProcessResult, error) {
 	// ClaimNext durably enters fetching before invoking the processor.
-	page, err := p.renderer.Render(ctx, job.SubmittedURL)
+	page, err := p.renderer.Render(ctx, requestedURL)
 	if err != nil {
 		return application.ProcessResult{}, mapRenderError(ctx, err)
 	}
@@ -51,7 +136,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 	}
 	sourceURL := strings.TrimSpace(page.FinalURL)
 	if sourceURL == "" {
-		sourceURL = job.SubmittedURL
+		sourceURL = requestedURL
 	}
 
 	if err := pc.SetStage(domain.StageExtracting); err != nil {
@@ -71,11 +156,14 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 		canonicalURL = sourceURL
 	}
 
+	if archived {
+		canonicalURL = sourceURL
+	}
 	if err := pc.SetStage(domain.StageAIAnalyzing); err != nil {
 		return application.ProcessResult{}, err
 	}
 	approved, err := p.approver.Approve(ctx, job.ID, ai.ApprovalInput{
-		SourceURL: canonicalURL, CandidateText: candidate.PlainText, CandidateHTML: candidate.SemanticHTML,
+		SourceURL: job.SubmittedURL, RetrievedURL: sourceURL, CandidateText: candidate.PlainText, CandidateHTML: candidate.SemanticHTML,
 		Title: candidate.Title, Author: candidate.Author, SiteName: candidate.SiteName,
 		PublicationDate: candidate.PublicationDate, Description: candidate.Description, Language: candidate.Language,
 		ExtractionMethod:  candidate.ExtractionMethod,

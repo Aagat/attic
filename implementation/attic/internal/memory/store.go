@@ -312,7 +312,7 @@ func (s *Store) SetStage(ctx context.Context, lease *application.Lease, stage do
 	if !ok || job.LeaseToken != lease.Token || job.Status != domain.StatusProcessing || job.Version != lease.CurrentVersion() || !job.LeaseUntil.After(now) {
 		return application.ErrLeaseLost
 	}
-	if stage != job.Stage && nextStage(job.Stage) != stage {
+	if stage != job.Stage && nextStage(job.Stage) != stage && !domain.CanRecoverSource(job.Stage, stage) {
 		return application.ErrInvalidStage
 	}
 	job.Stage = stage

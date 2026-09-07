@@ -61,7 +61,8 @@ type Config struct {
 // model. CandidateHTML is expected to have been sanitized by the caller; AI
 // output remains untrusted and must be sanitized again by the owning module.
 type AnalyzeRequest struct {
-	SourceURL string
+	RetrievedURL string
+	SourceURL    string
 
 	CandidateText string
 	CandidateHTML string
@@ -495,7 +496,7 @@ type responseFormat struct {
 
 const repairInstruction = "The previous assistant output did not match the required schema. Return only one JSON object conforming to the requested schema. Do not use Markdown fences or commentary."
 
-const defaultSystemInstruction = `You analyze a rendered public web page for Attic. Classify it and return exactly one JSON object, with no Markdown or commentary.
+const defaultSystemInstruction = `You analyze a rendered public web page for Attic. The retrieved page may be an archived copy of source_url. Verify it is the requested article, remove archive navigation/toolbars, and reject snapshot search results, captchas and unrelated articles. Never invent unavailable text. Classify it and return exactly one JSON object, with no Markdown or commentary.
 The object must contain classification, decision, title, completeness, confidence, and decision_reason. classification must be one of article, paywall, access_denied, error_page, interactive, non_article. decision must be one of accept_candidate, replace_candidate, reject. For replace_candidate, cleaned_html must contain the cleaned semantic article. completeness and confidence must be numbers from 0 to 1. Optional metadata fields are author, site_name, publication_date, description, and language. Image src values beginning attic-image: refer to captured article images; preserve those references verbatim in replacement HTML. Preserve code, tables, captions and the complete article; do not summarize.`
 
 func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, followup string) ([]byte, error) {
@@ -517,9 +518,10 @@ func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, follow
 		"html": candidateHTML,
 	}
 	input := map[string]interface{}{
-		"source_url": request.SourceURL,
-		"metadata":   metadata,
-		"candidate":  candidate,
+		"source_url":    request.SourceURL,
+		"retrieved_url": request.RetrievedURL,
+		"metadata":      metadata,
+		"candidate":     candidate,
 	}
 	inputJSON, err := json.Marshal(input)
 	if err != nil {

@@ -654,7 +654,7 @@ func (s *Store) SetStage(ctx context.Context, lease *application.Lease, stage do
 		return application.ErrLeaseLost
 	}
 	current := domain.Stage(currentStage.String)
-	if stage != current && nextStage(current) != stage {
+	if stage != current && nextStage(current) != stage && !domain.CanRecoverSource(current, stage) {
 		return ErrInvalidStage
 	}
 	result, err := tx.ExecContext(ctx, `

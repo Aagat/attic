@@ -162,3 +162,8 @@ type CursorPosition struct {
 	CreatedAt time.Time
 	ID        JobID
 }
+
+// CanRecoverSource permits a new acquisition attempt before artifact persistence.
+func CanRecoverSource(from, to Stage) bool {
+	return to == StageFetching && (from == StageExtracting || from == StageAIAnalyzing || from == StageFormatting)
+}
