@@ -155,3 +155,19 @@ func TestDatabasePoolBoundsAreParsedAndValidated(t *testing.T) {
 		t.Fatalf("invalid pool bounds = %v", err)
 	}
 }
+
+func TestSubscriptionProviderDoesNotRequireAPIKey(t *testing.T) {
+	values := map[string]string{"BEARER_TOKEN": "owner", "DATABASE_URL": "postgres://db/attic", "AI_PROVIDER": "chatgpt"}
+	cfg, err := LoadFrom(func(key string) string { return values[key] })
+	if err != nil || cfg.AI.AuthFile != "/data/auth/chatgpt.json" {
+		t.Fatalf("subscription config: %v", err)
+	}
+	values["AI_PROVIDER"] = "typo"
+	if _, err = LoadFrom(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("unknown provider accepted")
+	}
+	values["AI_PROVIDER"] = "api"
+	if _, err = LoadFrom(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("API credentials no longer required")
+	}
+}

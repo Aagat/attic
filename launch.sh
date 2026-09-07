@@ -280,25 +280,37 @@ AI_BASE_URL=$(usable_value AI_BASE_URL)
 [[ -n "$AI_BASE_URL" ]] || AI_BASE_URL="https://api.openai.com/v1"
 AI_MODEL=$(usable_value AI_MODEL)
 [[ -n "$AI_MODEL" ]] || AI_MODEL="gpt-5.6-luna"
-AI_API_KEY=$(usable_value AI_API_KEY)
-if [[ -z "$AI_API_KEY" ]]; then
-  AI_API_KEY=$(root_openai_key)
-  [[ -n "$AI_API_KEY" ]] && say "Reused OPENAI_API_KEY from the ignored root .env."
-fi
-if [[ -z "$AI_API_KEY" ]]; then
-  ask_secret AI_API_KEY "OpenAI-compatible API key:"
-fi
-[[ -n "$AI_API_KEY" ]] || { warn "AI_API_KEY cannot be empty."; exit 1; }
+AI_PROVIDER=$(usable_value AI_PROVIDER)
+[[ -n "$AI_PROVIDER" ]] || AI_PROVIDER="api"
+case "$AI_PROVIDER" in
+  api)
+    AI_API_KEY=$(usable_value AI_API_KEY)
+    if [[ -z "$AI_API_KEY" ]]; then
+      AI_API_KEY=$(root_openai_key)
+      [[ -n "$AI_API_KEY" ]] && say "Reused OPENAI_API_KEY from the ignored root .env."
+    fi
+    if [[ -z "$AI_API_KEY" ]]; then
+      ask_secret AI_API_KEY "OpenAI-compatible API key:"
+    fi
+    [[ -n "$AI_API_KEY" ]] || { warn "AI_API_KEY cannot be empty."; exit 1; }
+    write_env AI_API_KEY "$AI_API_KEY"
+    ;;
+  chatgpt)
+    say "Using direct ChatGPT subscription authentication."
+    note "After the build, connect your account with the documented login-chatgpt command."
+    ;;
+  *) warn "AI_PROVIDER must be api or chatgpt."; exit 1 ;;
+esac
+write_env AI_PROVIDER "$AI_PROVIDER"
 
 write_env DATABASE_URL "$DATABASE_URL"
 write_env PUBLIC_BASE_URL "$PUBLIC_BASE_URL"
 write_env BEARER_TOKEN "$BEARER_TOKEN"
 write_env AI_BASE_URL "$AI_BASE_URL"
-write_env AI_API_KEY "$AI_API_KEY"
 write_env AI_MODEL "$AI_MODEL"
 write_env SMTP_ENABLED "false"
 chmod 600 "$ENV_FILE"
-say "The AI workhorse is $AI_MODEL at $AI_BASE_URL."
+say "The AI model is $AI_MODEL (provider: $AI_PROVIDER)."
 
 stage "Build and launch"
 say "Compose will build Attic, apply migrations, and start the worker."

@@ -54,6 +54,8 @@ type PDFConfig struct {
 }
 
 type AIConfig struct {
+	Provider            string
+	AuthFile            string
 	BaseURL             string
 	APIKey              string
 	Model               string
@@ -118,6 +120,8 @@ func LoadFrom(get func(string) string) (Config, error) {
 		DefaultProfile: valueOr(get("PDF_PROFILE"), "a5"),
 		Profiles:       map[string]struct{}{"a5": {}},
 		AI: AIConfig{
+			Provider:            valueOr(get("AI_PROVIDER"), "api"),
+			AuthFile:            valueOr(get("CHATGPT_AUTH_FILE"), "/data/auth/chatgpt.json"),
 			BaseURL:             get("AI_BASE_URL"),
 			APIKey:              aiAPIKey,
 			Model:               valueOr(get("AI_MODEL"), DefaultAIModel),
@@ -279,10 +283,17 @@ func (c Config) Validate() error {
 	require("BEARER_TOKEN", c.BearerToken)
 	require("DATABASE_URL", c.DatabaseURL)
 	require("MIGRATIONS_DIR", c.MigrationsDir)
-	require("AI_BASE_URL", c.AI.BaseURL)
-	require("AI_API_KEY", c.AI.APIKey)
+	switch c.AI.Provider {
+	case "api", "":
+		require("AI_BASE_URL", c.AI.BaseURL)
+		require("AI_API_KEY", c.AI.APIKey)
+	case "chatgpt":
+		require("CHATGPT_AUTH_FILE", c.AI.AuthFile)
+	default:
+		fields = append(fields, "AI_PROVIDER")
+	}
 	require("ARTIFACT_ROOT", c.ArtifactRoot)
-	if strings.TrimSpace(c.AI.BaseURL) != "" {
+	if c.AI.Provider != "chatgpt" && strings.TrimSpace(c.AI.BaseURL) != "" {
 		parsed, err := url.Parse(c.AI.BaseURL)
 		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 			fields = append(fields, "AI_BASE_URL")

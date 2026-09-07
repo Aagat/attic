@@ -15,10 +15,10 @@ import (
 
 func testArchive(t *testing.T, processor application.Processor) (*application.Archive, *memory.Store, *memory.ArtifactStore) {
 	t.Helper()
-	store := memory.NewStore()
+	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	store := memory.NewStoreWithClock(func() time.Time { return now })
 	artifacts := memory.NewArtifactStore()
 	ids := 0
-	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
 	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
 		Profiles: map[string]struct{}{"a5": {}},
 		Now:      func() time.Time { return now },
@@ -337,13 +337,14 @@ func TestRetryAndDelete(t *testing.T) {
 }
 
 func TestWorkerCleansArtifactAndRecordsStorageFailureAfterCommitError(t *testing.T) {
-	baseStore := memory.NewStore()
+	now := func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) }
+	baseStore := memory.NewStoreWithClock(now)
 	store := &failingCompletionStore{JobStore: baseStore, err: errors.New("database write failed")}
 	baseArtifacts := memory.NewArtifactStore()
 	artifacts := &trackingArtifactStore{ArtifactStore: baseArtifacts}
 	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
 		Profiles: map[string]struct{}{"a5": {}},
-		Now:      func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) },
+		Now:      now,
 		NewJobID: func() domain.JobID { return "job-storage-failure" },
 	})
 	if err != nil {
@@ -381,13 +382,14 @@ func TestWorkerCleansArtifactAndRecordsStorageFailureAfterCommitError(t *testing
 }
 
 func TestDeleteSchedulesBeforePhysicalRemoval(t *testing.T) {
-	baseStore := memory.NewStore()
+	now := func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) }
+	baseStore := memory.NewStoreWithClock(now)
 	store := &failingDeleteStore{JobStore: baseStore, err: errors.New("database unavailable")}
 	baseArtifacts := memory.NewArtifactStore()
 	artifacts := &trackingArtifactStore{ArtifactStore: baseArtifacts}
 	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
 		Profiles: map[string]struct{}{"a5": {}},
-		Now:      func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) },
+		Now:      now,
 		NewJobID: func() domain.JobID { return "job-delete-order" },
 	})
 	if err != nil {

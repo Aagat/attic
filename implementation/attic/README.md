@@ -38,6 +38,87 @@ the existing values. If PostgreSQL runs directly on the Docker host, use
 
 ## Build
 
+### ChatGPT subscription login
+
+Attic can call the ChatGPT Codex backend directly using subscription OAuth.
+It does not invoke Codex, OpenCode, or another agent process. This integration
+follows the observed third-party protocol described in
+[the research note](../../docs/chatgpt-subscription-access.md); it is not the
+public Platform API, and available models and usage limits depend on your
+ChatGPT account.
+
+Set these values in `.env`:
+
+```dotenv
+AI_PROVIDER=chatgpt
+CHATGPT_AUTH_FILE=/data/auth/chatgpt.json
+AI_MODEL=gpt-5.6-luna
+```
+
+`AI_API_KEY` and `AI_BASE_URL` are unused in this mode. Keep `AI_MODEL` set to a
+model available to your subscription. To use the existing API-key provider,
+set `AI_PROVIDER=api` and configure those API fields.
+
+Build the image and start the native device login command:
+
+```sh
+docker compose -f compose.example.yaml build attic
+docker compose -f compose.example.yaml run --rm --no-deps attic login-chatgpt
+```
+
+Open the printed OpenAI verification URL, enter the displayed code, and sign
+in. Device authorization may need enabling in your ChatGPT account security
+settings or workspace permissions. Login expires after 15 minutes and can be
+cancelled with Ctrl-C. It requires no database or API-key configuration.
+
+The command saves Attic's own tokens under `/data/auth` with owner-only file
+permissions. The worker refreshes them automatically, serializes refresh across
+processes, and atomically saves rotated tokens. It never imports another
+application's credentials. Protect backups of `/data`, which now include these
+credentials. If authentication is revoked, rerun `login-chatgpt`.
+
+```sh
+docker compose -f compose.example.yaml run --rm --no-deps attic check-ai
+docker compose -f compose.example.yaml up -d
+```
+
+For the local validation deployment below, add
+`-p attic-validation -f compose.validation.yaml` after the base `-f` option in
+each command. Login and the worker must use the same project and data volume.
+Readiness does not require a logged-in AI provider; `check-ai` explicitly
+verifies credentials, image input, and the article-response protocol.
+
+### Local validation deployment
+
+`compose.validation.yaml` adds an isolated PostgreSQL container and publishes
+Attic at `http://127.0.0.1:18080`, for machines where port 8080 is occupied.
+Use it with the base Compose file, from this directory:
+
+```sh
+docker compose -p attic-validation -f compose.example.yaml -f compose.validation.yaml up -d --build
+curl -fsS http://127.0.0.1:18080/health/ready
+docker compose -p attic-validation -f compose.example.yaml -f compose.validation.yaml run --rm attic check-ai
+```
+
+Before starting, configure the ignored `.env` with the normal AI and bearer
+settings, `PUBLIC_BASE_URL=http://127.0.0.1:18080`, a random
+`VALIDATION_DB_PASSWORD`, and a matching
+`DATABASE_URL=postgres://attic:<password>@validation-db:5432/attic?sslmode=disable`.
+Use a URL-safe password, such as a randomly generated hexadecimal string.
+PostgreSQL is reachable only on the Compose network and retains its data in
+`attic-validation-postgres`. This local override is separate from the supported
+external-PostgreSQL deployment. Use the same two Compose files and project name
+for logs, updates, and shutdown. Do not use the root launcher for this override.
+
+A successful readiness response verifies local dependencies; it does not prove
+AI access. If `check-ai` fails because the provider account has no credit,
+fund the account or update the AI credentials before attempting an article.
+After changing `.env`, rerun `up -d` to recreate the application with the new
+configuration. A successful article must reach `ready` and yield a PDF through
+`GET /api/v1/jobs/{id}/artifact` with the owner bearer token.
+
+### Build the image directly
+
 Run these commands from this directory:
 
 ```sh

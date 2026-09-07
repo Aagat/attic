@@ -21,6 +21,7 @@ import (
 	"attic/internal/httpapi"
 	"attic/internal/postgres"
 	"attic/internal/processing"
+	"attic/internal/subscription"
 )
 
 const (
@@ -39,13 +40,25 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "login-chatgpt" {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		err := subscription.NewStore(os.Getenv("CHATGPT_AUTH_FILE")).Login(ctx, func(url, code string) {
+			fmt.Printf("Open %s and enter code: %s\n", url, code)
+			fmt.Println("Waiting for ChatGPT authorization...")
+		})
+		if err == nil {
+			fmt.Println("ChatGPT subscription connected. Credentials saved privately.")
+		}
+		return err
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 	if len(os.Args) > 1 {
 		if len(os.Args) != 2 || os.Args[1] != "check-ai" {
-			return errors.New("usage: attic [check-ai]")
+			return errors.New("usage: attic [check-ai|login-chatgpt]")
 		}
 		return runAICheck(cfg)
 	}
@@ -93,9 +106,7 @@ func runServer(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	aiClient, err := ai.NewClient(ai.Config{BaseURL: cfg.AI.BaseURL, APIKey: cfg.AI.APIKey, Model: cfg.AI.Model,
-		ReasoningEffort: cfg.AI.ReasoningEffort, OmitReasoningEffort: cfg.AI.OmitReasoningEffort,
-		OmitResponseFormat: cfg.AI.OmitResponseFormat, Timeout: cfg.AI.Timeout})
+	aiClient, err := newAnalyzer(cfg.AI)
 	if err != nil {
 		return fmt.Errorf("AI configuration failed: %s", ai.CodeOf(err))
 	}
@@ -171,15 +182,7 @@ func runServer(cfg config.Config) error {
 const compatibilityImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 func runAICheck(cfg config.Config) error {
-	client, err := ai.NewClient(ai.Config{
-		BaseURL:             cfg.AI.BaseURL,
-		APIKey:              cfg.AI.APIKey,
-		Model:               cfg.AI.Model,
-		ReasoningEffort:     cfg.AI.ReasoningEffort,
-		OmitReasoningEffort: cfg.AI.OmitReasoningEffort,
-		OmitResponseFormat:  cfg.AI.OmitResponseFormat,
-		Timeout:             cfg.AI.Timeout,
-	})
+	client, err := newAnalyzer(cfg.AI)
 	if err != nil {
 		return fmt.Errorf("AI compatibility check configuration failed: %s", ai.CodeOf(err))
 	}
@@ -219,4 +222,12 @@ func waitForWorker(workerDone <-chan error) error {
 	case <-time.After(10 * time.Second):
 		return errors.New("worker shutdown timed out")
 	}
+}
+
+func newAnalyzer(cfg config.AIConfig) (ai.Analyzer, error) {
+	options := ai.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, ReasoningEffort: cfg.ReasoningEffort, OmitReasoningEffort: cfg.OmitReasoningEffort, OmitResponseFormat: cfg.OmitResponseFormat, Timeout: cfg.Timeout}
+	if cfg.Provider == "chatgpt" {
+		return ai.NewSubscriptionClient(options, subscription.NewStore(cfg.AuthFile))
+	}
+	return ai.NewClient(options)
 }

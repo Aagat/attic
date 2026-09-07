@@ -17,11 +17,12 @@ import (
 
 func testServer(t *testing.T) (*Server, *application.Archive, *application.Worker) {
 	t.Helper()
-	store := memory.NewStore()
+	now := func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) }
+	store := memory.NewStoreWithClock(now)
 	artifacts := memory.NewArtifactStore()
 	archive, err := application.NewArchive(store, artifacts, application.ArchiveOptions{
 		MinContentChars: 10,
-		Now:             func() time.Time { return time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC) },
+		Now:             now,
 		NewJobID:        func() domain.JobID { return "job-http" },
 		NewContentID:    func() domain.ContentID { return "content-http" },
 	})

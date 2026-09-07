@@ -208,6 +208,7 @@ func CodeOf(err error) Code {
 
 // Client is safe for concurrent use after construction.
 type Client struct {
+	subscription        *subscriptionTransport
 	baseURL             string
 	apiKey              string
 	model               string
@@ -368,6 +369,9 @@ func (c *Client) Analyze(parent context.Context, request AnalyzeRequest) (Approv
 }
 
 func (c *Client) call(ctx context.Context, body []byte, number int) (content string, attempt Attempt, callErr error) {
+	if c.subscription != nil {
+		return c.subscriptionCall(ctx, body, number)
+	}
 	attempt = Attempt{
 		Number:        number,
 		CreatedAt:     time.Now().UTC(),

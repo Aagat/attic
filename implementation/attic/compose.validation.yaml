@@ -1,0 +1,27 @@
+# Local validation override; run together with compose.example.yaml.
+# .env must use validation-db:5432 in DATABASE_URL and provide the matching
+# VALIDATION_DB_PASSWORD. This database is separate from other local projects.
+services:
+  attic:
+    ports: !override
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      validation-db:
+        condition: service_healthy
+  validation-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: attic
+      POSTGRES_DB: attic
+      POSTGRES_PASSWORD: ${VALIDATION_DB_PASSWORD:?Set VALIDATION_DB_PASSWORD in .env}
+    volumes:
+      - validation-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attic -d attic"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+volumes:
+  validation-postgres:
+    name: attic-validation-postgres
