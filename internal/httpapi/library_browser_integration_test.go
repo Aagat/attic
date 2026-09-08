@@ -3,9 +3,11 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ func TestLibraryBrowserIntegration(t *testing.T) {
 	var mu sync.Mutex
 	var intents []string
 	var searched bool
+	collectionCount := 1
 	item := map[string]any{"id": "saved-one", "kind": "web", "url": "https://example.com/article", "title": "Saved article", "notes": "", "tags": []string{}, "saved_at": "2026-09-08T12:00:00Z", "capture_status": "complete", "index_status": "indexed", "pdf_status": "not_requested", "delivery_status": "not_requested", "suggested_tags": []string{"Computing"}, "captures": []map[string]any{{"id": "capture-one", "created_at": "2026-09-08T12:00:00Z", "status": "complete"}}}
 	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if (r.URL.Path != "/api/v1/items" && r.URL.Path != "/api/v1/items/saved-one") || !server.authorized(r) {
@@ -51,7 +54,23 @@ func TestLibraryBrowserIntegration(t *testing.T) {
 			if r.URL.Query().Get("q") == "captured phrase" {
 				searched = true
 			}
-			json.NewEncoder(w).Encode(map[string]any{"items": []any{item}, "total": 1, "index_status": "ready", "storage_bytes": 1048576})
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			if limit <= 0 || limit > 100 {
+				limit = 50
+			}
+			offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+			page := []map[string]any{}
+			for i := offset; i < collectionCount && i < offset+limit; i++ {
+				row := map[string]any{}
+				for key, value := range item {
+					row[key] = value
+				}
+				if collectionCount > 1 {
+					row["id"] = fmt.Sprint(i)
+				}
+				page = append(page, row)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"items": page, "total": collectionCount, "index_status": "ready", "storage_bytes": 1048576})
 			return
 		}
 		json.NewEncoder(w).Encode(item)
@@ -85,18 +104,36 @@ func TestLibraryBrowserIntegration(t *testing.T) {
 		t.Fatal("mobile library overflows")
 	}
 	mu.Lock()
-	defer mu.Unlock()
 	if len(intents) != 2 || intents[0] != "bookmark" || intents[1] != "kindle" {
-		t.Fatalf("intents: %v", intents)
+		t.Errorf("intents: %v", intents)
 	}
 	if !searched {
-		t.Fatal("search did not reach collection interface")
+		t.Error("search did not reach collection interface")
 	}
 	if item["notes"] != "Remember this" {
-		t.Fatalf("notes: %v", item["notes"])
+		t.Errorf("notes: %v", item["notes"])
 	}
 	tags, _ := item["tags"].([]any)
 	if len(tags) != 1 || tags[0] != "Computing" {
-		t.Fatalf("tags: %v", item["tags"])
+		t.Errorf("tags: %v", item["tags"])
 	}
+	collectionCount = 150
+	mu.Unlock()
+	if err := chromedp.Run(ctx, chromedp.Click("#close-details"),
+		chromedp.Evaluate(`document.getElementById('search').value='';document.getElementById('search').dispatchEvent(new Event('input'))`, nil),
+		chromedp.Poll(`document.querySelectorAll('.article').length===50`, nil),
+		chromedp.Click("#more"), chromedp.Poll(`document.querySelectorAll('.article').length===100`, nil),
+		chromedp.Click("#more"), chromedp.Poll(`document.querySelectorAll('.article').length===150`, nil),
+		chromedp.Sleep(4500*time.Millisecond),
+	); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelectorAll('.article').length`, &count)); err != nil {
+		t.Fatal(err)
+	}
+	if count != 150 {
+		t.Fatalf("background refresh dropped loaded collection pages: %d items", count)
+	}
+
 }
