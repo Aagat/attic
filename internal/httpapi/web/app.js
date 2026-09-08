@@ -65,6 +65,7 @@ function render() {
       statuses.append(element('span', label + ': ' + readable(value), 'badge ' + (['failed','blocked'].includes(value) ? 'failed' : ['pending','queued','processing'].includes(value) ? 'active' : '')));
     }
     info.append(statuses);
+    if (item.kind === 'pdf' && item.text_available === false) info.append(element('p', 'No extractable text; filename and notes are searchable.', 'hint'));
     if (item.folders?.length) info.append(element('p', item.folders.join(' · '), 'hint'));
     if (item.tags?.length) info.append(element('p', item.tags.join(' · '), 'tags'));
     const actions = element('div', undefined, 'actions');
@@ -90,14 +91,24 @@ async function refresh(more = false) {
   const version = ++requestVersion;
   listActive = true;
   listRequest?.abort(); listRequest = new AbortController();
-  const params = new URLSearchParams({limit:String(more ? 50 : Math.max(50, items.length)), offset:String(more ? items.length : 0)});
+  const wanted = more ? 50 : Math.max(50, items.length);
+  const params = new URLSearchParams({limit:String(Math.min(100, wanted)), offset:String(more ? items.length : 0)});
   for (const [key,id] of [['q','search'],['domain','filter-domain'],['tag','filter-tag'],['capture_status','filter-capture'],['from','filter-from'],['to','filter-to']]) {
     if ($(id).value.trim()) params.set(key, $(id).value.trim());
   }
   try {
     const page = await api('/items?' + params, {signal:listRequest.signal});
     if (version !== requestVersion || !signedIn) return;
-    const next = more ? [...items, ...page.items] : page.items;
+    const received = [...page.items];
+    while (!more && received.length < wanted && received.length < page.total) {
+      params.set('offset', String(received.length));
+      params.set('limit', String(Math.min(100, wanted - received.length)));
+      const remaining = await api('/items?' + params, {signal:listRequest.signal});
+      if (version !== requestVersion || !signedIn) return;
+      if (!remaining.items.length) break;
+      received.push(...remaining.items);
+    }
+    const next = more ? [...items, ...received] : received;
     const changed = JSON.stringify(items) !== JSON.stringify(next) || total !== page.total;
     items = next; total = page.total;
     $('index-status').textContent = page.index_status && !['ready','indexed','available'].includes(page.index_status) ? 'Search: ' + readable(page.index_status) + '. Saved content is preserved while indexing catches up.' : '';
@@ -112,7 +123,7 @@ async function openDetails(item) {
   $('edit-notes').value = selectedItem.notes || '';
   $('edit-tags').value = (selectedItem.tags || []).join(', ');
   $('edit-status').textContent = '';
-  $('suggested-tags').textContent = selectedItem.suggested_tags?.length ? 'AI suggested tags: ' + selectedItem.suggested_tags.join(', ') : 'Classification: ' + readable(selectedItem.enrichment_status);
+  $('suggested-tags').textContent = (selectedItem.classification ? selectedItem.classification + ' · ' : '') + (selectedItem.suggested_tags?.length ? 'AI suggested tags: ' + selectedItem.suggested_tags.join(', ') : 'Classification: ' + readable(selectedItem.enrichment_status));
   $('accept-tags').hidden = !selectedItem.suggested_tags?.length;
   $('capture-list').replaceChildren();
   for (const capture of selectedItem.captures || []) {
@@ -123,6 +134,9 @@ async function openDetails(item) {
   }
   if (!$('capture-list').children.length) $('capture-list').append(element('p', item.kind === 'pdf' ? 'The original PDF is preserved.' : 'No saved page is available yet.'));
   const actions = [];
+  if (selectedItem.enrichment_status === 'failed') actions.push(action('Retry classification', async () => {
+    await api(itemPath(item) + '/enrich', {method:'POST'}); $('item-details').close(); notice('Classification queued again.'); await refresh();
+  }));
   if (item.url) actions.push(link('Original page ↗', item.url));
   if (item.kind !== 'pdf') actions.push(action('Capture again', async () => {
     await api(itemPath(item) + '/recapture', {method:'POST'}); $('item-details').close(); notice('A new capture was requested. Previous versions are preserved.'); await refresh();
@@ -179,10 +193,10 @@ for (const [formID, fileID, endpoint] of [['upload-form','pdf-file','/items/uplo
       notice('Saving your file…');
       const result = await api(endpoint, {method:'POST', body, headers:{'Idempotency-Key':crypto.randomUUID()}});
       const errors = Array.isArray(result.errors) ? result.errors.length : result.errors || 0;
-      notice(result.imported !== undefined ? `${result.imported} imported · ${result.merged || 0} merged · ${result.skipped || 0} skipped${errors ? ' · ' + errors + ' errors; retry this import to continue.' : ''}` : 'Document saved.', Boolean(errors));
+      notice(result.imported !== undefined ? `${result.imported} imported · ${result.merged || 0} merged · ${result.skipped || 0} skipped${errors ? ' · ' + errors + ' errors; retry this import to continue.' : ''}` : result.restored !== undefined ? result.restored + ' items restored.' : 'Document saved.', Boolean(errors));
       $(fileID).value = ''; await refresh();
     } catch (error) { notice(error.message, true); }
-    finally { button.disabled = false; }
+    finally { await refresh(); button.disabled = false; }
   });
 }
 $('export').addEventListener('click', async () => {
