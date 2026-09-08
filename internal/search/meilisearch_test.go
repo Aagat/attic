@@ -165,3 +165,61 @@ func TestUnavailableAndInvalidInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMeilisearchIntegrationRebuildAfterExternalDeletion(t *testing.T) {
+	endpoint := os.Getenv("ATTIC_TEST_MEILI_URL")
+	if endpoint == "" {
+		t.Skip("set ATTIC_TEST_MEILI_URL to run against Meilisearch")
+	}
+	index, err := NewMeilisearch(Config{URL: endpoint, APIKey: os.Getenv("ATTIC_TEST_MEILI_KEY"), Index: fmt.Sprintf("rebuild_%d", time.Now().UnixNano())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = index.mutate(cleanup, http.MethodDelete, index.path(""), nil)
+	})
+	document := Document{ID: "preserved", Title: "Rebuilt record", Text: "rebuildphrase lives in canonical text", Tags: []string{"saved"}, SavedAt: time.Now()}
+	query := Query{Text: "rebuildphrase", Tags: []string{"saved"}}
+	if err := index.Upsert(ctx, document); err != nil {
+		t.Fatal(err)
+	}
+	// Deleting via the engine endpoint models an external index reset. Successful
+	// deletion deliberately leaves the adapter's initialization cache untouched.
+	if err := index.mutate(ctx, http.MethodDelete, index.path(""), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := index.Search(ctx, query); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("missing index error: %v", err)
+	}
+	if index.ready.Load() {
+		t.Fatal("404 retained stale initialization state")
+	}
+	if err := index.Upsert(ctx, document); err != nil {
+		t.Fatal("reindex after 404:", err)
+	}
+	result, err := index.Search(ctx, query)
+	if err != nil || len(result.Hits) != 1 {
+		t.Fatalf("404 recovery failed: %+v %v", result, err)
+	}
+	// If upsert is the first operation after deletion, Meilisearch may create a
+	// default index implicitly. Its missing filter settings must also be repaired.
+	if err := index.mutate(ctx, http.MethodDelete, index.path(""), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := index.Upsert(ctx, document); err != nil {
+		if err := index.Upsert(ctx, document); err != nil {
+			t.Fatal("upsert retry failed:", err)
+		}
+	}
+	result, err = index.Search(ctx, query)
+	if err != nil {
+		result, err = index.Search(ctx, query)
+	}
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].Document.ID != document.ID {
+		t.Fatalf("implicit recreation settings not repaired: %+v %v", result, err)
+	}
+}

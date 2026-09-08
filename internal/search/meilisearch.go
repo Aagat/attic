@@ -267,7 +267,10 @@ func (m *Meilisearch) request(ctx context.Context, method, path string, body, ou
 		return 0, ErrUnavailable
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
+	// A missing index returns 404, but a document upsert may also implicitly
+	// recreate it without our settings; filtered search then returns 400. Any
+	// backend error invalidates initialization so the next retry repairs settings.
+	if resp.StatusCode >= http.StatusBadRequest {
 		m.ready.Store(false)
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 && out != nil {
