@@ -48,12 +48,12 @@ and retry scheduling. This seam keeps email failures out of article processing.
 
 ### Catch email locally
 
-The development Compose override automatically routes mail to
+The optional mail-test Compose override routes mail to
 [Mailpit](https://mailpit.axllent.org/docs/install/docker/), an SMTP catcher that
 keeps messages locally. Run:
 
 ```sh
-docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml up -d --build
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.mail-test.yaml up -d --build
 ```
 
 Open `http://<server-address>:18025/` to inspect messages and download attachments.
@@ -63,6 +63,13 @@ configuration uses test addresses, no authentication and explicit
 `SMTP_TLS_MODE=none`; it does not forward mail to a real mailbox. Its web inbox
 is visible on the local network and messages are disposable on container replacement.
 The base Compose configuration leaves delivery disabled unless enabled in `.env`.
+
+To stop testing email while keeping Attic running:
+
+```sh
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml up -d --no-deps attic
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.mail-test.yaml rm -sf mailpit
+```
 
 ## Chromium extension
 
