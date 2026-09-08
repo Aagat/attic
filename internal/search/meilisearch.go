@@ -191,7 +191,10 @@ func (m *Meilisearch) Search(ctx context.Context, q Query) (Result, error) {
 	if q.Domain != "" {
 		filters = append(filters, "domain = "+quoted(q.Domain))
 	}
-	if q.CaptureStatus != "" {
+	if q.CaptureStatus == "preserved" {
+		// Partial captures have extracted content; missing resources are fidelity details.
+		filters = append(filters, `capture_status IN ["complete", "partial"]`)
+	} else if q.CaptureStatus != "" {
 		filters = append(filters, "capture_status = "+quoted(q.CaptureStatus))
 	}
 	if q.From != nil {

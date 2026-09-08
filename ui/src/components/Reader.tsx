@@ -587,8 +587,9 @@ function ReaderItem({ item }: { item: Item }) {
                     {item.capture}
                   </p>
                   <p className="mt-1 text-[11px]">
-                    {item.capture === "Partial copy"
-                      ? "Capture finished with some resources missing. This saved copy is available now; it is not still processing. You can request a fresh capture."
+                    {item.capture === "Preserved" &&
+                    item.versions[version]?.status === "Partial"
+                      ? "Content extracted and preserved. Some page resources could not be saved; details are listed below."
                       : item.capture === "Not captured"
                         ? "This bookmark has not been captured. Request a capture to preserve a local copy."
                         : item.versions.length
@@ -633,11 +634,7 @@ function ReaderItem({ item }: { item: Item }) {
                             : "Retained snapshot"}
                         </span>
                       </span>
-                      <Badge
-                        tone={v.status === "Partial" ? "warning" : "success"}
-                      >
-                        {v.status}
-                      </Badge>
+                      <Badge tone="success">Preserved</Badge>
                     </button>
                   ))}
                 </div>

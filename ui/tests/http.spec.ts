@@ -6,7 +6,7 @@ test("capture states reflect the server, including items never captured", async 
     not_captured: "Not captured",
     queued: "Capture queued",
     capturing: "Preserving",
-    partial: "Partial copy",
+    partial: "Preserved",
     complete: "Preserved",
     failed: "Capture failed",
     unexpected: "Capture status unavailable",
@@ -28,6 +28,7 @@ test("capture states reflect the server, including items never captured", async 
 
 test("capture filters use persisted server states", async () => {
   for (const [label, status] of Object.entries({
+    Preserved: "preserved",
     "Not captured": "not_captured",
     "Capture queued": "queued",
     Preserving: "capturing",

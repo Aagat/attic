@@ -223,3 +223,28 @@ func TestMeilisearchIntegrationRebuildAfterExternalDeletion(t *testing.T) {
 		t.Fatalf("implicit recreation settings not repaired: %+v %v", result, err)
 	}
 }
+
+func TestPreservedFilterIncludesExtractedPartialCopies(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Filter []string `json:"filter"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Filter) != 1 || body.Filter[0] != `capture_status IN ["complete", "partial"]` {
+			t.Errorf("preserved filter excludes usable copies: %v", body.Filter)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"hits":[],"estimatedTotalHits":0}`)
+	}))
+	defer server.Close()
+	index, err := NewMeilisearch(Config{URL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	index.ready.Store(true) // This test exercises query construction, not index setup.
+	if _, err := index.Search(context.Background(), Query{CaptureStatus: "preserved"}); err != nil {
+		t.Fatal(err)
+	}
+}

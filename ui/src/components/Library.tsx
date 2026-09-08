@@ -131,7 +131,6 @@ export function Library() {
           <option value="">All capture states</option>
           {[
             "Preserved",
-            "Partial copy",
             "Capture failed",
             "Not captured",
             "Capture queued",
@@ -285,7 +284,6 @@ export function Library() {
                             "Capture queued",
                             "Not captured",
                             "Capture status unavailable",
-                            "Partial copy",
                           ].includes(i.capture)
                         ? "warning"
                         : "success"

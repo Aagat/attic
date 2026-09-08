@@ -30,7 +30,7 @@ interface WireItem {
 }
 const captures: Record<string, Item["capture"]> = {
   complete: "Preserved",
-  partial: "Partial copy",
+  partial: "Preserved",
   failed: "Capture failed",
   blocked: "Capture failed",
   not_captured: "Not captured",
@@ -170,7 +170,7 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
           "capture_status",
           (
             {
-              Preserved: "complete",
+              Preserved: "preserved",
               "Partial copy": "partial",
               "Capture failed": "failed",
               "Not captured": "not_captured",

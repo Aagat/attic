@@ -80,7 +80,7 @@ const examples: Partial<Item>[] = [
     kind: "Reference",
     excerpt:
       "A client timeout does not tell you whether the operation took effect. Retrying can produce a duplicate unless…",
-    capture: "Partial copy",
+    capture: "Preserved",
     tags: ["distributed systems", "research"],
   },
   {
@@ -96,7 +96,7 @@ const examples: Partial<Item>[] = [
     title: "PostgreSQL 18 documentation: Full text search",
     source: "postgresql.org",
     kind: "Reference",
-    capture: "Partial copy",
+    capture: "Preserved",
     excerpt:
       "A practical reference for finding a half-remembered phrase across a large collection.",
     tags: ["databases", "reference"],

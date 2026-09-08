@@ -83,7 +83,7 @@ The optional mail-test Compose override routes mail to
 keeps messages locally. Run:
 
 ```sh
-docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.mail-test.yaml up -d --build
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.search.yaml -f compose.mail-test.yaml up -d --build
 ```
 
 Open `http://<server-address>:18025/` to inspect messages and download attachments.
@@ -97,7 +97,7 @@ The base Compose configuration leaves delivery disabled unless enabled in `.env`
 To stop testing email while keeping Attic running:
 
 ```sh
-docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml up -d --no-deps attic
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.search.yaml up -d --no-deps attic
 docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.mail-test.yaml rm -sf mailpit
 ```
 
