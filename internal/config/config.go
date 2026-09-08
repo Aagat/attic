@@ -3,6 +3,7 @@
 package config
 
 import (
+	"attic/internal/delivery"
 	"net/url"
 	"os"
 	"strconv"
@@ -19,6 +20,7 @@ const (
 )
 
 type Config struct {
+	SMTP          delivery.Config
 	ListenAddress string
 	PublicBaseURL string
 	BearerToken   string
@@ -228,6 +230,17 @@ func LoadFrom(get func(string) string) (Config, error) {
 		}
 		config.DBPoolMax = poolMax
 	}
+	config.SMTP = delivery.Config{Host: get("SMTP_HOST"), Port: 587, TLSMode: valueOr(get("SMTP_TLS_MODE"), "starttls"), Username: get("SMTP_USERNAME"), Password: get("SMTP_PASSWORD"), Sender: get("SMTP_SENDER"), Destination: get("SMTP_DESTINATION"), Timeout: 30 * time.Second}
+	config.SMTP.Enabled, err = parseBool(get("SMTP_ENABLED"), false)
+	if err != nil {
+		return Config{}, &ValidationError{Fields: []string{"SMTP_ENABLED"}}
+	}
+	if err := parseInt("SMTP_PORT", &config.SMTP.Port); err != nil {
+		return Config{}, err
+	}
+	if err := parseDuration("SMTP_TIMEOUT", &config.SMTP.Timeout); err != nil {
+		return Config{}, err
+	}
 	if err := config.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -235,6 +248,9 @@ func LoadFrom(get func(string) string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if err := c.SMTP.Validate(); err != nil {
+		return &ValidationError{Fields: []string{err.Error()}}
+	}
 	fields := make([]string, 0)
 	require := func(name, value string) {
 		if strings.TrimSpace(value) == "" {
