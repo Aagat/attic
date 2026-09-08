@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"attic/internal/application"
 
 	"github.com/chromedp/chromedp"
 )
@@ -53,9 +56,24 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	server, _, _ := testServer(t)
+	server, archive, worker := testServer(t)
+	if _, err := archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.com/article"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var delayArtifact atomic.Bool
+	artifactStarted := make(chan struct{}, 1)
+	artifactCancelled := make(chan struct{}, 1)
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/fixture.pdf" {
+		if r.URL.Path == "/api/v1/jobs/job-http/artifact" && server.authorized(r) {
+			if delayArtifact.Load() {
+				artifactStarted <- struct{}{}
+				<-r.Context().Done()
+				artifactCancelled <- struct{}{}
+				return
+			}
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Write(pdf)
 			return
@@ -71,7 +89,10 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 844), chromedp.Navigate(httpServer.URL), chromedp.WaitVisible("#login"),
-		chromedp.Evaluate(`document.getElementById('reader').showModal(); fetch('/fixture.pdf').then(r=>r.blob()).then(b=>pdfPreview.load(b)).catch(e=>document.getElementById('reader-status').textContent=e.message)`, nil),
+		chromedp.SendKeys("#access-key", "secret-token"),
+		chromedp.Click("#login-form button"),
+		chromedp.WaitVisible(".article .actions button"),
+		chromedp.Click(".article .actions button"),
 		chromedp.Poll(`document.getElementById('pdf-canvas').dataset.page==='1'`, nil),
 	); err != nil {
 		var status string
@@ -84,21 +105,21 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 	}
 	// Once a page is painted, idle layout must not keep retriggering rendering.
 	var before, after int
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`pdfPreview.renderVersion`, &before), chromedp.Sleep(time.Second), chromedp.Evaluate(`pdfPreview.renderVersion`, &after)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.readerStatusChanges=0; window.readerObserver=new MutationObserver(()=>window.readerStatusChanges++);window.readerObserver.observe(document.getElementById('reader-status'),{childList:true});window.readerStatusChanges`, &before), chromedp.Sleep(time.Second), chromedp.Evaluate(`window.readerStatusChanges`, &after)); err != nil {
 		t.Fatal(err)
 	}
 	if after != before {
 		t.Fatalf("idle PDF preview repeatedly rendered: version %d -> %d", before, after)
 	}
 	// Phone browser chrome and expanding help change height, not render scale.
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 700), chromedp.Sleep(400*time.Millisecond), chromedp.Evaluate(`pdfPreview.renderVersion`, &after)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 700), chromedp.Sleep(400*time.Millisecond), chromedp.Evaluate(`window.readerStatusChanges`, &after)); err != nil {
 		t.Fatal(err)
 	}
 	if after != before {
 		t.Fatalf("height-only resize restarted rendering: %d -> %d", before, after)
 	}
 	var previousWidth int
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('pdf-canvas').width`, &previousWidth), chromedp.EmulateViewport(430, 700), chromedp.Poll(fmt.Sprintf(`document.getElementById('pdf-canvas').width !== %d && pdfPreview.renderTask === null`, previousWidth), nil)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('pdf-canvas').width`, &previousWidth), chromedp.EmulateViewport(430, 700), chromedp.Poll(fmt.Sprintf(`document.getElementById('pdf-canvas').width !== %d && document.getElementById('reader-status').textContent === ''`, previousWidth), nil)); err != nil {
 		t.Fatalf("width resize did not render: %v", err)
 	}
 	if path := os.Getenv("ATTIC_PREVIEW_SCREENSHOT"); path != "" {
@@ -113,9 +134,30 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Click("#pdf-next"), chromedp.Poll(`document.getElementById('pdf-canvas').dataset.page==='2'`, nil),
 		chromedp.Evaluate(`document.getElementById('pdf-page').value=document.getElementById('pdf-page').max;document.getElementById('pdf-page').dispatchEvent(new Event('change'))`, nil),
 		chromedp.Poll(`document.getElementById('pdf-canvas').dataset.page===document.getElementById('pdf-page').max`, nil),
-		chromedp.Click("#pdf-larger"), chromedp.Poll(`pdfPreview.renderTask===null && parseFloat(document.getElementById('pdf-canvas').style.width)>document.getElementById('pdf-viewer').clientWidth`, nil),
+		chromedp.Click("#pdf-larger"), chromedp.Poll(`document.getElementById('reader-status').textContent === '' && parseFloat(document.getElementById('pdf-canvas').style.width)>document.getElementById('pdf-viewer').clientWidth`, nil),
 		chromedp.Click("#close-reader"), chromedp.Poll(`document.getElementById('pdf-canvas').width===0 && !document.getElementById('reader').open`, nil),
 	); err != nil {
+		t.Fatal(err)
+	}
+	// Closing the reader must cancel its pending download, not just hide a dialog.
+	delayArtifact.Store(true)
+	if err := chromedp.Run(ctx, chromedp.Click(".article .actions button")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-artifactStarted:
+	case <-ctx.Done():
+		t.Fatal("artifact request did not start")
+	}
+	if err := chromedp.Run(ctx, chromedp.Click("#close-reader")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-artifactCancelled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("closing reader left download running")
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`!document.getElementById('reader').open && document.getElementById('download').hidden && document.getElementById('pdf-canvas').width===0`, nil)); err != nil {
 		t.Fatal(err)
 	}
 	t.Log("Real PDF rendered to canvas at phone width; next page, last page, zoom and close passed")

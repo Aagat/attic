@@ -43,7 +43,7 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 	}
 	path := requestPath
 	switch path {
-	case "/", "/pdf-preview.js", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
+	case "/", "/article-reader.js", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
 	default:
 		return false
 	}
