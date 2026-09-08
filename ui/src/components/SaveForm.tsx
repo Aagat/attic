@@ -1,3 +1,4 @@
+import { randomId } from "../id";
 import { useRef, useState } from "react";
 import { Bookmark, Send, Link as LinkIcon, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -26,7 +27,7 @@ export function SaveForm({
     }
     if (busy) return;
     if (attempt.current.url !== valid || attempt.current.send !== send)
-      attempt.current = { url: valid, send, key: crypto.randomUUID() };
+      attempt.current = { url: valid, send, key: randomId() };
     setBusy(true);
     try {
       await save(valid, send, attempt.current.key);

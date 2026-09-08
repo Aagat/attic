@@ -324,3 +324,30 @@ test("reader has one toolbar and a collapsible information panel", async ({
     page.getByRole("link", { name: "Open library", exact: true }),
   ).toHaveCount(0);
 });
+
+test("save and Kindle actions work without secure-context randomUUID", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(crypto, "randomUUID", { value: undefined }),
+  );
+  await page.goto("/items/sample-1");
+  await page
+    .getByRole("button", { name: "Send to Kindle", exact: true })
+    .click();
+  await expect(
+    page.getByText("Kindle preparation requested.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("crypto.randomUUID is not a function"),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Attic library", exact: true }).click();
+  await page.locator("header").getByRole("button", { name: /Save/ }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("URL to save").fill("https://example.com/http-save");
+  await dialog.getByRole("button", { name: /^Bookmark/ }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "example.com / http-save", exact: true }),
+  ).toBeVisible();
+});

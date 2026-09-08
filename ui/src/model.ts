@@ -1,7 +1,11 @@
+import { randomId } from "./id";
 export type CaptureStatus =
   | "Preserved"
   | "Partial copy"
   | "Capture failed"
+  | "Not captured"
+  | "Capture queued"
+  | "Capture status unavailable"
   | "Preserving"
   | "Original PDF";
 export type Delivery =
@@ -224,6 +228,9 @@ export function validItems(value: unknown): value is Item[] {
           "Preserved",
           "Partial copy",
           "Capture failed",
+          "Not captured",
+          "Capture queued",
+          "Capture status unavailable",
           "Preserving",
           "Original PDF",
         ].includes(x.capture) &&
@@ -264,7 +271,7 @@ export function makeItem(raw: string, send = false): Item {
   const url = new URL(raw);
   url.hash = "";
   return {
-    id: crypto.randomUUID(),
+    id: randomId(),
     title:
       url.hostname +
       (url.pathname === "/" ? "" : url.pathname.replaceAll("/", " / ")),

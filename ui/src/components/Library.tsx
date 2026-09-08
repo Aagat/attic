@@ -133,6 +133,8 @@ export function Library() {
             "Preserved",
             "Partial copy",
             "Capture failed",
+            "Not captured",
+            "Capture queued",
             "Preserving",
             "Original PDF",
           ].map((s) => (
@@ -278,7 +280,13 @@ export function Library() {
                   tone={
                     i.capture === "Capture failed"
                       ? "danger"
-                      : ["Preserving", "Partial copy"].includes(i.capture)
+                      : [
+                            "Preserving",
+                            "Capture queued",
+                            "Not captured",
+                            "Capture status unavailable",
+                            "Partial copy",
+                          ].includes(i.capture)
                         ? "warning"
                         : "success"
                   }

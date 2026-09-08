@@ -1,3 +1,4 @@
+import { randomId } from "./id";
 import { useEffect, useRef, useState } from "react";
 import {
   Link,
@@ -104,7 +105,7 @@ export function App() {
     if (pendingActions.current.has(pendingKey)) return;
     pendingActions.current.add(pendingKey);
     try {
-      await archive.act(id, name, crypto.randomUUID());
+      await archive.act(id, name, randomId());
       refresh();
       notify(
         name === "send"
@@ -151,7 +152,7 @@ export function App() {
         uploadAttempt.current = {
           file,
           send: uploadSend,
-          key: crypto.randomUUID(),
+          key: randomId(),
         };
       const item = await archive.upload(
         file,

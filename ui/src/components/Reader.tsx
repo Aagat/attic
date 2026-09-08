@@ -492,7 +492,11 @@ function ReaderItem({ item }: { item: Item }) {
                         Your link is saved.{" "}
                         {item.capture === "Capture failed"
                           ? "Capture failed. You can request a fresh capture."
-                          : "The saved page will appear when capture finishes."}
+                          : item.capture === "Not captured"
+                            ? "This item has no saved page yet. Request a capture to preserve it."
+                            : item.capture === "Capture status unavailable"
+                              ? "Capture status is unavailable. You can request a fresh capture."
+                              : "The saved page will appear when capture finishes."}
                       </div>
                     )}
                   </Tabs.Content>
@@ -583,9 +587,13 @@ function ReaderItem({ item }: { item: Item }) {
                     {item.capture}
                   </p>
                   <p className="mt-1 text-[11px]">
-                    {item.versions.length
-                      ? "Earlier saved copies remain available, even if a new capture fails."
-                      : "The bookmark is kept. Capture does not determine whether it stays saved."}
+                    {item.capture === "Partial copy"
+                      ? "Capture finished with some resources missing. This saved copy is available now; it is not still processing. You can request a fresh capture."
+                      : item.capture === "Not captured"
+                        ? "This bookmark has not been captured. Request a capture to preserve a local copy."
+                        : item.versions.length
+                          ? "Earlier saved copies remain available, even if a new capture fails."
+                          : "The bookmark is kept. Capture does not determine whether it stays saved."}
                   </p>
                 </div>
               </section>
@@ -633,16 +641,31 @@ function ReaderItem({ item }: { item: Item }) {
                     </button>
                   ))}
                 </div>
+                {!!item.versions[version]?.missing?.length && (
+                  <details className="mt-3 text-[11px] text-[var(--muted)]">
+                    <summary>
+                      Missing resources (
+                      {item.versions[version].missing!.length})
+                    </summary>
+                    <ul className="mt-2 space-y-2 break-all">
+                      {item.versions[version].missing!.map((resource) => (
+                        <li key={resource}>{resource}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
                 <p className="my-4 text-[11px] leading-5 text-[var(--muted)]">
                   A fresh capture keeps every earlier version. The original site
                   may have changed.
                 </p>
                 <Button
-                  disabled={item.capture === "Preserving"}
+                  disabled={["Preserving", "Capture queued"].includes(
+                    item.capture,
+                  )}
                   onClick={() => recapture(item.id)}
                 >
                   <RefreshCw size={14} />
-                  {item.capture === "Preserving"
+                  {["Preserving", "Capture queued"].includes(item.capture)
                     ? "Capture queued"
                     : "Request fresh capture"}
                 </Button>

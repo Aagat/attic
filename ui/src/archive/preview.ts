@@ -1,3 +1,4 @@
+import { randomId } from "../id";
 import type { Archive } from "./contract";
 import {
   loadItems,
@@ -87,7 +88,7 @@ export function createPreviewArchive(): Archive {
       await persist();
     },
     async upload(file, kindle) {
-      const id = crypto.randomUUID();
+      const id = randomId();
       await fileStore("put", id, file);
       const i: Item = {
         id,

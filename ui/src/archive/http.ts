@@ -33,8 +33,9 @@ const captures: Record<string, Item["capture"]> = {
   partial: "Partial copy",
   failed: "Capture failed",
   blocked: "Capture failed",
-  pending: "Preserving",
-  processing: "Preserving",
+  not_captured: "Not captured",
+  queued: "Capture queued",
+  capturing: "Preserving",
 };
 const deliveries: Record<string, Item["delivery"]> = {
   accepted: "Email accepted",
@@ -66,7 +67,7 @@ function item(w: WireItem): Item {
     capture:
       w.kind === "pdf"
         ? "Original PDF"
-        : captures[w.capture_status] || "Preserving",
+        : captures[w.capture_status] || "Capture status unavailable",
     delivery:
       w.pdf_status === "failed"
         ? "Preparation failed"
@@ -172,8 +173,10 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
               Preserved: "complete",
               "Partial copy": "partial",
               "Capture failed": "failed",
-              Preserving: "pending",
-              "Original PDF": "complete",
+              "Not captured": "not_captured",
+              "Capture queued": "queued",
+              Preserving: "capturing",
+              "Original PDF": "not_applicable",
             } as Record<string, string>
           )[status],
         );
