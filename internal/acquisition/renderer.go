@@ -52,6 +52,8 @@ type RenderDiagnostics struct {
 }
 
 type ChromiumConfig struct {
+	// Concurrency bounds browser processes across both Render and Snapshot calls.
+	Concurrency         int
 	Executable          string
 	NavigationTimeout   time.Duration
 	RenderTimeout       time.Duration
@@ -72,10 +74,17 @@ type ChromiumConfig struct {
 // and cancellation ownership unambiguous.
 type ChromiumRenderer struct {
 	config  ChromiumConfig
+	slots   chan struct{}
 	resolve func(context.Context, string) ([]net.IP, error)
 }
 
 func NewChromiumRenderer(cfg ChromiumConfig) (*ChromiumRenderer, error) {
+	if cfg.Concurrency < 0 {
+		return nil, errors.New("browser concurrency must not be negative")
+	}
+	if cfg.Concurrency == 0 {
+		cfg.Concurrency = 1
+	}
 	if cfg.Executable == "" {
 		cfg.Executable = "/usr/bin/chromium"
 	}
@@ -124,7 +133,7 @@ func NewChromiumRenderer(cfg ChromiumConfig) (*ChromiumRenderer, error) {
 	if cfg.MaxRedirects <= 0 {
 		cfg.MaxRedirects = 5
 	}
-	return &ChromiumRenderer{config: cfg, resolve: func(ctx context.Context, host string) ([]net.IP, error) {
+	return &ChromiumRenderer{config: cfg, slots: make(chan struct{}, cfg.Concurrency), resolve: func(ctx context.Context, host string) ([]net.IP, error) {
 		return net.DefaultResolver.LookupIP(ctx, "ip", host)
 	}}, nil
 }
@@ -145,6 +154,19 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	u, parseErr := url.Parse(raw)
 	if parseErr != nil || ValidateURL(u) != nil {
 		return result, ErrBlockedTarget
+	}
+	// Waiting callers remain cancellable and do not consume browser resources.
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	select {
+	case r.slots <- struct{}{}:
+	case <-ctx.Done():
+		return result, ctx.Err()
+	}
+	defer func() { <-r.slots }()
+	if err := ctx.Err(); err != nil {
+		return result, err
 	}
 	proxy, err := newPolicyProxy(proxyConfig{resolve: r.resolve, dialTimeout: r.config.DialTimeout, maxBytes: r.config.MaxTransferredBytes, maxRequests: r.config.MaxRequests})
 	if err != nil {
@@ -289,6 +311,14 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 		return result, ErrBlockedTarget
 	}
 	if snapshot {
+		var tooLarge bool
+		expression := fmt.Sprintf(`(()=>{let count=0;const walker=document.createTreeWalker(document,NodeFilter.SHOW_ALL);while(walker.nextNode()){if(++count>%d)return true;}return new TextEncoder().encode(document.documentElement.outerHTML).length>%d})()`, r.config.MaxDOMNodes, r.config.MaxDOMBytes)
+		if err = chromedp.Run(browserCtx, chromedp.Evaluate(expression, &tooLarge)); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+		if tooLarge {
+			return result, ErrDOMTooLarge
+		}
 		// Trigger ordinary lazy image loading through the existing network policy.
 		if err = chromedp.Run(browserCtx, chromedp.Evaluate(`(async()=>{await Promise.all([...document.images].slice(0,256).map(img=>{img.loading="eager";return Promise.race([img.decode().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,4000))])}));return true})()`, nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
 			return result, r.renderError(ctx, operationCtx, err)
