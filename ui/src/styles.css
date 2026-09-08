@@ -1,0 +1,51 @@
+@import "tailwindcss";
+:root {
+  --surface: #fcfaf7;
+  --paper: #ffffff;
+  --ink: #171512;
+  --muted: #6b665f;
+  --line: #e5e0d8;
+  --accent: #e87512;
+  --accent-soft: #fff0e2;
+  --accent-ink: #954509;
+  --success: #32735f;
+  --success-soft: #eaf5f0;
+  --warning: #9a5b13;
+  --warning-soft: #fff4d9;
+  --danger: #a13d32;
+  --danger-soft: #fbedea;
+}
+@layer base {
+  body {
+    font-family: "Inter", sans-serif;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .font-display {
+    font-family: "Newsreader", Georgia, serif;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    outline-offset: 4px;
+  }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+}

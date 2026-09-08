@@ -3,3 +3,8 @@
 *.test
 /coverage.out
 .DS_Store
+node_modules/
+/ui/dist/
+/ui/test-results/
+/ui/playwright-report/
+*.tsbuildinfo
