@@ -1,0 +1,20 @@
+# Optional search index: docker compose -f compose.yaml -f compose.search.yaml up -d
+# Keep this key in the ignored .env; no host port is published.
+services:
+  attic:
+    environment:
+      SEARCH_URL: http://search:7700
+      SEARCH_API_KEY: ${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in .env (at least 16 bytes)}
+      SEARCH_INDEX: attic
+  search:
+    image: getmeili/meilisearch:v1.37.0@sha256:9cde2774864e6c19cdd09fcd2950bc01ac9a0454b6f343fffafa14faae6eb7ea
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in .env (at least 16 bytes)}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - attic-search:/meili_data
+    mem_limit: 1g
+volumes:
+  attic-search:
