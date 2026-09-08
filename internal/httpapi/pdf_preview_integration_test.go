@@ -66,7 +66,7 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 	var delayArtifact atomic.Bool
 	artifactStarted := make(chan struct{}, 1)
 	artifactCancelled := make(chan struct{}, 1)
-	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httpServer := httptest.NewServer(browserItemsFixture(t, server, archive, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/jobs/job-http/artifact" && server.authorized(r) {
 			if delayArtifact.Load() {
 				artifactStarted <- struct{}{}
@@ -79,7 +79,7 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 			return
 		}
 		server.ServeHTTP(w, r)
-	}))
+	})))
 	defer httpServer.Close()
 	options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath("/usr/bin/chromium"))
 	allocator, cancel := chromedp.NewExecAllocator(context.Background(), options...)

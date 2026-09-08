@@ -17,8 +17,8 @@ func TestPWABrowserIntegration(t *testing.T) {
 	if os.Getenv("ATTIC_WEB_INTEGRATION") != "1" {
 		t.Skip("ATTIC_WEB_INTEGRATION is not set")
 	}
-	server, _, _ := testServer(t)
-	httpServer := httptest.NewServer(server)
+	server, archive, _ := testServer(t)
+	httpServer := httptest.NewServer(browserItemsFixture(t, server, archive, server))
 	defer httpServer.Close()
 	options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath("/usr/bin/chromium"))
 	allocator, cancel := chromedp.NewExecAllocator(context.Background(), options...)
