@@ -10,11 +10,20 @@ class AtticPDFPreview {
   this.input.onchange=()=>this.go(Number(this.input.value));
   document.getElementById('pdf-smaller').onclick=()=>this.setZoom(this.zoom/1.25);
   document.getElementById('pdf-larger').onclick=()=>this.setZoom(this.zoom*1.25);
-  this.observer=new ResizeObserver(()=>{clearTimeout(this.resizeTimer);this.resizeTimer=setTimeout(()=>{if(this.doc)this.render();},150);});
+  this.observer=new ResizeObserver(()=>{
+   // Height changes (status, browser chrome, help panel) do not change page scale.
+   // The last requested width also suppresses our own canvas/layout notifications.
+   const width=this.viewer.clientWidth;
+   if(!this.doc||width<=0||width===this.renderWidth)return;
+   clearTimeout(this.resizeTimer);
+   this.resizeTimer=setTimeout(()=>{
+    if(this.doc&&this.viewer.clientWidth>0&&this.viewer.clientWidth!==this.renderWidth)this.render();
+   },150);
+  });
   this.observer.observe(this.viewer);
  }
  close() {
-  this.generation++;this.renderVersion++;clearTimeout(this.resizeTimer);
+  this.generation++;this.renderVersion++;this.renderWidth=0;clearTimeout(this.resizeTimer);
   if(this.renderTask)this.renderTask.cancel();this.renderTask=null;
   const task=this.loadingTask;this.loadingTask=null;this.doc=null;
   if(task)task.destroy().catch(()=>{});
@@ -36,7 +45,8 @@ class AtticPDFPreview {
  go(number) {if(!this.doc)return;this.number=Math.max(1,Math.min(this.doc.numPages,Math.round(number)||1));this.viewer.scrollTop=0;this.render();}
  setZoom(zoom) {this.zoom=Math.max(1,Math.min(2.5,zoom));this.render();}
  async render() {
-  if(!this.doc)return;
+  if(!this.doc||this.viewer.clientWidth<=0)return;
+  const width=this.viewer.clientWidth;this.renderWidth=width;
   const doc=this.doc,generation=this.generation,version=++this.renderVersion,number=this.number;
   const oldTask=this.renderTask;
   if(oldTask){oldTask.cancel();try{await oldTask.promise;}catch{}}
@@ -46,7 +56,7 @@ class AtticPDFPreview {
    const page=await doc.getPage(number);
    if(generation!==this.generation||version!==this.renderVersion)return;
    const base=page.getViewport({scale:1});
-   const cssScale=Math.max(1,this.viewer.clientWidth-24)/base.width*this.zoom;
+   const cssScale=Math.max(1,width-24)/base.width*this.zoom;
    const css=page.getViewport({scale:cssScale});
    // Cap the canvas at four megapixels, including on high-density phones.
    const ratio=Math.min(devicePixelRatio||1,2,Math.sqrt(4000000/(css.width*css.height)));

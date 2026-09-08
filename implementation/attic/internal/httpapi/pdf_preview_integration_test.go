@@ -82,6 +82,25 @@ func TestPDFPreviewBrowserIntegration(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const c=document.getElementById('pdf-canvas');const p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;return p.some((value,i)=>i%4!==3&&value<150);})()`, &painted)); err != nil || !painted {
 		t.Fatalf("blank canvas: %v", err)
 	}
+	// Once a page is painted, idle layout must not keep retriggering rendering.
+	var before, after int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`pdfPreview.renderVersion`, &before), chromedp.Sleep(time.Second), chromedp.Evaluate(`pdfPreview.renderVersion`, &after)); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatalf("idle PDF preview repeatedly rendered: version %d -> %d", before, after)
+	}
+	// Phone browser chrome and expanding help change height, not render scale.
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 700), chromedp.Sleep(400*time.Millisecond), chromedp.Evaluate(`pdfPreview.renderVersion`, &after)); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatalf("height-only resize restarted rendering: %d -> %d", before, after)
+	}
+	var previousWidth int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('pdf-canvas').width`, &previousWidth), chromedp.EmulateViewport(430, 700), chromedp.Poll(fmt.Sprintf(`document.getElementById('pdf-canvas').width !== %d && pdfPreview.renderTask === null`, previousWidth), nil)); err != nil {
+		t.Fatalf("width resize did not render: %v", err)
+	}
 	if path := os.Getenv("ATTIC_PREVIEW_SCREENSHOT"); path != "" {
 		var png []byte
 		if err := chromedp.Run(ctx, chromedp.CaptureScreenshot(&png)); err != nil {
