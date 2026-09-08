@@ -1,6 +1,6 @@
 # Attic: things I might need later
 
-**Status:** Draft for review · **Date:** 2026-09-08
+**Status:** Scope decisions incorporated; draft for review · **Date:** 2026-09-08
 
 ## Product vision
 
@@ -11,89 +11,103 @@ Attic should preserve what I save and help me find and use it when that need ari
 Organization is optional at save time; retrieval should not depend on remembering
 where I put something or the exact words I used to describe it.
 
-This release applies that vision to bookmarks and web content: save a link, keep a
-usable copy, find it later, and read or send it to my Kindle Scribe. Kindle delivery
-remains a primary workflow. Other kinds of saved things can follow without expanding
-this release's scope.
+This release covers web links and uploaded PDFs. Save quickly, preserve a usable
+copy, find it later, and read or send it to Kindle Scribe. Kindle delivery remains
+a primary workflow.
 
 ## Starting point
 
 The [original Attic](https://github.com/aagat/attic/tree/1c0dc1e3f262673e7709e90515532c580d18e043)
-provides bookmark CRUD, titles/descriptions/tags, URL deduplication, browser HTML
-bookmark import, metadata fetching, and a Bleve search interface. Its `archived`
-flag does not have an accompanying snapshot/replay implementation in the inspected
-source. Relevant code: [bookmarks](https://github.com/aagat/attic/blob/1c0dc1e3f262673e7709e90515532c580d18e043/models/bookmark.go),
-[import](https://github.com/aagat/attic/blob/1c0dc1e3f262673e7709e90515532c580d18e043/helpers/importer.go),
-[fetching](https://github.com/aagat/attic/blob/1c0dc1e3f262673e7709e90515532c580d18e043/fetcher/fetcher.go),
-[search](https://github.com/aagat/attic/blob/1c0dc1e3f262673e7709e90515532c580d18e043/search/mapping.go).
-
-Current Attic adds browser capture, archive-source recovery, approved article text,
-Scribe PDFs, SMTP delivery, an extension and mobile sharing. Its library is organized
-around processing jobs; search filters only titles/domains already loaded in the browser.
+provided bookmark editing, tags, browser HTML import, metadata fetching and a Bleve
+search interface. Its source includes an `archived` flag but no saved-page replay.
+Current Attic provides browser capture, source recovery, approved text, Scribe PDFs,
+SMTP delivery, an extension and mobile sharing. Its library is job-based and searches
+only titles/domains already loaded in the browser.
 
 ## First-release requirements
 
-1. **Keep every bookmark.** Persist the URL immediately, even for non-articles,
-   blocked pages or failed processing. Support editable titles, notes/descriptions
-   and tags. Repeated saves find the existing bookmark without discarding annotations
-   or automatically resending it. Preserve meaningful query parameters when deduplicating.
+1. **Keep what I save.** Persist web bookmarks immediately, including non-articles,
+   blocked pages and failed captures. Accept PDF uploads, preserve the original file,
+   and index extractable text. Support editable titles, notes and tags. Repeated saves
+   merge without losing annotations or silently resending content. Preserve meaningful
+   query parameters when deduplicating.
 
-2. **Import my collection.** Import browser bookmark HTML and the original Attic
-   SQLite database. Preserve available titles, URLs, saved dates, descriptions, tags
-   and browser folder paths. Report imported, merged and skipped entries with reasons;
-   interrupted imports can resume. Importing never automatically emails the collection.
+2. **Expose both actions.** **Bookmark** saves and archives; it does not send to Kindle.
+   **Send to Kindle** also saves and archives the item, then prepares and delivers its
+   reading document. Expose both in the extension and web/mobile saving flows. Reuse
+   stored documents when available. An archive failure must not prevent delivery of an
+   otherwise valid reading document, or erase the saved item.
 
-3. **Keep a local copy.** Capture rendered HTML, required images/styles and searchable
-   text in persistent storage, independently of AI approval or PDF success. A saved
-   copy should open without contacting the original site or running its scripts.
-   Record capture time, original/retrieved URLs and missing resources. Mark partial or
-   blocked captures honestly; a screenshot or paywall shell is not a complete archive.
-   Use existing archive-source recovery when needed and record that provenance.
+3. **Keep using browser bookmarks normally.** After enabling browser-bookmark access,
+   the Chromium extension reads existing bookmarks and automatically ingests new ones.
+   Preserve available titles, dates and folder paths; reconcile edits and moves, and
+   catch up after the browser or server has been offline. Browser bookmarking is an
+   additional save-and-archive path and never triggers Kindle delivery. No manual export
+   is required. Keep HTML bookmark import for other browsers and external collections,
+   with resumable processing and imported/merged/skipped counts. There is no old Attic
+   database to migrate. This does not imply direct access to mobile Safari's bookmarks.
+   [Browser capability](https://developer.chrome.com/docs/extensions/reference/api/bookmarks)
 
-4. **Find anything saved.** Search the entire collection server-side across titles,
-   URLs, notes, tags, metadata and captured text. Return ranked results with matching
-   snippets, domain and saved date; filter by tags, domain, date and capture status.
-   Uncaptured bookmarks remain searchable by their saved metadata. Search must work
-   without an AI connection and remain rebuildable from stored records and captures.
+4. **Keep a usable local copy.** Preserve rendered HTML, required images/styles and
+   searchable text independently of AI approval or PDF success. Provide a static saved
+   page and, for suitable articles, a cleaned reading version. Saved pages must open
+   without the original site or its scripts; preserve images, tables and code. Record
+   capture time, original/retrieved URLs, archive-source provenance and missing resources.
+   Mark partial and blocked captures honestly. Use existing archive-source recovery.
 
-5. **Read and send to Kindle.** Provide clear actions to open the original, view the
-   saved page, read the PDF, and send to Kindle. Preserve current Scribe typography,
-   quality checks and durable SMTP delivery. Show capture, PDF and delivery outcomes
-   separately. Retrying one outcome must not redo successful work or erase saved content.
+5. **Find and organize automatically.** Search the whole collection across titles,
+   URLs, notes, tags, metadata and captured/document text, with ranked results, matching
+   snippets and filters for domain, tags, date and capture status. Use AI classification
+   and suggested tags when useful; organization must not rely solely on source metadata
+   or manual effort. AI enrichment is editable and must not overwrite user choices.
+   Saving and keyword search continue when AI is unavailable.
 
-6. **Own the archive.** Allow manual recapture while retaining previous successful
-   versions; failed recapture never replaces a good copy. Export bookmarks and saved
-   content in documented, portable formats. Provide a tested backup/restore path and
-   explicit deletion of a bookmark with its captures, PDFs and search entries.
+6. **Read, preserve and deliver reliably.** Keep Scribe PDF quality and durable SMTP
+   delivery. Show capture, indexing, PDF and delivery outcomes separately; retry only
+   failed work. Retain successful captures indefinitely, allow manual recapture with
+   version history, and never replace a good capture with a failed one. Show storage
+   usage. Export bookmarks and content in documented portable formats; support tested
+   backup/restore and explicit removal of an item and its derived data.
 
-## Product model and delivery order
+## Product model and search design
 
-A **bookmark** is the lasting record. A **capture** is a dated local copy. A **job**
-is an attempt to capture, prepare or deliver it. PDFs and email attempts belong to
-that record. Adopt existing articles/PDFs into this model without refetching or resending.
+A **saved item** is the lasting record: a web bookmark or an uploaded PDF. A **capture**
+is a dated local copy of a web page. Jobs prepare captures, enrichment, indexes and
+reading documents; delivery attempts send documents. Adopt current articles and PDFs
+without refetching or resending them.
 
-Deliver in three slices: bookmark persistence and imports; durable captures and
-full-collection search; unified archive/reader/Kindle actions plus export and restore.
-Keep the existing Kindle workflow usable throughout. Reuse current modules where
-useful; do not revive old runtime code or add legacy compatibility routes.
+Design search around an external index, with [Meilisearch](https://www.meilisearch.com/)
+or a vector-capable alternative to be selected during technical design. Keyword search
+is the first baseline; the design must accommodate semantic or hybrid retrieval later.
+Keep canonical records and captured content outside the index so it can be rebuilt.
+Indexing is asynchronous and retryable: an index outage must not block saving,
+archiving or Kindle delivery. Show pending indexing rather than silently losing items.
 
-## Acceptance checks
+## Delivery order and acceptance
 
-- Reimporting the same collection creates no duplicate bookmarks or unsolicited emails.
-- With the source unavailable, a successful capture still opens with its saved images;
-  a phrase found only in its body returns it in search.
-- AI, capture, PDF and SMTP failures leave the bookmark and successful outputs intact.
-- Restoring a backup recovers bookmarks, annotations and artifacts; search can be rebuilt.
-- Proposed performance target: first search results within one second for 10,000 bookmarks
-  on the deployment host, verified against a representative collection.
+Deliver saved-item persistence, browser ingestion and PDF uploads first; then durable
+captures, AI enrichment and full-collection search; then complete archive/reader/Kindle
+flows and export/restore. Keep Kindle usable throughout. Reuse current modules without
+reviving old runtime code or building legacy compatibility routes.
 
-## Decisions for review
+- Existing browser bookmarks appear without export; additions and reconnects converge
+  without duplicates, and browser-originated saves send no email.
+- Both actions are available: bookmarking archives only; sending also bookmarks and
+  archives, with one requested delivery despite ingestion retries.
+- With the original site unavailable, a successful saved page still opens with images;
+  a phrase found only in captured text or an uploaded PDF finds the item.
+- AI or index downtime does not lose saved items. Enrichment can be corrected, and
+  restoring a backup recovers records/files and permits rebuilding the index.
+- Proposed search target: results within one second for 10,000 saved items on the
+  deployment host, measured against a representative collection.
 
-- **Quick-save default:** propose “Save and archive,” with a prominent “Save and send
-  to Kindle” action and a configurable default for the extension/mobile workflow.
-- **Archive fidelity:** propose self-contained static page captures first. Interactive
-  application replay, recursive site crawling, video archives and logged-in browser
-  session capture are outside this release.
-- **Retention:** propose keeping all successful manual captures initially, with visible
-  storage usage. Scheduled recapture, automatic pruning, semantic/AI search and
-  multi-user sharing can follow later.
+## Scope limits and remaining assumption
+
+Interactive application replay, recursive crawling, video archiving, logged-in session
+capture, scheduled recapture, automatic pruning and multi-user sharing are deferred.
+Image-only PDFs remain preserved even if OCR is deferred; do not imply their text is indexed.
+
+**Recommended browser-deletion behavior, still to confirm:** removing a browser bookmark
+leaves its Attic copy intact. Browser folder/title changes update source metadata without
+replacing Attic edits. Attic does not rewrite browser bookmarks; deleting an Attic item
+should not cause unchanged browser bookmarks to immediately reimport it.
