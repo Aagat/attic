@@ -1,7 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
 (async () => {
- const config = await chrome.storage.local.get(['server', 'key']);
+ const config = await chrome.storage.local.get(['server', 'key', 'bookmarkSync', 'syncStatus']);
+ $('bookmark-sync').checked = Boolean(config.bookmarkSync);
+ $('sync-status').textContent = config.syncStatus || '';
  $('server').value = config.server || '';
  $('key').value = config.key || '';
  if (config.server) {
@@ -38,6 +40,7 @@ $('setup').addEventListener('submit', async event => {
   const body = await response.json();
   if (body.authenticated !== true) throw new Error('This address is not an Attic server.');
   await chrome.storage.local.set({server, key});
+  chrome.runtime.sendMessage({type: 'reconcile'}).catch(() => {});
   // Remove any old or unsuccessfully configured server grants after connecting.
   const permissions = await chrome.permissions.getAll();
   const unused = (permissions.origins || []).filter(granted => granted !== origin);
@@ -52,7 +55,9 @@ $('setup').addEventListener('submit', async event => {
 });
 $('disconnect').addEventListener('click', async () => {
  try {
-  await chrome.storage.local.remove(['server', 'key']);
+  await chrome.storage.local.remove(['server', 'key', 'pendingSaves', 'pendingBookmarks', 'syncStatus']);
+  await chrome.storage.local.set({bookmarkSync: false});
+  $('bookmark-sync').checked = false;
   const permissions = await chrome.permissions.getAll();
   if (permissions.origins?.length) await chrome.permissions.remove({origins: permissions.origins});
   $('key').value = '';
@@ -60,4 +65,32 @@ $('disconnect').addEventListener('click', async () => {
   $('disconnect').hidden = true;
   $('status').textContent = 'Disconnected.';
  } catch { $('status').textContent = 'Could not disconnect. Try again.'; }
+});
+
+$('bookmark-sync').addEventListener('change', async () => {
+ try {
+  const enabled = $('bookmark-sync').checked;
+  if (enabled && !await chrome.permissions.request({permissions: ['bookmarks']})) {
+   $('bookmark-sync').checked = false;
+   throw new Error('Allow bookmark access to enable automatic saving.');
+  }
+  await chrome.storage.local.set({bookmarkSync: enabled});
+  if (!enabled) {
+   await chrome.storage.local.remove('pendingBookmarks');
+   await chrome.permissions.remove({permissions: ['bookmarks']});
+  }
+  $('sync-status').textContent = enabled ? 'Importing browser bookmarks…' : 'Automatic browser bookmarking is off. Your Attic copies are preserved.';
+  await chrome.runtime.sendMessage({type: 'reconcile'});
+  const state = await chrome.storage.local.get(['syncStatus']);
+  if (enabled) $('sync-status').textContent = state.syncStatus || 'Waiting for connection.';
+ } catch (error) { $('sync-status').textContent = error.message; }
+});
+$('sync-now').addEventListener('click', async () => {
+ $('sync-status').textContent = 'Checking bookmarks…';
+ await chrome.runtime.sendMessage({type: 'reconcile'});
+ const state = await chrome.storage.local.get(['syncStatus']);
+ $('sync-status').textContent = state.syncStatus || 'Connect to Attic first.';
+});
+chrome.storage.onChanged.addListener(changes => {
+ if (changes.syncStatus) $('sync-status').textContent = changes.syncStatus.newValue || '';
 });

@@ -1,14 +1,18 @@
 # Save to Attic for Chromium
 
-1. Download `/attic-chromium.zip` from your Attic server and extract it. Alternatively, use this source directory.
-2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the extracted `attic` directory containing `manifest.json`.
-3. Open the extension's **Options**. Enter your Attic server address and access key (`BEARER_TOKEN` in the server configuration), then click **Connect to Attic** and approve access to that server.
+1. Download `/attic-chromium.zip` from your Attic server and extract it, or use this directory.
+2. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the directory containing `manifest.json`.
+3. Open the extension's **Options**, enter your Attic server address and access key, and approve access to that server.
 4. Pin **Save to Attic** in Chromium's Extensions menu.
 
-Click the toolbar button to save the current article, or right-click a link and choose **Save link to Attic**. A ✓ badge means the server accepted the URL for processing; PDF preparation continues on the server. A ! badge indicates a submission problem; hover over the button for details. Open your library from Options to check progress and download PDFs.
+The toolbar popup exposes **Bookmark** and **Send to Kindle**. Both preserve the page; only Send to Kindle requests delivery. The same actions are available when right-clicking a page or link. Saves are retained locally until Attic acknowledges them, and retry after reconnection using the original request identity so delivery is not duplicated.
 
-The extension works with any reachable Attic server origin (for example, `https://attic.example.com`). Reverse proxies must expose Attic at the origin root. Use HTTPS for a remote server: HTTP sends the access key without encryption. Host access is requested only when connecting; Chromium host grants apply to the host regardless of port. The configured address determines where requests go. No publisher-page content, cookies, browser history, or ChatGPT credentials are collected. Only the article URL is submitted. The access key remains in local extension storage, not browser sync. **Disconnect** removes it and revokes server access.
+Enable **Automatically save browser bookmarks** in Options to grant optional bookmark access. Existing bookmarks are imported automatically; additions, title edits and folder moves are reconciled. Folder paths and original bookmark dates are preserved. Bookmark ingestion never requests Kindle delivery. Deleting a browser bookmark does not delete its Attic copy; removal in Attic remains explicit. Attic does not edit your browser bookmarks.
 
-This is an unpacked extension, not a Chrome Web Store release. Keep the extracted directory in place. After updating its files, click **Reload** at `chrome://extensions`. Changing deployment only requires reconnecting to the new server in Options.
+Reconciliation runs on bookmark changes, browser startup and once per minute while Chromium is running. Successful unchanged bookmarks are not resent. Failed batches remain in local storage across browser restarts. **Check now** retries immediately; the status in Options shows failures and the last successful reconciliation. Turning off automatic bookmarking clears its pending imports and revokes bookmark access while preserving Attic copies. Disconnect clears pending saves and server credentials.
 
-Run the behavior checks from the repository root with `node --test tests/extension.test.mjs`.
+The extension connects to an Attic server at its origin root (for example `https://attic.example.com`). Host access is requested when connecting; Chromium grants apply to a host regardless of port, while the configured address determines the actual destination. Use HTTPS on remote servers. The access key stays in local extension storage, not browser sync. The extension sends link URLs, titles and opted-in bookmark metadata; it does not collect publisher cookies, browsing history or ChatGPT credentials.
+
+This is an unpacked extension. Keep its directory in place and click **Reload** at `chrome://extensions` after updating the files. Browser bookmark access does not provide access to mobile Safari bookmarks.
+
+Run `node tests/extension.test.mjs` from the repository root for behavior checks.
