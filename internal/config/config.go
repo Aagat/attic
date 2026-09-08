@@ -20,15 +20,16 @@ const (
 )
 
 type Config struct {
-	SMTP          delivery.Config
-	ListenAddress string
-	PublicBaseURL string
-	BearerToken   string
-	DatabaseURL   string
-	MigrationsDir string
-	DBPoolMin     int
-	DBPoolMax     int
-	ArtifactRoot  string
+	SearchURL, SearchAPIKey, SearchIndex string
+	SMTP                                 delivery.Config
+	ListenAddress                        string
+	PublicBaseURL                        string
+	BearerToken                          string
+	DatabaseURL                          string
+	MigrationsDir                        string
+	DBPoolMin                            int
+	DBPoolMax                            int
+	ArtifactRoot                         string
 
 	DefaultProfile string
 	Profiles       map[string]struct{}
@@ -93,6 +94,7 @@ func LoadFrom(get func(string) string) (Config, error) {
 		reasoningEffort = ""
 	}
 	config := Config{
+		SearchURL: get("SEARCH_URL"), SearchAPIKey: get("SEARCH_API_KEY"), SearchIndex: valueOr(get("SEARCH_INDEX"), "attic"),
 		ListenAddress:  valueOr(get("LISTEN_ADDRESS"), ":8080"),
 		PublicBaseURL:  valueOr(get("PUBLIC_BASE_URL"), "http://localhost:8080"),
 		BearerToken:    get("BEARER_TOKEN"),

@@ -19,6 +19,8 @@ import (
 
 	"attic/internal/application"
 	"attic/internal/domain"
+	"attic/internal/library"
+	"attic/internal/search"
 )
 
 const maxBodyBytes = 1 << 20
@@ -33,7 +35,9 @@ const (
 // Options controls transport limits and the clock used by the authentication
 // limiter. Zero values select conservative production defaults.
 type Options struct {
-	Now func() time.Time
+	Library *library.Library
+	Search  search.Index
+	Now     func() time.Time
 
 	AuthFailureLimit      int
 	AuthFailureWindow     time.Duration
@@ -42,6 +46,8 @@ type Options struct {
 }
 
 type Server struct {
+	library            *library.Library
+	search             search.Index
 	archive            application.JobArchive
 	readiness          application.Readiness
 	bearerToken        string
@@ -76,6 +82,7 @@ func NewServerWithOptions(archive application.JobArchive, readiness application.
 		options.MaxRequestURIBytes = defaultMaxRequestURIBytes
 	}
 	return &Server{
+		library: options.Library, search: options.Search,
 		sessions:           make(map[[32]byte]time.Time),
 		archive:            archive,
 		readiness:          readiness,
@@ -123,6 +130,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.authFailures.clear(remoteIP)
 	if r.URL.Path == "/api/v1/session" {
 		s.handleSession(w, r, correlationID)
+		return
+	}
+	if s.serveLibrary(w, r, correlationID) {
 		return
 	}
 	s.handleAPI(w, r, correlationID)

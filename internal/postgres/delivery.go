@@ -33,7 +33,7 @@ func (s *Store) ClaimDelivery(ctx context.Context, duration time.Duration) (*del
 	if err != nil {
 		return nil, err
 	}
-	if job.Artifact == nil || job.Content == nil {
+	if job.Artifact == nil {
 		return nil, &databaseFailure{operation: "delivery artifact"}
 	}
 	token := randomToken()
@@ -50,7 +50,11 @@ func (s *Store) ClaimDelivery(ctx context.Context, duration time.Duration) (*del
 	if err := tx.Commit(); err != nil {
 		return nil, mapDBError("commit email claim", err)
 	}
-	return &delivery.Claim{JobID: job.ID, Token: token, MessageID: messageID, Destination: destination, Title: job.Content.Title, Artifact: *job.Artifact}, nil
+	title := job.TitleHint
+	if job.Content != nil {
+		title = job.Content.Title
+	}
+	return &delivery.Claim{JobID: job.ID, Token: token, MessageID: messageID, Destination: destination, Title: title, Artifact: *job.Artifact}, nil
 }
 
 func (s *Store) FinishDelivery(ctx context.Context, claim *delivery.Claim, result delivery.Result) error {

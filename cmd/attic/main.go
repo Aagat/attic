@@ -9,19 +9,23 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"attic/internal/acquisition"
 	"attic/internal/ai"
 	"attic/internal/application"
+	"attic/internal/capture"
 	"attic/internal/config"
 	"attic/internal/delivery"
 	"attic/internal/filesystem"
 	"attic/internal/formatter"
 	"attic/internal/httpapi"
+	"attic/internal/library"
 	"attic/internal/postgres"
 	"attic/internal/processing"
+	"attic/internal/search"
 	"attic/internal/subscription"
 )
 
@@ -73,7 +77,7 @@ func runServer(cfg config.Config) error {
 		destination = cfg.SMTP.Destination
 	}
 	store, err := postgres.Open(context.Background(), cfg.DatabaseURL, postgres.Options{
-		DeliveryDestination: destination,
+		DeliveryDestination: "",
 		MaxOpenConns:        cfg.DBPoolMax,
 		MaxIdleConns:        cfg.DBPoolMin,
 	})
@@ -138,10 +142,36 @@ func runServer(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	server := httpapi.NewServer(archive, readiness, cfg.BearerToken)
+	saved, err := library.Open(context.Background(), library.Options{DatabaseURL: cfg.DatabaseURL, ArtifactRoot: cfg.ArtifactRoot, Profile: cfg.DefaultProfile, Destination: destination})
+	if err != nil {
+		return err
+	}
+	defer saved.Close()
+	var index search.Index
+	if cfg.SearchURL != "" {
+		index, err = search.NewMeilisearch(search.Config{URL: cfg.SearchURL, APIKey: cfg.SearchAPIKey, Index: cfg.SearchIndex, Timeout: 15 * time.Second})
+		if err != nil {
+			return err
+		}
+	}
+	server := httpapi.NewServerWithOptions(archive, readiness, cfg.BearerToken, httpapi.Options{Library: saved, Search: index})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	var background sync.WaitGroup
+	start := func(run func(context.Context) error) {
+		background.Add(1)
+		go func() { defer background.Done(); run(ctx) }()
+	}
+	start(func(ctx context.Context) error {
+		return saved.RunCaptures(ctx, capture.New(renderer, acquisition.Archives{}))
+	})
+	start(saved.RunCleanup)
+	start(func(ctx context.Context) error { return saved.RunEnrichment(ctx, aiClient) })
+	if index != nil {
+		start(func(ctx context.Context) error { return saved.RunIndex(ctx, index) })
+	}
+	defer func() { stop(); background.Wait() }()
 	workerDone := make(chan error, 1)
 	go func() {
 		err := worker.Run(ctx)
@@ -249,7 +279,7 @@ func waitForWorker(workerDone <-chan error) error {
 	}
 }
 
-func newAnalyzer(cfg config.AIConfig) (ai.Analyzer, error) {
+func newAnalyzer(cfg config.AIConfig) (*ai.Client, error) {
 	options := ai.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, ReasoningEffort: cfg.ReasoningEffort, OmitReasoningEffort: cfg.OmitReasoningEffort, OmitResponseFormat: cfg.OmitResponseFormat, Timeout: cfg.Timeout}
 	if cfg.Provider == "chatgpt" {
 		return ai.NewSubscriptionClient(options, subscription.NewStore(cfg.AuthFile))

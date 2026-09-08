@@ -755,7 +755,7 @@ func (s *Store) Complete(ctx context.Context, lease *application.Lease, completi
 	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE jobs SET display_title = $2, canonical_url = NULLIF($7, ''), status = 'ready', stage = NULL,
- delivery_destination=NULLIF($8,''), delivery_pending=($8<>''),
+ delivery_destination=COALESCE(delivery_destination,NULLIF($8,'')), delivery_pending=(COALESCE(delivery_destination,NULLIF($8,'')) IS NOT NULL),
 			lease_token = NULL, lease_expires_at = NULL, completed_at = $3,
 			updated_at = $3, version = version + 1
 		WHERE id = $1 AND status = 'processing' AND lease_token = $4
