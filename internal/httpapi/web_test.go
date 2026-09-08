@@ -11,7 +11,7 @@ import (
 func TestWebSessionsProtectLibraryAndMutations(t *testing.T) {
 	server, _, _ := testServer(t)
 	home := request(server, "GET", "/", "", "")
-	if home.Code != 200 || !strings.Contains(home.Body.String(), "Your reading library") {
+	if home.Code != 200 || !strings.Contains(home.Body.String(), "Things you might need later") {
 		t.Fatal("web entry point unavailable")
 	}
 	if home.Header().Get("Content-Security-Policy") == "" {
