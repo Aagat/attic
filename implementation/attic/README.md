@@ -228,7 +228,8 @@ the library. Search and status filters help find articles; failed jobs can be
 retried, and unwanted jobs can be cancelled or removed. Search covers the
 loaded articles; use **Load more** to include older entries.
 
-**Read PDF** opens an authenticated preview with author/source details, download,
+**Read PDF** opens an authenticated PDF.js canvas preview with page navigation,
+page-number entry, zoom, author/source details, download,
 and a **Send to Kindle** handoff. Download the file and follow the Amazon upload
 link, or use native file sharing when the browser supports it (usually over
 HTTPS). Automatic email delivery is not connected. The interface works on
@@ -239,6 +240,24 @@ Sign-in uses a random HttpOnly, SameSite cookie; the access key is not stored in
 browser local storage or URLs. Sessions expire after 30 days, on sign-out, or
 when the server restarts. API clients can continue using bearer authentication.
 Use HTTPS when exposing the service outside your trusted private network.
+
+The in-app preview renders one page at a time without relying on a browser's
+embedded PDF plugin. Its canvas is capped at approximately four megapixels;
+closing the reader destroys its PDF worker and canvas. Download/share still use
+the original PDF. The preview is visual; use the downloaded PDF for text selection
+and the PDF viewer's other advanced features.
+
+PDF.js 6.3.289 (legacy browser build, Apache-2.0) and its worker/font/decoder
+assets are vendored under `internal/httpapi/web/pdfjs`, including license files.
+No CDN access or frontend build is needed. The browser CSP permits WebAssembly
+compilation for PDF image decoders; JavaScript string evaluation remains disabled.
+
+```sh
+ATTIC_WEB_INTEGRATION=1 go test ./internal/httpapi -run TestPDFPreviewBrowserIntegration -v
+# Optionally inspect an existing larger PDF with the same browser check:
+ATTIC_WEB_INTEGRATION=1 ATTIC_PREVIEW_TEST_PDF=/path/to/article.pdf \
+go test ./internal/httpapi -run TestPDFPreviewBrowserIntegration -v
+```
 
 ## Mobile PWA and sharing
 

@@ -1,7 +1,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let jobs = new Map(), cursor = '', loadedMore = false, filter = 'all', signedIn = false, refreshing = false;
-let previewURL = '', previewFile = null, previewGeneration = 0;
+let previewFile = null, previewGeneration = 0;
+const pdfPreview=new AtticPDFPreview();
 const active = job => ['queued','processing','delivering'].includes(job.status);
 const failed = job => ['failed','delivery_failed','cancelled'].includes(job.status);
 const stages = {queued:'Waiting in the queue',fetching:'Opening the article or an archive',extracting:'Finding the article',ai_analyzing:'Checking the source content',formatting:'Typesetting and checking the PDF',persisting:'Saving your PDF',delivering:'Sending to Kindle'};
@@ -52,9 +53,7 @@ async function refresh(more=false) {
 function closePreview() {
  previewGeneration++;
  if($('reader').open)$('reader').close();
- $('pdf-frame').removeAttribute('src');
- if(previewURL)URL.revokeObjectURL(previewURL);
- previewURL='';previewFile=null;
+ pdfPreview.close();previewFile=null;
 }
 async function openPreview(job) {
  closePreview();$('archive-source').hidden=true;const generation=previewGeneration;$('reader-title').textContent=job.title||'Article';$('reader-meta').textContent=job.source_host||'';$('reader-status').textContent='Opening PDF…';$('kindle-help').hidden=true;$('share').hidden=true;$('reader').showModal();
@@ -70,9 +69,9 @@ async function openPreview(job) {
   const response=await fetch(path,{credentials:'same-origin'});
   if(!response.ok)throw new Error('Could not open this PDF. Try downloading it again.');
   const blob=await response.blob();if(generation!==previewGeneration||!$('reader').open)return;
-  previewURL=URL.createObjectURL(blob);previewFile=new File([blob],detail.artifact?.filename||'article.pdf',{type:'application/pdf'});
-  $('pdf-frame').src=previewURL+'#view=FitH';$('reader-status').textContent='';
+  previewFile=new File([blob],detail.artifact?.filename||'article.pdf',{type:'application/pdf'});
   $('share').hidden=!(navigator.canShare&&navigator.canShare({files:[previewFile]}));
+  await pdfPreview.load(blob);
  }catch(error){if(generation===previewGeneration)$('reader-status').textContent=error.message;}
 }
 $('login-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;$('login-error').textContent='';try{await api('/session',{method:'POST',headers:{Authorization:'Bearer '+$('access-key').value.trim()}});$('access-key').value='';showLibrary();await refresh();}catch(error){$('login-error').textContent=error.message;}finally{button.disabled=false;}});

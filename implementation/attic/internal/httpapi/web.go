@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -21,9 +22,28 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 	if s.serveExtension(w, r) {
 		return true
 	}
-	path := r.URL.Path
+	requestPath := r.URL.Path
+	if strings.HasPrefix(requestPath, "/pdfjs/") && path.Clean(requestPath) == requestPath && !strings.HasSuffix(requestPath, "/") {
+		if _, err := webAssets.ReadFile("web" + requestPath); err == nil {
+			if r.Method != "GET" && r.Method != "HEAD" {
+				methodNotAllowed(w, "GET, HEAD", "")
+				return true
+			}
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			if strings.HasSuffix(requestPath, ".mjs") {
+				w.Header().Set("Content-Type", "text/javascript")
+			}
+			if strings.HasSuffix(requestPath, ".wasm") {
+				w.Header().Set("Content-Type", "application/wasm")
+			}
+			files, _ := fs.Sub(webAssets, "web")
+			http.FileServer(http.FS(files)).ServeHTTP(w, r)
+			return true
+		}
+	}
+	path := requestPath
 	switch path {
-	case "/", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
+	case "/", "/pdf-preview.js", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
 	default:
 		return false
 	}
@@ -31,7 +51,7 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 		methodNotAllowed(w, "GET, HEAD", "")
 		return true
 	}
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
