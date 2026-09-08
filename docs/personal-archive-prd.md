@@ -1,12 +1,20 @@
-# Attic: personal archive and Kindle library
+# Attic: things I might need later
 
 **Status:** Draft for review · **Date:** 2026-09-08
 
-## Purpose
+## Product vision
 
-Make Attic the permanent home for everything I bookmark: save it quickly, keep a
-usable copy when the original disappears, find it later, and send reading material
-to my Kindle Scribe. Kindle delivery remains a primary workflow.
+> attic is where I store things that I might need later
+
+Saving should be easy even when I do not yet know how I will use something.
+Attic should preserve what I save and help me find and use it when that need arises.
+Organization is optional at save time; retrieval should not depend on remembering
+where I put something or the exact words I used to describe it.
+
+This release applies that vision to bookmarks and web content: save a link, keep a
+usable copy, find it later, and read or send it to my Kindle Scribe. Kindle delivery
+remains a primary workflow. Other kinds of saved things can follow without expanding
+this release's scope.
 
 ## Starting point
 

@@ -1,6 +1,9 @@
 # Attic
 
-Attic turns saved web articles into readable documents for the owner's reading library.
+Attic is where I store things that I might need later.
+
+Its first workflows help the owner save web content, preserve it, find it later,
+and read it in the library or on Kindle.
 
 ## Language
 
