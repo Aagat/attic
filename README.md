@@ -20,7 +20,7 @@ or resending their PDFs. Capture, AI classification, indexing and Kindle prepara
 run independently. Search needs the external index; an unavailable index leaves saving
 and existing documents usable. See [search setup](docs/search.md).
 
-Enable **Read browser bookmarks** in the Chromium extension's options to ingest existing
+Enable **Automatically save browser bookmarks** in the Chromium extension's options to ingest existing
 bookmarks and follow new bookmarks, edits and folder moves. It catches up after outages.
 Removing a browser bookmark never deletes its Attic copy. Explicit Attic deletion also
 prevents routine browser reconciliation from reimporting it. HTML import is available
