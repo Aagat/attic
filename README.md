@@ -269,6 +269,35 @@ runtime fonts and Poppler utilities:
 ATTIC_LATEX_INTEGRATION=1 go test ./internal/formatter -run TestPandocPDFIntegration
 ```
 
+## HTTP interface
+
+Authenticated saving and management use `/api/v1/items`. Send the owner bearer
+key, or sign in through `/api/v1/session` for the browser session cookie.
+
+| Method and path | Purpose |
+| --- | --- |
+| `POST /api/v1/items` | Save `{url,title,action}`; action is `bookmark` or `kindle`. |
+| `GET /api/v1/items` | List/search the collection with pagination and filters. |
+| `GET /api/v1/items/{id}` | Item metadata and saved-page versions. |
+| `PUT /api/v1/items/{id}` | Edit title, notes and tags. |
+| `DELETE /api/v1/items/{id}` | Explicitly remove the item and its derived content. |
+| `POST /api/v1/items/{id}/send` | Prepare or reuse its document and request Kindle delivery. |
+| `POST /api/v1/items/{id}/recapture` | Preserve a new saved-page version. |
+| `POST /api/v1/items/{id}/enrich` | Retry AI classification. |
+| `GET /api/v1/items/{id}/captures/{captureID}` | Open a static saved page. |
+| `POST /api/v1/items/upload` | Upload a PDF with multipart fields `file` and `action`. |
+| `POST /api/v1/items/import` | Import bookmark HTML or a JSON `bookmarks` batch. |
+| `GET /api/v1/items/export` | Download a portable archive ZIP. |
+| `POST /api/v1/items/restore` | Restore a multipart archive ZIP `file`. |
+| `POST /api/v1/items/reindex` | Rebuild the external search index. |
+
+Use a stable `Idempotency-Key` when retrying one Kindle delivery request.
+Bookmarking never sends email; sending to Kindle also preserves a saved item.
+The document interface is read-only: `GET /api/v1/jobs` provides operational
+inspection, and `GET /api/v1/jobs/{id}` plus `/artifact` serve the PDF reader.
+Job creation, retry and deletion are not exposed over HTTP; item actions own
+those operations so saved records, capture history and deletion policy stay consistent.
+
 ## Reading library
 
 Open `/` on the running server and sign in with the `BEARER_TOKEN` value from

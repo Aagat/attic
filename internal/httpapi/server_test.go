@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -113,20 +112,13 @@ func TestRoutesRequireBearerAuthentication(t *testing.T) {
 	}
 }
 
-func TestSubmitPollAndDownloadRoutes(t *testing.T) {
-	server, _, worker := testServer(t)
-	response := request(server, http.MethodPost, "/api/v1/jobs", `{"url":"https://example.test/article?token=secret"}`, "secret-token")
-	if response.Code != http.StatusAccepted {
-		t.Fatalf("submit status = %d, body %s", response.Code, response.Body.String())
+func TestPollAndDownloadRoutes(t *testing.T) {
+	server, archive, worker := testServer(t)
+	accepted, err := archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.test/article?token=secret"}, "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	var accepted struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &accepted); err != nil || accepted.ID == "" {
-		t.Fatalf("accepted = %s, err %v", response.Body.String(), err)
-	}
-
-	response = request(server, http.MethodGet, "/api/v1/jobs/"+accepted.ID, "", "secret-token")
+	response := request(server, http.MethodGet, "/api/v1/jobs/"+string(accepted.ID), "", "secret-token")
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"queued"`) {
 		t.Fatalf("inspect status = %d, body %s", response.Code, response.Body.String())
 	}
@@ -138,7 +130,7 @@ func TestSubmitPollAndDownloadRoutes(t *testing.T) {
 	if err != nil || !claimed {
 		t.Fatalf("worker claimed %v, err %v", claimed, err)
 	}
-	response = request(server, http.MethodGet, "/api/v1/jobs/"+accepted.ID+"/artifact", "", "secret-token")
+	response = request(server, http.MethodGet, "/api/v1/jobs/"+string(accepted.ID)+"/artifact", "", "secret-token")
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/pdf" || response.Body.String() != "pdf" {
 		t.Fatalf("artifact response = %d %q headers %#v", response.Code, response.Body.String(), response.Header())
 	}
@@ -164,13 +156,9 @@ func TestListAndHealthRoutes(t *testing.T) {
 	}
 }
 
-func TestInvalidJSONAndUnknownJobUseSafeEnvelope(t *testing.T) {
+func TestUnknownJobUsesSafeEnvelope(t *testing.T) {
 	server, _, _ := testServer(t)
-	response := request(server, http.MethodPost, "/api/v1/jobs", `{"url":`, "secret-token")
-	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_input"`) {
-		t.Fatalf("invalid JSON = %d %s", response.Code, response.Body.String())
-	}
-	response = request(server, http.MethodGet, "/api/v1/jobs/unknown", "", "secret-token")
+	response := request(server, http.MethodGet, "/api/v1/jobs/unknown", "", "secret-token")
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"not_found"`) {
 		t.Fatalf("unknown job = %d %s", response.Code, response.Body.String())
 	}
@@ -322,5 +310,30 @@ func TestOverlongRequestURIIsRejectedBeforeRouting(t *testing.T) {
 	}
 	if got := len(server.authFailures.entries); got != 0 {
 		t.Fatalf("auth limiter entries = %d, want 0", got)
+	}
+}
+
+func TestObsoleteJobMutationsCannotBypassSavedItems(t *testing.T) {
+	server, archive, _ := testServer(t)
+	for _, route := range []struct{ method, path string }{{"POST", "/api/v1/jobs"}, {"POST", "/api/v1/jobs/job-http/retry"}, {"DELETE", "/api/v1/jobs/job-http"}} {
+		response := request(server, route.method, route.path, `{"url":"https://example.test/article"}`, "secret-token")
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s = %d: %s", route.method, route.path, response.Code, response.Body.String())
+		}
+	}
+	page, err := archive.ListJobs(context.Background(), application.ListJobsRequest{})
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("obsolete routes created work: %+v, %v", page, err)
+	}
+	accepted, err := archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.test/article"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := request(server, "DELETE", "/api/v1/jobs/"+string(accepted.ID), "", "secret-token")
+	if response.Code != 405 {
+		t.Fatalf("delete existing job: %d", response.Code)
+	}
+	if _, err := archive.GetJob(context.Background(), accepted.ID); err != nil {
+		t.Fatalf("read-only route removed job: %v", err)
 	}
 }

@@ -320,15 +320,11 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, correlationID
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
 	path = strings.TrimPrefix(path, "/")
 	if path == "jobs" || path == "jobs/" {
-		if r.Method == http.MethodPost && path == "jobs" {
-			s.handleSubmit(w, r, correlationID)
-			return
-		}
 		if r.Method == http.MethodGet {
 			s.handleList(w, r, correlationID)
 			return
 		}
-		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost, correlationID)
+		methodNotAllowed(w, http.MethodGet, correlationID)
 		return
 	}
 	parts := splitPath(path)
@@ -345,47 +341,17 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, correlationID
 	switch {
 	case len(parts) == 2 && r.Method == http.MethodGet:
 		s.handleGet(w, r, id, correlationID)
-	case len(parts) == 2 && r.Method == http.MethodDelete:
-		s.handleDelete(w, r, id, correlationID)
+	case len(parts) == 2:
+		methodNotAllowed(w, http.MethodGet, correlationID)
 	case len(parts) == 3 && parts[2] == "artifact" && r.Method == http.MethodGet:
 		s.handleArtifact(w, r, id, correlationID)
+	case len(parts) == 3 && parts[2] == "artifact":
+		methodNotAllowed(w, http.MethodGet, correlationID)
 	case len(parts) == 3 && parts[2] == "retry" && r.Method == http.MethodPost:
-		s.handleRetry(w, r, id, correlationID)
+		methodNotAllowed(w, "", correlationID)
 	default:
 		writeError(w, application.NewSafeError("not_found", 404, "Route was not found"), correlationID)
 	}
-}
-
-func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request, correlationID string) {
-	if r.ContentLength > maxBodyBytes {
-		writeError(w, application.NewSafeError("invalid_input", 400, "request body is too large"), correlationID)
-		return
-	}
-	body := http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	defer body.Close()
-	var input application.SubmitURLRequest
-	decoder := json.NewDecoder(body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, application.NewSafeError("invalid_input", 400, "request body is invalid"), correlationID)
-		return
-	}
-	var extra struct{}
-	if err := decoder.Decode(&extra); err != io.EOF {
-		writeError(w, application.NewSafeError("invalid_input", 400, "request body must contain one JSON object"), correlationID)
-		return
-	}
-	accepted, err := s.archive.SubmitURL(r.Context(), input, r.Header.Get("Idempotency-Key"))
-	if err != nil {
-		writeError(w, err, correlationID)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"id":         string(accepted.ID),
-		"status":     string(accepted.Status),
-		"created_at": accepted.CreatedAt.UTC().Format(time.RFC3339),
-		"links":      map[string]string{"self": accepted.Self},
-	})
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request, correlationID string) {
@@ -465,28 +431,6 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request, id domai
 		// partial download into a JSON error, so the stream simply terminates.
 		return
 	}
-}
-
-func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request, id domain.JobID, correlationID string) {
-	accepted, err := s.archive.RetryJob(r.Context(), id)
-	if err != nil {
-		writeError(w, err, correlationID)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"id":         string(accepted.ID),
-		"status":     string(accepted.Status),
-		"created_at": accepted.CreatedAt.UTC().Format(time.RFC3339),
-		"links":      map[string]string{"self": accepted.Self},
-	})
-}
-
-func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, id domain.JobID, correlationID string) {
-	if err := s.archive.DeleteJob(r.Context(), id); err != nil {
-		writeError(w, err, correlationID)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func jobDetailJSON(job application.JobDetail) map[string]any {
