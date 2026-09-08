@@ -17,6 +17,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
@@ -39,6 +40,7 @@ type RenderedPage struct {
 	Status      int
 	Title       string
 	DOM         []byte
+	MHTML       []byte
 	Screenshot  []byte
 	Diagnostics RenderDiagnostics
 }
@@ -127,7 +129,16 @@ func NewChromiumRenderer(cfg ChromiumConfig) (*ChromiumRenderer, error) {
 	}}, nil
 }
 
-func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result RenderedPage, err error) {
+func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (RenderedPage, error) {
+	return r.render(ctx, raw, false)
+}
+
+// Snapshot preserves loaded cross-origin images and styles within the same protected browser.
+func (r *ChromiumRenderer) Snapshot(ctx context.Context, raw string) (RenderedPage, error) {
+	return r.render(ctx, raw, true)
+}
+
+func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool) (result RenderedPage, err error) {
 	if r == nil {
 		return result, errors.New("nil renderer")
 	}
@@ -248,34 +259,53 @@ func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (result Rende
 		}
 	}
 
-	type capture struct {
-		HTML     string `json:"html"`
-		Nodes    int    `json:"nodes"`
-		TooLarge bool   `json:"tooLarge"`
+	if !snapshot {
+		type capture struct {
+			HTML     string `json:"html"`
+			Nodes    int    `json:"nodes"`
+			TooLarge bool   `json:"tooLarge"`
+		}
+		var dom capture
+		expression := fmt.Sprintf(captureScript, r.config.MaxDOMNodes, r.config.MaxDOMBytes)
+		if err = chromedp.Run(browserCtx, chromedp.Evaluate(expression, &dom, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+		if dom.TooLarge || len([]byte(dom.HTML)) > r.config.MaxDOMBytes {
+			return result, ErrDOMTooLarge
+		}
+		if err = chromedp.Run(browserCtx, chromedp.CaptureScreenshot(&result.Screenshot)); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+		if len(result.Screenshot) > r.config.MaxScreenshotBytes {
+			return result, ErrScreenshotTooLarge
+		}
+		result.DOM = []byte(dom.HTML)
 	}
-	var dom capture
-	expression := fmt.Sprintf(captureScript, r.config.MaxDOMNodes, r.config.MaxDOMBytes)
-	if err = chromedp.Run(browserCtx, chromedp.Evaluate(expression, &dom, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
+	if err = chromedp.Run(browserCtx, chromedp.Title(&result.Title), chromedp.Location(&result.FinalURL)); err != nil {
 		return result, r.renderError(ctx, operationCtx, err)
-	}
-	if dom.TooLarge || len([]byte(dom.HTML)) > r.config.MaxDOMBytes {
-		return result, ErrDOMTooLarge
-	}
-	if err = chromedp.Run(browserCtx,
-		chromedp.Title(&result.Title),
-		chromedp.Location(&result.FinalURL),
-		chromedp.CaptureScreenshot(&result.Screenshot),
-	); err != nil {
-		return result, r.renderError(ctx, operationCtx, err)
-	}
-	if len(result.Screenshot) > r.config.MaxScreenshotBytes {
-		return result, ErrScreenshotTooLarge
 	}
 	finalURL, finalErr := url.Parse(result.FinalURL)
 	if finalErr != nil || ValidateURL(finalURL) != nil {
 		return result, ErrBlockedTarget
 	}
-	result.DOM = []byte(dom.HTML)
+	if snapshot {
+		// Trigger ordinary lazy image loading through the existing network policy.
+		if err = chromedp.Run(browserCtx, chromedp.Evaluate(`(async()=>{await Promise.all([...document.images].slice(0,256).map(img=>{img.loading="eager";return Promise.race([img.decode().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,4000))])}));return true})()`, nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+		var archive string
+		if err = chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			var e error
+			archive, e = page.CaptureSnapshot().Do(ctx)
+			return e
+		})); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+		if int64(len(archive)) > r.config.MaxTransferredBytes*2 {
+			return result, ErrResponseTooLarge
+		}
+		result.MHTML = []byte(archive)
+	}
 	responseMu.Lock()
 	result.Status = responseStatuses[result.FinalURL]
 	if result.Status == 0 {
