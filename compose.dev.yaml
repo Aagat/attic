@@ -1,4 +1,4 @@
-# Local validation override; run together with compose.example.yaml.
+# Local validation override; run together with compose.yaml.
 # .env must use validation-db:5432 in DATABASE_URL and provide the matching
 # VALIDATION_DB_PASSWORD. This database is separate from other local projects.
 services:

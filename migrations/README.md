@@ -1,6 +1,6 @@
 # Attic V1 migrations
 
-This directory contains the PostgreSQL 14+ schema for the clean-room Attic V1
+This directory contains the PostgreSQL 14+ schema for the Attic
 implementation. It is intentionally extension-free and contains no search
 engine tables, indexes, or outbox. `content_documents.plain_text` and the
 normalized metadata are sufficient for a later full rebuild of a search index.

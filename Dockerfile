@@ -22,8 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
-# Copy only the clean-room module inputs. In particular, do not COPY the
-# repository root, which could put prototype source or tests in the image.
+# Copy the application and embedded runtime assets.
 COPY cmd/attic ./cmd/attic
 COPY internal ./internal
 COPY migrations ./migrations
@@ -37,7 +36,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:${RUNTIME_ALPINE_VERSION} AS runtime
 
 LABEL org.opencontainers.image.title="Attic"
-LABEL org.opencontainers.image.description="Clean-room Attic V1 article processing runtime"
+LABEL org.opencontainers.image.description="Attic article processing runtime"
 
 RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-cjk ttf-dejavu \
     pandoc-cli texlive-xetex texmf-dist-xetex texmf-dist-latexextra texmf-dist-fontsrecommended texmf-dist-langchinese \

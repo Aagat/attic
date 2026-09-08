@@ -11,4 +11,4 @@ The extension works with any reachable Attic server origin (for example, `https:
 
 This is an unpacked extension, not a Chrome Web Store release. Keep the extracted directory in place. After updating its files, click **Reload** at `chrome://extensions`. Changing deployment only requires reconnecting to the new server in Options.
 
-Run the behavior checks from `implementation/attic` with `node --test tests/extension.test.mjs`.
+Run the behavior checks from the repository root with `node --test tests/extension.test.mjs`.
