@@ -223,6 +223,10 @@ func absolute(base, raw string) string {
 	return b.ResolveReference(u).String()
 }
 func (r *rewriter) asset(raw, base string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
 	if strings.HasPrefix(raw, "data:") {
 		if strings.HasPrefix(raw, "data:image/") || strings.HasPrefix(raw, "data:font/") {
 			return raw
