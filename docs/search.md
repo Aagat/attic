@@ -22,4 +22,8 @@ go test ./internal/search -v
 
 The test creates a unique index and deletes that test index afterward. Validated against the pinned Docker image. The proposed 10,000-item, one-second target is not yet benchmarked against a representative collection.
 
+On 2026-09-08, the opt-in library integration check indexed 10,000 synthetic article records of approximately 2.5 KB each across ten topics. The first query after indexing, `speculative decoding`, took **13.2 ms** against the pinned local Docker image and returned 20 hits from 1,000 matching records. This passes the one-second baseline on this machine, but the corpus is synthetic and repetitive: it does **not** establish latency for a representative personal collection, cold process startup, or another deployment host.
+
+Reproduce using `ATTIC_LIBRARY_TEST_SEARCH_URL`, `ATTIC_LIBRARY_TEST_SEARCH_KEY` and `ATTIC_LIBRARY_TEST_BENCHMARK=1` with `go test ./internal/library -run TestLibraryIntegrationSearchTenThousand -v`. The test bulk-loads its own disposable index, waits for indexing to finish, then measures the first populated-index query through the production adapter.
+
 Protocol references: [asynchronous tasks](https://www.meilisearch.com/docs/reference/api/async-task-management/list-tasks), [search snippets](https://www.meilisearch.com/docs/capabilities/full_text_search/getting_started/search_with_snippets), [search parameters](https://www.meilisearch.com/docs/reference/api/search/search-with-get).

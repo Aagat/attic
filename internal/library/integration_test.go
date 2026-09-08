@@ -588,3 +588,98 @@ func TestLibraryIntegrationApprovedTextSurvivesCaptureFailure(t *testing.T) {
 		t.Fatalf("approved body not searchable: %+v %v", result, err)
 	}
 }
+
+type integrationEnricherFunc func(context.Context, string) (ai.Enrichment, error)
+
+func (f integrationEnricherFunc) Enrich(ctx context.Context, text string) (ai.Enrichment, error) {
+	return f(ctx, text)
+}
+
+func TestLibraryIntegrationFailedEnrichmentPreservesSuggestions(t *testing.T) {
+	ctx := context.Background()
+	l := integrationLibrary(t, "")
+	item, _, err := l.Save(ctx, SaveRequest{URL: "https://example.com/enrichment", Title: "Saved page", Notes: "My note", Tags: []string{"manual"}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.CaptureOnce(ctx, integrationCapturer{result: capture.Result{HTML: []byte("<p>Captured source</p>"), PlainText: "Captured source", Title: item.Title, FinalURL: item.URL, Status: "complete"}}); err != nil {
+		t.Fatal(err)
+	}
+	suggested := ai.Enrichment{Classification: "research paper", Tags: []string{"systems", "performance"}}
+	if err := l.EnrichOnce(ctx, integrationEnricherFunc(func(context.Context, string) (ai.Enrichment, error) { return suggested, nil })); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.RetryEnrichment(ctx, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.EnrichOnce(ctx, integrationOfflineEnricher{}); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := l.Get(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.EnrichmentStatus != "failed" || detail.Classification != suggested.Classification || strings.Join(detail.SuggestedTags, ",") != "systems,performance" {
+		t.Fatalf("failed enrichment erased previous suggestions: %+v", detail.Item)
+	}
+	if detail.Notes != "My note" || strings.Join(detail.Tags, ",") != "manual" || detail.Text != "Captured source" {
+		t.Fatalf("failed enrichment changed canonical content or annotations: %+v", detail.Item)
+	}
+}
+
+func TestLibraryIntegrationStaleEnrichmentLeavesNewVersionPending(t *testing.T) {
+	ctx := context.Background()
+	l := integrationLibrary(t, "")
+	item, _, err := l.Save(ctx, SaveRequest{URL: "https://example.com/stale", Title: "Old title"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.CaptureOnce(ctx, integrationCapturer{result: capture.Result{HTML: []byte("<p>Old source</p>"), PlainText: "Old source", Title: item.Title, FinalURL: item.URL, Status: "complete"}}); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	var editedVersion int64
+	err = l.EnrichOnce(ctx, integrationEnricherFunc(func(ctx context.Context, text string) (ai.Enrichment, error) {
+		called = true
+		if !strings.Contains(text, "Old title") {
+			t.Errorf("enrichment did not receive original version: %q", text)
+		}
+		// An edit commits while the model request is in flight. It must invalidate
+		// the eventual result even though the enrichment transaction remains open.
+		if err := l.Edit(ctx, item.ID, SaveRequest{Title: "New title", Notes: "New note", Tags: []string{"chosen"}}); err != nil {
+			return ai.Enrichment{}, err
+		}
+		edited, err := l.Get(ctx, item.ID)
+		if err != nil {
+			return ai.Enrichment{}, err
+		}
+		editedVersion = edited.Version
+		return ai.Enrichment{Classification: "stale classification", Tags: []string{"stale"}}, nil
+	}))
+	if err != nil || !called {
+		t.Fatalf("enrichment: called=%v err=%v", called, err)
+	}
+	detail, err := l.Get(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.EnrichmentStatus != "pending" || detail.Classification != "" || len(detail.SuggestedTags) != 0 || detail.Version != editedVersion {
+		t.Fatalf("stale result acknowledged newer version: %+v", detail.Item)
+	}
+	if detail.Title != "New title" || detail.Notes != "New note" || strings.Join(detail.Tags, ",") != "chosen" {
+		t.Fatalf("stale result changed annotations: %+v", detail.Item)
+	}
+	err = l.EnrichOnce(ctx, integrationEnricherFunc(func(_ context.Context, text string) (ai.Enrichment, error) {
+		if !strings.Contains(text, "New title") {
+			t.Errorf("retry did not receive current version: %q", text)
+		}
+		return ai.Enrichment{Classification: "reference", Tags: []string{"current"}}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err = l.Get(ctx, item.ID)
+	if err != nil || detail.EnrichmentStatus != "complete" || detail.Classification != "reference" || strings.Join(detail.SuggestedTags, ",") != "current" {
+		t.Fatalf("current version did not complete on retry: %+v %v", detail.Item, err)
+	}
+}
