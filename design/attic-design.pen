@@ -163,7 +163,7 @@
                           "height": 22,
                           "icon": "plus",
                           "library": "lucide",
-                          "fill": "$paper"
+                          "fill": "$ink"
                         }
                       ]
                     }
@@ -947,13 +947,13 @@
                               "height": 20,
                               "icon": "bookmark",
                               "library": "lucide",
-                              "fill": "$paper"
+                              "fill": "$ink"
                             },
                             {
                               "type": "text",
                               "id": "c8aal",
                               "name": "Bookmark Label",
-                              "fill": "$paper",
+                              "fill": "$ink",
                               "content": "Bookmark",
                               "fontFamily": "$font-body",
                               "fontSize": 15,
@@ -969,7 +969,7 @@
                           "height": 20,
                           "icon": "arrow-right",
                           "library": "lucide",
-                          "fill": "$paper"
+                          "fill": "$ink"
                         }
                       ]
                     },
@@ -2180,7 +2180,7 @@
                           "height": 19,
                           "icon": "send",
                           "library": "lucide",
-                          "fill": "$paper"
+                          "fill": "$ink"
                         }
                       ]
                     }
@@ -5263,7 +5263,7 @@
                       "type": "text",
                       "id": "dbSPn",
                       "name": "Connect Label",
-                      "fill": "$paper",
+                      "fill": "$ink",
                       "content": "Connect to Attic",
                       "fontFamily": "$font-body",
                       "fontSize": 14,
@@ -5277,7 +5277,7 @@
                       "height": 17,
                       "icon": "arrow-right",
                       "library": "lucide",
-                      "fill": "$paper"
+                      "fill": "$ink"
                     }
                   ]
                 }
@@ -5480,13 +5480,13 @@
                       "height": 16,
                       "icon": "plus",
                       "library": "lucide",
-                      "fill": "$paper"
+                      "fill": "$ink"
                     },
                     {
                       "type": "text",
                       "id": "T8ghx",
                       "name": "Save link Label",
-                      "fill": "$paper",
+                      "fill": "$ink",
                       "content": "Save link",
                       "fontFamily": "$font-body",
                       "fontSize": 13,
@@ -6499,7 +6499,7 @@
                               "height": 18,
                               "icon": "bookmark",
                               "library": "lucide",
-                              "fill": "$paper"
+                              "fill": "$ink"
                             },
                             {
                               "type": "frame",
@@ -6513,7 +6513,7 @@
                                   "type": "text",
                                   "id": "u37Ko",
                                   "name": "Bookmark Save Label",
-                                  "fill": "$paper",
+                                  "fill": "$ink",
                                   "content": "Bookmark",
                                   "fontFamily": "$font-body",
                                   "fontSize": 13,
@@ -6523,7 +6523,7 @@
                                   "type": "text",
                                   "id": "l49eT",
                                   "name": "Bookmark Save Subtext",
-                                  "fill": "#FFF4E9",
+                                  "fill": "$ink",
                                   "content": "Save and archive in background",
                                   "fontFamily": "$font-body",
                                   "fontSize": 10,
@@ -6676,35 +6676,6 @@
           "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
-            {
-              "type": "frame",
-              "id": "HmFh6",
-              "name": "Brand and Back",
-              "gap": 9,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon",
-                  "id": "MU7CV",
-                  "name": "Back Icon",
-                  "width": 20,
-                  "height": 20,
-                  "icon": "arrow-left",
-                  "library": "lucide",
-                  "fill": "$ink"
-                },
-                {
-                  "type": "text",
-                  "id": "cDMYB",
-                  "name": "Back to Item Label",
-                  "fill": "#171512",
-                  "content": "Item details",
-                  "fontFamily": "Inter",
-                  "fontSize": 13,
-                  "fontWeight": "600"
-                }
-              ]
-            },
             {
               "type": "frame",
               "id": "Gi5qP",
@@ -7628,35 +7599,6 @@
           "children": [
             {
               "type": "frame",
-              "id": "Z6xB8D",
-              "name": "PDF Brand",
-              "gap": 9,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon",
-                  "id": "c12gIg",
-                  "name": "PDF Back",
-                  "width": 20,
-                  "height": 20,
-                  "icon": "arrow-left",
-                  "library": "lucide",
-                  "fill": "$ink"
-                },
-                {
-                  "type": "text",
-                  "id": "hPcQm",
-                  "name": "PDF Back Label",
-                  "fill": "#171512",
-                  "content": "Item details",
-                  "fontFamily": "Inter",
-                  "fontSize": 13,
-                  "fontWeight": "600"
-                }
-              ]
-            },
-            {
-              "type": "frame",
               "id": "WyynD",
               "name": "PDF Reader Brand",
               "gap": 8,
@@ -7827,13 +7769,13 @@
                       "height": 16,
                       "icon": "send",
                       "library": "lucide",
-                      "fill": "$paper"
+                      "fill": "$ink"
                     },
                     {
                       "type": "text",
                       "id": "Q82Pxs",
                       "name": "Kindle Label",
-                      "fill": "$paper",
+                      "fill": "$ink",
                       "content": "Send to Kindle",
                       "fontFamily": "$font-body",
                       "fontSize": 12,
@@ -9432,7 +9374,7 @@
                               "type": "text",
                               "id": "CziLE",
                               "name": "Choose PDF Label",
-                              "fill": "$paper",
+                              "fill": "$ink",
                               "content": "Choose PDF",
                               "fontFamily": "$font-body",
                               "fontSize": 11,
@@ -9870,35 +9812,6 @@
           "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
-            {
-              "type": "frame",
-              "id": "pZZnn",
-              "name": "Brand and Back",
-              "gap": 9,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon",
-                  "id": "C5OLE",
-                  "name": "Back Icon",
-                  "width": 20,
-                  "height": 20,
-                  "icon": "arrow-left",
-                  "library": "lucide",
-                  "fill": "$ink"
-                },
-                {
-                  "type": "text",
-                  "id": "ez5g1",
-                  "name": "Back to Item Label",
-                  "fill": "#171512",
-                  "content": "Item details",
-                  "fontFamily": "Inter",
-                  "fontSize": 13,
-                  "fontWeight": "600"
-                }
-              ]
-            },
             {
               "type": "frame",
               "id": "wvE5N",
@@ -11329,6 +11242,32 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "H14sN",
+      "x": 0,
+      "y": 3372,
+      "name": "PWA — App Icon",
+      "clip": true,
+      "width": 512,
+      "height": 512,
+      "fill": "$surface",
+      "layout": "vertical",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon",
+          "id": "PB2rU",
+          "name": "Attic Archive Mark",
+          "width": 256,
+          "height": 256,
+          "icon": "archive",
+          "library": "lucide",
+          "fill": "$accent"
         }
       ]
     }

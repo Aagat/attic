@@ -15,7 +15,6 @@ import {
   Upload,
   Check,
   X,
-  ArrowLeft,
   WifiOff,
 } from "lucide-react";
 import { Brand, Button, Modal, input } from "./components/primitives";
@@ -249,27 +248,12 @@ export function App() {
           </span>
         )}
       </div>
-      {!isConnect && (
+      {!isConnect && !isReader && (
         <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-5 sm:px-8">
           <div className="flex items-center gap-5">
-            {isReader && (
-              <Link
-                to="/"
-                className="inline-flex min-h-11 items-center gap-2 text-xs"
-              >
-                <ArrowLeft size={16} />
-                <span className="hidden sm:inline">Library</span>
-              </Link>
-            )}
             <Brand />
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              to="/setup"
-              className="mr-4 hidden text-xs text-[var(--muted)] lg:inline"
-            >
-              Save from anywhere
-            </Link>
             <div className="hidden sm:block">
               <Button
                 onClick={() => {
@@ -288,13 +272,6 @@ export function App() {
               <span className="hidden sm:inline">Save link</span>
               <span className="sm:hidden">Save</span>
             </Button>
-            <Link
-              aria-label="Settings"
-              to="/settings"
-              className="ml-1 hidden min-h-11 items-center px-2 md:inline-flex"
-            >
-              <SettingsIcon size={18} />
-            </Link>
           </div>
         </header>
       )}
@@ -332,7 +309,7 @@ export function App() {
       {!isConnect && (
         <nav
           aria-label="Mobile navigation"
-          className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] left-4 right-4 z-30 flex justify-around rounded-full border border-[var(--line)] bg-[var(--paper)] p-1.5 shadow-lg md:hidden"
+          className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] left-4 right-4 z-30 flex justify-around rounded-full border border-[var(--line)] bg-[var(--paper)] p-1.5 shadow-lg lg:hidden"
         >
           {[
             { to: "/", label: "Library", icon: BookOpen },

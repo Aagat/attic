@@ -48,6 +48,7 @@ test("bookmark, edit, reload, deduplicate and remove", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "My durable reference",
   );
+  await page.getByRole("link", { name: "Attic library", exact: true }).click();
   await page.locator("header").getByRole("button", { name: /Save/ }).click();
   await dialog.getByLabel("URL to save").fill("https://example.com/kept");
   await dialog.getByRole("button", { name: /^Send to Kindle/ }).click();
@@ -284,4 +285,50 @@ test("ten thousand records keep pagination compact and search the collection", a
   await expect(
     page.getByRole("link", { name: "Archive record 9999" }),
   ).toBeVisible();
+});
+
+test("reader has one toolbar and a collapsible information panel", async ({
+  page,
+}) => {
+  await page.goto("/items/sample-1");
+  await expect(page.locator("header")).toHaveCount(1);
+  await expect(
+    page
+      .locator("header")
+      .getByRole("button", { name: "Item details", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("header")
+      .getByRole("button", { name: /Save link|Upload PDF/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("header").getByRole("link", { name: "Library", exact: true }),
+  ).toHaveCount(0);
+  const content = page
+    .getByRole("tabpanel", { name: "Reading version" })
+    .locator("..");
+  const before = await content.boundingBox();
+  await page.getByRole("button", { name: "Hide item information" }).click();
+  await expect(
+    page.getByRole("complementary", { name: "Item information" }),
+  ).toBeHidden();
+  if (page.viewportSize()!.width >= 1024)
+    expect((await content.boundingBox())!.width).toBeGreaterThan(before!.width);
+  await page.getByRole("button", { name: "Show item information" }).click();
+  await expect(
+    page.getByRole("complementary", { name: "Item information" }),
+  ).toBeVisible();
+  await page.goto("/items/sample-5");
+  await page.getByLabel("PDF page", { exact: true }).fill("4");
+  await page.getByRole("button", { name: "Hide item information" }).click();
+  await expect(page.getByLabel("PDF page", { exact: true })).toHaveValue("4");
+  await page.goto("/");
+  await expect(
+    page.locator("header").getByRole("link", { name: "Settings", exact: true }),
+  ).toHaveCount(0);
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("link", { name: "Open library", exact: true }),
+  ).toHaveCount(0);
 });

@@ -136,7 +136,7 @@ export function Library() {
   return (
     <main
       id="main"
-      className="mx-auto max-w-[1600px] px-5 pb-28 pt-7 sm:px-8 md:pb-10"
+      className="mx-auto max-w-[1600px] px-5 pb-28 pt-7 sm:px-8 lg:pb-10"
     >
       <div className="mb-6 flex items-end justify-between">
         <div>

@@ -14,9 +14,11 @@ import {
   Trash2,
   Plus,
   Minus,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { Badge, Button, Modal, SectionLabel, input } from "./primitives";
+import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
 import { dateLabel, fileStore, safeUrl, type Item } from "../model";
 import { usePreview } from "../state";
 const prose = [
@@ -42,6 +44,7 @@ export function Reader() {
 function ReaderItem({ item }: { item: Item }) {
   const { setItems, notify, send, recapture } = usePreview();
   const navigate = useNavigate();
+  const [informationOpen, setInformationOpen] = useState(true);
   const [details, setDetails] = useState(false),
     [remove, setRemove] = useState(false),
     [resend, setResend] = useState(false),
@@ -198,16 +201,9 @@ function ReaderItem({ item }: { item: Item }) {
     }
   }
   return (
-    <main id="main" className="pb-24 md:pb-0">
-      <section className="flex flex-wrap items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-5 sm:px-8">
-        <div className="min-w-0 max-w-3xl">
-          <h1 className="font-display text-2xl leading-tight">{item.title}</h1>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
-            {item.author && `${item.author} · `}
-            {item.source} · Saved {dateLabel(item.saved)}
-            {isPdf && ` · ${total} pages`}
-          </p>
-        </div>
+    <main id="main" className="pb-24 lg:pb-0">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-3 sm:px-8">
+        <Brand />
         <div className="flex flex-wrap gap-2">
           {isPdf ? (
             <>
@@ -255,8 +251,20 @@ function ReaderItem({ item }: { item: Item }) {
               : "Send to Kindle"}
           </Button>
         </div>
-      </section>
+      </header>
       <Tabs.Root defaultValue="reading">
+        <section className="flex flex-wrap items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-5 sm:px-8">
+          <div className="min-w-0 max-w-3xl">
+            <h1 className="font-display text-2xl leading-tight">
+              {item.title}
+            </h1>
+            <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
+              {item.author && `${item.author} · `}
+              {item.source} · Saved {dateLabel(item.saved)}
+              {isPdf && ` · ${total} pages`}
+            </p>
+          </div>
+        </section>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-3 sm:px-8">
           {isPdf ? (
             <>
@@ -319,7 +327,15 @@ function ReaderItem({ item }: { item: Item }) {
             </>
           ) : (
             <>
-              <Tabs.List aria-label="Reading format" className="flex gap-2">
+              <span className="text-[11px] text-[var(--muted)]">
+                {selected
+                  ? `Captured ${dateLabel(selected.date)}`
+                  : "No capture available yet"}
+              </span>
+              <Tabs.List
+                aria-label="Reading format"
+                className="ml-auto flex gap-2"
+              >
                 {[
                   ["reading", "Reading version"],
                   ["original", "Original layout"],
@@ -333,15 +349,22 @@ function ReaderItem({ item }: { item: Item }) {
                   </Tabs.Trigger>
                 ))}
               </Tabs.List>
-              <span className="text-[11px] text-[var(--muted)]">
-                {selected
-                  ? `Captured ${dateLabel(selected.date)}`
-                  : "No capture available yet"}
-              </span>
             </>
           )}
+          {!informationOpen && (
+            <Button
+              aria-label="Show item information"
+              aria-expanded={false}
+              aria-controls="item-information"
+              onClick={() => setInformationOpen(true)}
+            >
+              <PanelRightOpen size={18} />
+            </Button>
+          )}
         </div>
-        <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_285px]">
+        <div
+          className={`grid gap-5 p-4 sm:p-6 ${informationOpen ? "lg:grid-cols-[minmax(0,1fr)_285px]" : "grid-cols-1"}`}
+        >
           <div className="min-w-0 bg-[var(--paper)]">
             {isPdf ? (
               <div className="min-h-[65dvh] overflow-auto bg-[var(--line)]/30 p-4 sm:p-8">
@@ -457,8 +480,23 @@ function ReaderItem({ item }: { item: Item }) {
               </>
             )}
           </div>
-          <aside className="space-y-6 p-3 text-xs">
-            <h2 className="font-display text-xl">Item information</h2>
+          <aside
+            id="item-information"
+            aria-label="Item information"
+            hidden={!informationOpen}
+            className="space-y-6 p-3 text-xs"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-xl">Item information</h2>
+              <Button
+                aria-label="Hide item information"
+                aria-expanded={true}
+                aria-controls="item-information"
+                onClick={() => setInformationOpen(false)}
+              >
+                <PanelRightClose size={18} />
+              </Button>
+            </div>
             {!isPdf && (
               <section>
                 <SectionLabel>Capture context</SectionLabel>

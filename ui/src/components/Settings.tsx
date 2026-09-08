@@ -121,13 +121,6 @@ export function SettingsPage() {
             Manage storage, imports, backups, and required connections.
           </p>
         </div>
-        <Link
-          to="/"
-          className="inline-flex min-h-11 items-center gap-2 text-xs"
-        >
-          <ArrowLeft size={14} />
-          Open library
-        </Link>
       </div>
       <section className="mt-6 grid gap-7 border border-[var(--line)] bg-[var(--paper)] p-6 md:grid-cols-[220px_1fr_230px]">
         <div>
