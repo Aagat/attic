@@ -170,17 +170,24 @@ export function Library() {
         </kbd>
       </div>
       <div className="my-4 flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Item type"
-          className="min-h-11 rounded bg-[var(--ink)] px-3 text-xs text-[var(--paper)]"
-          value={kind}
-          onChange={(e) => change("kind", e.target.value)}
-        >
-          <option value="">All items</option>
-          <option>Article</option>
-          <option>Reference</option>
-          <option>PDF</option>
-        </select>
+        <div className="relative inline-flex">
+          <select
+            aria-label="Item type"
+            className="min-h-11 appearance-none rounded bg-[var(--ink)] pl-3 pr-9 text-xs text-[var(--paper)]"
+            value={kind}
+            onChange={(e) => change("kind", e.target.value)}
+          >
+            <option value="">All items</option>
+            <option>Article</option>
+            <option>Reference</option>
+            <option>PDF</option>
+          </select>
+          <ChevronDown
+            aria-hidden="true"
+            size={14}
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--paper)]"
+          />
+        </div>
         <Popover.Root open={filterOpen} onOpenChange={setFilterOpen}>
           <Popover.Trigger asChild>
             <Button>
