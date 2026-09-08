@@ -92,6 +92,8 @@ reviving old runtime code or building legacy compatibility routes.
 
 - Existing browser bookmarks appear without export; additions and reconnects converge
   without duplicates, and browser-originated saves send no email.
+- Deleting a browser bookmark leaves its Attic copy intact. Explicit deletion in Attic
+  removes the item and its derived data; routine browser reconciliation does not restore it.
 - Both actions are available: bookmarking archives only; sending also bookmarks and
   archives, with one requested delivery despite ingestion retries.
 - With the original site unavailable, a successful saved page still opens with images;
@@ -101,13 +103,13 @@ reviving old runtime code or building legacy compatibility routes.
 - Proposed search target: results within one second for 10,000 saved items on the
   deployment host, measured against a representative collection.
 
-## Scope limits and remaining assumption
+## Scope limits and deletion policy
 
 Interactive application replay, recursive crawling, video archiving, logged-in session
 capture, scheduled recapture, automatic pruning and multi-user sharing are deferred.
 Image-only PDFs remain preserved even if OCR is deferred; do not imply their text is indexed.
 
-**Recommended browser-deletion behavior, still to confirm:** removing a browser bookmark
-leaves its Attic copy intact. Browser folder/title changes update source metadata without
+**Deletion policy:** only explicit removal in Attic deletes a saved item. Removing a
+browser bookmark leaves its Attic copy, captures and documents intact. Browser folder/title changes update source metadata without
 replacing Attic edits. Attic does not rewrite browser bookmarks; deleting an Attic item
 should not cause unchanged browser bookmarks to immediately reimport it.
