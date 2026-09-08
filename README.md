@@ -1,12 +1,43 @@
 # Attic
 
-Attic turns web articles into PDFs for reading on a Kindle Scribe. It runs as a non-root,
-read-only-compatible container. It builds `./cmd/attic` into
-`/usr/local/bin/attic`. The current composition wires external PostgreSQL,
-ordered migrations, durable jobs, filesystem artifacts under `/data`, the
-worker, browser rendering, deterministic extraction, mandatory durable AI
-approval, PDF formatting, and readiness/HTTP health endpoints. `/tmp` is the
-bounded ephemeral workspace. Completed PDFs end in `ready` and are available through the authenticated artifact endpoint.
+Attic is where I store things that I might need later. Save web bookmarks and PDFs,
+preserve page snapshots, search the whole collection, and send reading documents
+to Kindle Scribe. Bookmarking archives without emailing; **Send to Kindle** also
+saves the item and requests delivery.
+
+## Run the personal archive
+
+Configure `.env` using `.env.example`, including the database, owner access key,
+AI provider and a random `MEILI_MASTER_KEY`. For the development database and private
+search index, run:
+
+```sh
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.search.yaml up -d --build
+```
+
+Open `http://<server-address>:18080/`. Existing articles are adopted without refetching
+or resending their PDFs. Capture, AI classification, indexing and Kindle preparation
+run independently. Search needs the external index; an unavailable index leaves saving
+and existing documents usable. See [search setup](docs/search.md).
+
+Enable **Read browser bookmarks** in the Chromium extension's options to ingest existing
+bookmarks and follow new bookmarks, edits and folder moves. It catches up after outages.
+Removing a browser bookmark never deletes its Attic copy. Explicit Attic deletion also
+prevents routine browser reconciliation from reimporting it. HTML import is available
+for bookmark exports from other browsers. PDF uploads preserve their original bytes;
+image-only PDFs remain searchable by filename and annotations, without OCR.
+
+The item details expose captures and missing resources, annotations, suggested tags,
+and separate capture/index/PDF/delivery status. A failed optional classification can
+be retried. A successful capture remains available if a later capture fails.
+
+**Export archive** downloads a portable ZIP of saved records, capture versions, PDFs,
+approved reading content and browser deletion records. **Restore archive** merges it
+without overwriting newer local edits, recapturing pages or sending email, and schedules
+reindexing. Export streams without using the small browser tmpfs; restore stages a private
+ZIP on the artifact volume. Restore limits: 16 GiB per archive, 128 MiB per member and
+100,000 ZIP entries. The ZIP does not contain credentials or full operational job history;
+keep database/volume backups below for complete deployment recovery.
 
 ## Architecture and navigation
 
@@ -26,16 +57,15 @@ the owner and checks observable rendering, layout stability and cancellation.
 
 ## Email delivery
 
-Enable `SMTP_ENABLED=true` to email each newly prepared PDF to
+Enable `SMTP_ENABLED=true` to deliver explicit **Send to Kindle** requests to
 `SMTP_DESTINATION`. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SENDER`, and optional
 `SMTP_USERNAME`/`SMTP_PASSWORD`. Use `SMTP_TLS_MODE=starttls` (normally port 587)
 or `implicit_tls` (normally 465); certificates are verified. The default timeout
 is `SMTP_TIMEOUT=30s`. For Kindle delivery, use your Send to Kindle address and
 add the sender to your Amazon approved personal document email list.
 
-The PDF stays available in the library. SMTP queues only newly completed articles,
-so enabling email does not send the existing library. Its queue is persisted with
-the PDF in the same transaction and saves the intended recipient. Temporary
+The PDF stays available in the library. Bookmarking and importing do not email anything. Delivery requests save the intended
+recipient and reuse existing PDFs, or queue document preparation when necessary. Temporary
 failures retry up to three times with backoff. Rejections and unconfirmed delivery
 show **Retry email**, which sends the saved PDF without rerunning AI or formatting.
 A lost acknowledgement or expired delivery lease is not automatically retried:
@@ -57,7 +87,7 @@ docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compos
 ```
 
 Open `http://<server-address>:18025/` to inspect messages and download attachments.
-Submit an article through Attic on port 18080; its email appears after PDF
+Use **Send to Kindle** through Attic on port 18080; its email appears after PDF
 preparation succeeds. The SMTP port is internal to Compose. This development
 configuration uses test addresses, no authentication and explicit
 `SMTP_TLS_MODE=none`; it does not forward mail to a real mailbox. Its web inbox
@@ -303,9 +333,8 @@ those operations so saved records, capture history and deletion policy stay cons
 Open `/` on the running server and sign in with the `BEARER_TOKEN` value from
 `.env`. This is the Attic access key, separate from your
 ChatGPT login. Paste an article URL to submit it, then follow its progress in
-the library. Search and status filters help find articles; failed jobs can be
-retried, and unwanted jobs can be cancelled or removed. Search covers the
-loaded articles; use **Load more** to include older entries.
+the library. Search and status filters help find articles; failed work can be
+retried, and unwanted saved items can be explicitly removed. Search covers the entire indexed collection, including captured page and PDF text.
 
 **Read PDF** opens an authenticated PDF.js canvas preview with page navigation,
 page-number entry, zoom, author/source details, download,

@@ -107,7 +107,7 @@ func runServer(cfg config.Config) error {
 		return err
 	}
 	renderer, err := acquisition.NewChromiumRenderer(acquisition.ChromiumConfig{
-		Executable: cfg.Browser.Executable, NavigationTimeout: cfg.Browser.NavigationTimeout,
+		Concurrency: cfg.Browser.Concurrency, Executable: cfg.Browser.Executable, NavigationTimeout: cfg.Browser.NavigationTimeout,
 		RenderTimeout: cfg.Browser.RenderTimeout, MaxDOMBytes: cfg.Browser.MaxDOMBytes,
 		MaxDOMNodes: cfg.Browser.MaxDOMNodes, MaxScreenshotBytes: cfg.Browser.MaxScreenshotBytes,
 		ScreenshotWidth: cfg.Browser.ScreenshotWidth, ScreenshotHeight: cfg.Browser.ScreenshotHeight,

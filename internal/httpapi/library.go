@@ -69,6 +69,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			}
 			var items []library.Item
 			total := 0
+			totalEstimated := false
 			snippets := map[string]string{}
 			if q.Get("q") != "" || q.Get("tag") != "" || q.Get("domain") != "" || q.Get("from") != "" || q.Get("to") != "" || q.Get("capture_status") != "" {
 				if s.search == nil {
@@ -98,6 +99,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 					return true
 				}
 				total = result.Total
+				totalEstimated = result.TotalEstimated
 				items = []library.Item{}
 				for _, hit := range result.Hits {
 					d, err := s.library.Get(r.Context(), hit.Document.ID)
@@ -132,7 +134,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			for _, i := range items {
 				hits = append(hits, hit{i, snippets[i.ID]})
 			}
-			respond(200, map[string]any{"items": hits, "total": total, "storage_bytes": bytes})
+			respond(200, map[string]any{"items": hits, "total": total, "storage_bytes": bytes, "total_estimated": totalEstimated})
 			return true
 		case "POST":
 			var request library.SaveRequest
@@ -211,6 +213,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		return true
 	}
 	if tail == "export" && r.Method == "GET" {
+		http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Minute))
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", `attachment; filename="attic.zip"`)
 		if err := s.library.Export(r.Context(), w); err != nil {
@@ -219,19 +222,21 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		return true
 	}
 	if tail == "restore" && r.Method == "POST" {
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<30)
-		if err := r.ParseMultipartForm(1 << 20); err != nil {
-			fail(library.ErrInvalid)
-			return true
-		}
-		defer r.MultipartForm.RemoveAll()
-		file, header, err := r.FormFile("file")
+		http.NewResponseController(w).SetReadDeadline(time.Now().Add(30 * time.Minute))
+		http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Minute))
+		r.Body = http.MaxBytesReader(w, r.Body, (16<<30)+(1<<20))
+		parts, err := r.MultipartReader()
 		if err != nil {
 			fail(library.ErrInvalid)
 			return true
 		}
+		file, err := parts.NextPart()
+		if err != nil || file.FormName() != "file" {
+			fail(library.ErrInvalid)
+			return true
+		}
 		defer file.Close()
-		n, err := s.library.Restore(r.Context(), file, header.Size)
+		n, err := s.library.RestoreUpload(r.Context(), file)
 		if err != nil {
 			fail(err)
 		} else {
@@ -256,6 +261,29 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			return true
 		}
 		defer body.Close()
+		if r.URL.Query().Get("view") == "reader" {
+			detail, err := s.library.Get(r.Context(), id)
+			if err != nil {
+				fail(err)
+				return true
+			}
+			raw, err := io.ReadAll(io.LimitReader(body, 64<<20))
+			if err != nil {
+				fail(err)
+				return true
+			}
+			html, err := capture.ReadingView(raw, detail.URL)
+			if err != nil {
+				writeError(w, application.NewSafeError("reading_view_unavailable", 422, "A cleaned reading view is unavailable for this capture. Open its original layout."), correlation)
+				return true
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.Write(html)
+			return true
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
 		w.Header().Set("X-Content-Type-Options", "nosniff")

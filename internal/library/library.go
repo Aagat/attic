@@ -80,6 +80,7 @@ type Library struct {
 	db                   *sql.DB
 	files                *filesystem.Store
 	profile, destination string
+	root                 string
 }
 
 func Open(ctx context.Context, o Options) (*Library, error) {
@@ -98,7 +99,7 @@ func Open(ctx context.Context, o Options) (*Library, error) {
 		db.Close()
 		return nil, ErrStorage
 	}
-	return &Library{db: db, files: files, profile: o.Profile, destination: o.Destination}, nil
+	return &Library{db: db, files: files, profile: o.Profile, destination: o.Destination, root: o.ArtifactRoot}, nil
 }
 func (l *Library) Close() error { return l.db.Close() }
 func opaque() string {
