@@ -86,6 +86,9 @@ export function Reader() {
 function ReaderItem({ item }: { item: Item }) {
   const { archive, refresh, notify, send, recapture } = useArchive();
   const navigate = useNavigate();
+  const [format, setFormat] = useState(item.kind === "PDF" ? "pdf" : "reading");
+  const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
+  const showPdf = item.kind === "PDF" || (format === "pdf" && hasPdf);
   const [informationOpen, setInformationOpen] = useState(true);
   const [details, setDetails] = useState(false),
     [remove, setRemove] = useState(false),
@@ -171,7 +174,7 @@ function ReaderItem({ item }: { item: Item }) {
     };
   }, [file]);
   useEffect(() => {
-    if (!pdf || !canvas.current) return;
+    if (!showPdf || !pdf || !canvas.current) return;
     let active = true;
     let task: { cancel: () => void; promise: Promise<void> } | undefined;
     void pdf
@@ -195,7 +198,7 @@ function ReaderItem({ item }: { item: Item }) {
       active = false;
       task?.cancel();
     };
-  }, [pdf, current]);
+  }, [pdf, current, showPdf]);
   useEffect(() => {
     try {
       localStorage.setItem(`attic-page-${item.id}`, String(current));
@@ -301,7 +304,7 @@ function ReaderItem({ item }: { item: Item }) {
           </Button>
         </div>
       </header>
-      <Tabs.Root defaultValue="reading">
+      <Tabs.Root value={format} onValueChange={setFormat}>
         <section className="flex flex-wrap items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-5 sm:px-8">
           <div className="min-w-0 max-w-3xl">
             <h1 className="font-display text-2xl leading-tight">
@@ -315,7 +318,27 @@ function ReaderItem({ item }: { item: Item }) {
           </div>
         </section>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-3 sm:px-8">
-          {isPdf ? (
+          {!isPdf && (
+            <Tabs.List
+              aria-label="Reading format"
+              className="flex flex-wrap gap-2"
+            >
+              {[
+                ["reading", "Reading version"],
+                ["original", "Original layout"],
+                ...(hasPdf ? [["pdf", "PDF"]] : []),
+              ].map(([value, label]) => (
+                <Tabs.Trigger
+                  key={value}
+                  value={value}
+                  className="min-h-11 rounded border border-transparent px-3 text-xs data-[state=active]:border-[var(--line)] data-[state=active]:bg-[var(--paper)]"
+                >
+                  {label}
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+          )}
+          {showPdf ? (
             <>
               <div className="flex items-center gap-2">
                 <Button
@@ -381,23 +404,6 @@ function ReaderItem({ item }: { item: Item }) {
                   ? `Captured ${dateLabel(selected.date)}`
                   : "No capture available yet"}
               </span>
-              <Tabs.List
-                aria-label="Reading format"
-                className="ml-auto flex gap-2"
-              >
-                {[
-                  ["reading", "Reading version"],
-                  ["original", "Original layout"],
-                ].map(([value, label]) => (
-                  <Tabs.Trigger
-                    key={value}
-                    value={value}
-                    className="min-h-11 rounded border border-transparent px-3 text-xs data-[state=active]:border-[var(--line)] data-[state=active]:bg-[var(--paper)]"
-                  >
-                    {label}
-                  </Tabs.Trigger>
-                ))}
-              </Tabs.List>
             </>
           )}
           {!informationOpen && (
@@ -415,68 +421,70 @@ function ReaderItem({ item }: { item: Item }) {
           className={`grid gap-5 p-4 sm:p-6 ${informationOpen ? "lg:grid-cols-[minmax(0,1fr)_285px]" : "grid-cols-1"}`}
         >
           <div className="min-w-0 bg-[var(--paper)]">
-            {isPdf ? (
-              <div className="min-h-[65dvh] overflow-auto bg-[var(--line)]/30 p-4 sm:p-8">
-                <div
-                  className={`mx-auto min-h-[700px] bg-[var(--paper)] p-6 shadow-sm sm:p-12 ${zoom === 75 ? "max-w-[510px]" : zoom === 100 ? "max-w-[680px]" : zoom === 125 ? "w-[850px]" : "w-[1020px]"}`}
-                >
-                  {!archive.preview && !item.hasPdf ? (
-                    <p role="alert" className="text-sm">
-                      The original PDF is unavailable. Your saved record is
-                      still here.
-                    </p>
-                  ) : item.fileId || item.hasPdf ? (
-                    <>
-                      {pdfLoading && (
-                        <p role="status" className="text-sm">
-                          Opening original PDF…
-                        </p>
-                      )}
-                      {(fileError || pdfError) && (
-                        <p
-                          role="alert"
-                          className="text-sm text-[var(--danger)]"
-                        >
-                          {fileError || pdfError}
-                        </p>
-                      )}
-                      <canvas
-                        ref={canvas}
-                        className="h-auto w-full"
-                        aria-label={`PDF page ${current} of ${total}`}
-                      />
-                      <p className="mt-4 text-xs text-[var(--muted)]">
-                        For selectable text and assistive reading, download the
-                        original PDF.
+            {showPdf ? (
+              <Tabs.Content value="pdf">
+                <div className="min-h-[65dvh] overflow-auto bg-[var(--line)]/30 p-4 sm:p-8">
+                  <div
+                    className={`mx-auto min-h-[700px] bg-[var(--paper)] p-6 shadow-sm sm:p-12 ${zoom === 75 ? "max-w-[510px]" : zoom === 100 ? "max-w-[680px]" : zoom === 125 ? "w-[850px]" : "w-[1020px]"}`}
+                  >
+                    {!archive.preview && !item.hasPdf ? (
+                      <p role="alert" className="text-sm">
+                        The original PDF is unavailable. Your saved record is
+                        still here.
                       </p>
-                    </>
-                  ) : (
-                    <>
-                      <SectionLabel>
-                        Sample document · page {current}
-                      </SectionLabel>
-                      <h2 className="font-display mb-8 mt-7 text-4xl">
-                        {current === 1
-                          ? "Encoding and Evolution"
-                          : `Field notes · ${current}`}
-                      </h2>
-                      <div className="font-display space-y-6 text-lg leading-8">
-                        {prose.map((t) => (
-                          <p key={t}>{t}</p>
-                        ))}
-                      </div>
-                      <div className="mt-10 border-t border-[var(--line)] pt-6 text-xs leading-6 text-[var(--muted)]">
-                        This is a layout sample, not the original publication.
-                        Upload your own PDF to try real page rendering,
-                        download, and sharing.
-                      </div>
-                      <p className="mt-14 text-center font-display">
-                        {current}
-                      </p>
-                    </>
-                  )}
+                    ) : item.fileId || item.hasPdf ? (
+                      <>
+                        {pdfLoading && (
+                          <p role="status" className="text-sm">
+                            Opening PDF…
+                          </p>
+                        )}
+                        {(fileError || pdfError) && (
+                          <p
+                            role="alert"
+                            className="text-sm text-[var(--danger)]"
+                          >
+                            {fileError || pdfError}
+                          </p>
+                        )}
+                        <canvas
+                          ref={canvas}
+                          className="h-auto w-full"
+                          aria-label={`PDF page ${current} of ${total}`}
+                        />
+                        <p className="mt-4 text-xs text-[var(--muted)]">
+                          For selectable text and assistive reading, download
+                          the original PDF.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <SectionLabel>
+                          Sample document · page {current}
+                        </SectionLabel>
+                        <h2 className="font-display mb-8 mt-7 text-4xl">
+                          {current === 1
+                            ? "Encoding and Evolution"
+                            : `Field notes · ${current}`}
+                        </h2>
+                        <div className="font-display space-y-6 text-lg leading-8">
+                          {prose.map((t) => (
+                            <p key={t}>{t}</p>
+                          ))}
+                        </div>
+                        <div className="mt-10 border-t border-[var(--line)] pt-6 text-xs leading-6 text-[var(--muted)]">
+                          This is a layout sample, not the original publication.
+                          Upload your own PDF to try real page rendering,
+                          download, and sharing.
+                        </div>
+                        <p className="mt-14 text-center font-display">
+                          {current}
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </Tabs.Content>
             ) : !archive.preview ? (
               <>
                 {(["reading", "original"] as const).map((view) => (

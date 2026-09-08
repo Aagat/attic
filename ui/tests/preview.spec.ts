@@ -351,3 +351,58 @@ test("save and Kindle actions work without secure-context randomUUID", async ({
     page.getByRole("link", { name: "example.com / http-save", exact: true }),
   ).toBeVisible();
 });
+
+test("article PDF tab appears only with a document and renders after switching views", async ({
+  page,
+}) => {
+  await page.goto("/items/sample-1");
+  await expect(page.getByRole("tab", { name: "PDF", exact: true })).toHaveCount(
+    0,
+  );
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Choose PDF", exact: true }).click();
+  await page.getByLabel("PDF file", { exact: true }).setInputFiles({
+    name: "article-reading.pdf",
+    mimeType: "application/pdf",
+    buffer: samplePdf(),
+  });
+  await page.getByRole("button", { name: "Keep original PDF" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  // Model a saved article with an available generated document using the real stored PDF.
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve) => {
+      const request = indexedDB.open("attic-preview-records", 1);
+      request.onsuccess = () => resolve(request.result);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("records", "readwrite");
+      const store = tx.objectStore("records");
+      const request = store.get("items");
+      request.onsuccess = () => {
+        const items = request.result;
+        items[0].kind = "Article";
+        items[0].url = "https://example.com/article";
+        store.put(items, "items");
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("tab", { name: "Reading version", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  for (const view of ["Reading version", "Original layout"]) {
+    await page.getByRole("tab", { name: "PDF", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.locator("canvas").evaluate((c: HTMLCanvasElement) => c.width),
+      )
+      .toBe(420);
+    await expect(page.getByLabel("PDF page", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await page.getByRole("tab", { name: view, exact: true }).click();
+    await expect(page.locator("canvas")).toHaveCount(0);
+  }
+});
