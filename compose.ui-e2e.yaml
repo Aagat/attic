@@ -1,0 +1,61 @@
+# Isolated real-server tests. No host mounts or production credentials.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: attic
+      POSTGRES_PASSWORD: attic-e2e-only
+      POSTGRES_DB: attic
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U attic']
+      interval: 2s
+      retries: 30
+  search:
+    image: getmeili/meilisearch:v1.37.0
+    environment:
+      MEILI_MASTER_KEY: attic-e2e-search-key
+      MEILI_NO_ANALYTICS: 'true'
+  mailpit:
+    image: axllent/mailpit@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365
+  attic:
+    image: attic-ui-e2e:local
+    build: .
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN, SYS_CHROOT]
+    tmpfs: [/tmp, /dev/shm]
+    environment:
+      DATABASE_URL: postgres://attic:attic-e2e-only@db:5432/attic?sslmode=disable
+      BEARER_TOKEN: attic-e2e-owner-key
+      AI_API_KEY: unused-e2e-key
+      AI_BASE_URL: https://127.0.0.1:9/v1
+      AI_MODEL: e2e
+      AI_TIMEOUT: 2s
+      AI_MAX_RETRIES: '0'
+      SEARCH_URL: http://search:7700
+      SEARCH_API_KEY: attic-e2e-search-key
+      SMTP_ENABLED: 'true'
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_TLS_MODE: none
+      SMTP_SENDER: attic@example.test
+      SMTP_DESTINATION: reader@example.test
+    depends_on:
+      db: {condition: service_healthy}
+      search: {condition: service_started}
+      mailpit: {condition: service_started}
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://127.0.0.1:8080/health/ready']
+      interval: 3s
+      retries: 30
+      start_period: 20s
+  tests:
+    image: attic-ui-e2e-tests:local
+    build:
+      context: .
+      dockerfile: ui/e2e/Dockerfile
+    environment:
+      CI: 'true'
+    depends_on:
+      attic: {condition: service_healthy}

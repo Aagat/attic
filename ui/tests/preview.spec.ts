@@ -52,12 +52,10 @@ test("bookmark, edit, reload, deduplicate and remove", async ({ page }) => {
   await page.locator("header").getByRole("button", { name: /Save/ }).click();
   await dialog.getByLabel("URL to save").fill("https://example.com/kept");
   await dialog.getByRole("button", { name: /^Send to Kindle/ }).click();
-  await expect(
-    page.getByText("Already in your library.", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Not requested", { exact: true }).first(),
-  ).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await page
+    .getByRole("link", { name: "My durable reference", exact: true })
+    .click();
   await page.getByRole("button", { name: "Item details", exact: true }).click();
   await dialog
     .getByRole("button", { name: "Remove item", exact: true })
@@ -71,29 +69,21 @@ test("bookmark, edit, reload, deduplicate and remove", async ({ page }) => {
     page.getByRole("link", { name: "My durable reference", exact: true }),
   ).toHaveCount(0);
 });
-test("reader state changes retain captures and uncertain delivery asks before retry", async ({
+test("recapture retains earlier copies and resending accepted email asks first", async ({
   page,
 }) => {
   await page.goto("/items/sample-1");
-  await page.getByText("Preview state controls", { exact: true }).click();
-  await page
-    .getByLabel("Capture", { exact: true })
-    .selectOption("Capture failed");
-  await expect(page.getByRole("button", { name: /18 Aug 2026/ })).toBeVisible();
   await page.getByRole("button", { name: "Request fresh capture" }).click();
   await expect(
     page.getByRole("button", { name: "Capture queued" }),
   ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /18 Aug 2026/ })).toBeVisible();
+  await page.goto("/items/sample-3");
   await page
-    .getByLabel("Delivery", { exact: true })
-    .selectOption("Outcome uncertain");
-  await page.getByRole("button", { name: "Retry delivery" }).click();
+    .getByRole("button", { name: "Send to Kindle", exact: true })
+    .click();
   await expect(
     page.getByRole("dialog", { name: "Send this document again?" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(
-    page.getByText("Outcome uncertain", { exact: true }).first(),
   ).toBeVisible();
 });
 test("settings import merges duplicates; export is a real download", async ({
@@ -108,10 +98,10 @@ test("settings import merges duplicates; export is a real download", async ({
     ),
   });
   await expect(
-    page.getByText("1 added · 1 merged · 1 skipped.", { exact: false }),
+    page.getByText("1 added · 1 merged.", { exact: false }),
   ).toBeVisible();
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export preview records" }).click();
+  await page.getByRole("button", { name: "Export archive" }).click();
   expect((await downloading).suggestedFilename()).toBe("attic-ui-preview.json");
 });
 test("responsive screens and keyboard dialogs have no page overflow or runtime errors", async ({
@@ -187,7 +177,9 @@ test("offline reload uses the installed shell", async ({
   await expect(
     page.getByRole("heading", { name: "Library", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Offline preview")).toBeVisible();
+  await expect(
+    page.getByText("Offline — reconnect to access your archive"),
+  ).toBeVisible();
   await context.setOffline(false);
 });
 function samplePdf() {

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bookmark, Send, Link as LinkIcon, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button, input } from "./primitives";
 import { safeUrl } from "../model";
-import { usePreview } from "../state";
+import { useArchive } from "../state";
 export function SaveForm({
   initial = "",
   onSaved,
@@ -15,17 +15,30 @@ export function SaveForm({
 }) {
   const [url, setUrl] = useState(initial),
     [error, setError] = useState("");
-  const { save } = usePreview();
-  function submit(send: boolean) {
+  const { save, archive } = useArchive();
+  const [busy, setBusy] = useState(false);
+  const attempt = useRef({ url: "", send: false, key: "" });
+  async function submit(send: boolean) {
     const valid = safeUrl(url.trim());
     if (!valid) {
       setError("Enter a complete http:// or https:// URL.");
       return;
     }
-    save(valid, send);
-    setUrl("");
-    setError("");
-    onSaved?.();
+    if (busy) return;
+    if (attempt.current.url !== valid || attempt.current.send !== send)
+      attempt.current = { url: valid, send, key: crypto.randomUUID() };
+    setBusy(true);
+    try {
+      await save(valid, send, attempt.current.key);
+      setUrl("");
+      setError("");
+      onSaved?.();
+      attempt.current.url = "";
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <form
@@ -58,7 +71,12 @@ export function SaveForm({
           {error}
         </p>
       )}
-      <Button primary type="submit" className="justify-start py-3">
+      <Button
+        disabled={busy}
+        primary
+        type="submit"
+        className="justify-start py-3"
+      >
         <Bookmark size={18} />
         <span className="text-left">
           Bookmark
@@ -68,6 +86,7 @@ export function SaveForm({
         </span>
       </Button>
       <Button
+        disabled={busy}
         type="button"
         onClick={() => submit(true)}
         className="justify-start py-3"
@@ -80,10 +99,12 @@ export function SaveForm({
           </span>
         </span>
       </Button>
-      <p className="text-[11px] leading-5 text-[var(--muted)]">
-        Preview: saves stay on this device. Processing and delivery are
-        simulated.
-      </p>
+      {archive.preview && (
+        <p className="text-[11px] leading-5 text-[var(--muted)]">
+          Preview: saves stay on this device. Processing and delivery are
+          simulated.
+        </p>
+      )}
       {sidebar && (
         <Link
           to="/settings"

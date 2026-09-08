@@ -15,9 +15,9 @@ import {
 import { Badge, Button, input } from "./primitives";
 import { SaveForm } from "./SaveForm";
 import { dateLabel } from "../model";
-import { usePreview } from "../state";
+import { useArchive, useArchiveQuery } from "../state";
 export function Library() {
-  const { items, openSave } = usePreview();
+  const { archive, openSave } = useArchive();
   const [params, setParams] = useSearchParams();
   const search = useRef<HTMLInputElement>(null);
   const query = params.get("q") || "",
@@ -50,56 +50,65 @@ export function Library() {
   useEffect(() => {
     if (params.get("focus")) search.current?.focus();
   }, [params]);
-  const filtered = items.filter(
-    (i) =>
-      (!kind || i.kind === kind) &&
-      (!source || i.source === source) &&
-      (!tag || i.tags.includes(tag)) &&
-      (!status || i.capture === status) &&
-      (!date || i.saved.slice(0, 10) >= date) &&
-      query
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean)
-        .every((term) =>
-          `${i.title} ${i.source} ${i.excerpt} ${i.notes} ${i.tags.join(" ")}`
-            .toLowerCase()
-            .includes(term),
-        ),
+  const { data, error } = useArchiveQuery(
+    "library:" + params.toString(),
+    (signal) => archive.list(params, signal),
   );
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize)),
-    current = Math.min(page, pages),
-    visible = filtered.slice((current - 1) * pageSize, current * pageSize);
+  const items = data?.items || [];
+  const total = data?.total || 0;
+  const pages = Math.max(1, Math.ceil(total / pageSize)),
+    current = page,
+    visible = items;
   const active = !!(query || kind || source || tag || status || date);
   const filterFields = (
     <>
       <label className="grid gap-2 text-xs">
         Source
-        <select
-          aria-label="Source"
-          className={input}
-          value={source}
-          onChange={(e) => change("source", e.target.value)}
-        >
-          <option value="">All sources</option>
-          {[...new Set(items.map((i) => i.source))].sort().map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        {!archive.preview ? (
+          <input
+            className={input}
+            aria-label="Source"
+            value={source}
+            onChange={(e) => change("source", e.target.value)}
+            placeholder="example.com"
+          />
+        ) : (
+          <select
+            aria-label="Source"
+            className={input}
+            value={source}
+            onChange={(e) => change("source", e.target.value)}
+          >
+            <option value="">All sources</option>
+            {[...new Set(items.map((i) => i.source))].sort().map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        )}
       </label>
       <label className="grid gap-2 text-xs">
         Tags
-        <select
-          aria-label="Tags"
-          className={input}
-          value={tag}
-          onChange={(e) => change("tag", e.target.value)}
-        >
-          <option value="">All tags</option>
-          {[...new Set(items.flatMap((i) => i.tags))].sort().map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        {!archive.preview ? (
+          <input
+            className={input}
+            aria-label="Tags"
+            value={tag}
+            onChange={(e) => change("tag", e.target.value)}
+            placeholder="Tag"
+          />
+        ) : (
+          <select
+            aria-label="Tags"
+            className={input}
+            value={tag}
+            onChange={(e) => change("tag", e.target.value)}
+          >
+            <option value="">All tags</option>
+            {[...new Set(items.flatMap((i) => i.tags))].sort().map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        )}
       </label>
       <label className="grid gap-2 text-xs">
         Saved since
@@ -138,6 +147,12 @@ export function Library() {
       id="main"
       className="mx-auto max-w-[1600px] px-5 pb-28 pt-7 sm:px-8 lg:pb-10"
     >
+      {error && (
+        <p role="alert" className="mb-5 text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+      {!data && !error && <p role="status">Loading library…</p>}
       <div className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="font-display text-4xl">Library</h1>
@@ -146,8 +161,7 @@ export function Library() {
           </p>
         </div>
         <span className="hidden text-xs text-[var(--muted)] sm:block">
-          {items.length} saved items ·{" "}
-          {items.filter((i) => i.capture === "Preserving").length} indexing
+          {total} matching items{data?.estimated ? " (estimated)" : ""}
         </span>
       </div>
       <div className="flex h-[58px] focus-within:ring-2 focus-within:ring-[var(--accent)] items-center gap-3 rounded border border-[var(--ink)] bg-[var(--paper)] px-4">
@@ -179,7 +193,7 @@ export function Library() {
           >
             <option value="">All items</option>
             <option>Article</option>
-            <option>Reference</option>
+            {archive.preview && <option>Reference</option>}
             <option>PDF</option>
           </select>
           <ChevronDown
@@ -203,7 +217,7 @@ export function Library() {
             <Popover.Content
               align="start"
               sideOffset={8}
-              className="z-30 grid w-[min(330px,calc(100vw-32px))] gap-4 rounded border border-[var(--line)] bg-[var(--paper)] p-5 shadow-lg"
+              className="z-30 grid max-h-[var(--radix-popover-content-available-height)] overflow-y-auto w-[min(330px,calc(100vw-32px))] gap-4 rounded border border-[var(--line)] bg-[var(--paper)] p-5 shadow-lg"
             >
               <div className="flex items-center justify-between">
                 <h2 className="font-medium">Refine your library</h2>
@@ -213,7 +227,7 @@ export function Library() {
               </div>
               {filterFields}
               <Button onClick={() => setFilterOpen(false)}>
-                Show {filtered.length} items
+                Show {total} items
               </Button>
             </Popover.Content>
           </Popover.Portal>
@@ -230,7 +244,7 @@ export function Library() {
           </button>
         )}
         <span role="status" className="ml-auto text-xs text-[var(--muted)]">
-          {filtered.length} {query ? "results" : "items"}
+          {total} {query ? "results" : "items"}
         </span>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px]">
@@ -275,7 +289,7 @@ export function Library() {
               </div>
             </article>
           ))}
-          {!visible.length && (
+          {data && !error && !visible.length && (
             <div className="py-20 text-center">
               <Archive className="mx-auto mb-5 size-9 text-[var(--muted)]" />
               <h2 className="font-display text-3xl">
@@ -300,8 +314,7 @@ export function Library() {
             >
               <span className="text-[var(--muted)]">
                 Showing {(current - 1) * pageSize + 1}–
-                {Math.min(current * pageSize, filtered.length)} of{" "}
-                {filtered.length}
+                {Math.min(current * pageSize, total)} of {total}
               </span>
               <div className="flex gap-1">
                 <Button

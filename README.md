@@ -631,3 +631,33 @@ startup, readiness, health endpoints, and the worker are supplied by the
 current application composition. Browser subprocess, outbound-address,
 screenshot, DOM, AI input, and PDF output limits are validated at startup and
 enforced by their owning modules.
+
+## React web application
+
+The production Docker image builds and embeds the pnpm/React application. Open
+Attic's root URL and connect with its owner access key. The browser exchanges it
+for an HttpOnly session cookie; it does not persist the access key. Library
+queries, PDFs, captures, imports and ZIP backups use the authenticated server API.
+The PWA caches the application shell only; reading saved content requires a server
+connection. Desktop Chromium and mobile WebKit are covered by the remote tests.
+
+For development, run the Go server on port 8080 and `pnpm install && pnpm dev`.
+Vite proxies API requests to that server. For a locally compiled Go binary, run
+`pnpm build:embed` before `go build ./cmd/attic`; Docker does this automatically.
+Do not commit generated frontend bundles. `pnpm build:preview && pnpm preview`
+retains an optional local sample-data mode, separate from the production build.
+
+The `Archive` interface in `ui/src/archive/contract.ts` owns session, query and
+mutation operations. Its HTTP implementation contains transport, server-to-view
+mapping, error handling and idempotency headers. Screens use this same interface
+for the local preview adapter. Query hooks cancel obsolete reads and refresh
+background processing states; mutations refresh visible data after acknowledgement.
+No mutation is retried automatically.
+
+Run the real-server E2E suite with `ui/e2e/run-remote.sh gov-remote`. It resolves the
+SSH endpoint from the Docker context and builds on that host, using isolated
+PostgreSQL, Meilisearch and Mailpit containers. It needs no production credentials,
+host bind mounts, external AI calls, or external email delivery. The temporary
+stack and its volumes are removed on exit; browser artifacts are copied to
+`ui/test-results/<project>/`. AI processing is unavailable in this
+fixture; the Go processing tests cover that boundary separately.

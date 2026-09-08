@@ -393,3 +393,6 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 	}
 	return safe(tx.Commit())
 }
+
+// KindleConfigured reports whether explicit deliveries have a destination.
+func (l *Library) KindleConfigured() bool { return l.destination != "" }

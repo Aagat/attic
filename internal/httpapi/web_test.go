@@ -11,7 +11,7 @@ import (
 func TestWebSessionsProtectLibraryAndMutations(t *testing.T) {
 	server, _, _ := testServer(t)
 	home := request(server, "GET", "/", "", "")
-	if home.Code != 200 || !strings.Contains(home.Body.String(), "Things you might need later") {
+	if home.Code != 200 || !strings.Contains(home.Body.String(), `id="root"`) {
 		t.Fatal("web entry point unavailable")
 	}
 	if home.Header().Get("Content-Security-Policy") == "" {
@@ -66,7 +66,7 @@ func TestSharingAssetsArePublicButCannotSubmitJobs(t *testing.T) {
 	var config struct {
 		Share struct{ Action, Method string } `json:"share_target"`
 	}
-	if err := json.Unmarshal(manifest.Body.Bytes(), &config); err != nil || config.Share.Action != "/" || config.Share.Method != "GET" {
+	if err := json.Unmarshal(manifest.Body.Bytes(), &config); err != nil || (config.Share.Action != "/" && config.Share.Action != "/share") || config.Share.Method != "GET" {
 		t.Fatalf("invalid share manifest: %v", err)
 	}
 	// A shared URL only renders the public application shell. It never creates a job.
@@ -80,5 +80,26 @@ func TestSharingAssetsArePublicButCannotSubmitJobs(t *testing.T) {
 	}
 	if response := request(server, "POST", "/", "url=https://example.com", ""); response.Code != 405 {
 		t.Fatal("share bypassed authenticated API")
+	}
+}
+
+func TestFrontendDeepLinksAndAssetMisses(t *testing.T) {
+	server, _, _ := testServer(t)
+	for _, path := range []string{"/", "/items/saved-item", "/settings", "/setup", "/connect", "/share?url=https://example.com"} {
+		r := request(server, "GET", path, "", "")
+		if r.Code != 200 || !strings.Contains(r.Body.String(), `id="root"`) {
+			t.Fatalf("missing app shell at %s: %d", path, r.Code)
+		}
+		if r.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("shell must revalidate: %s", path)
+		}
+	}
+	for _, path := range []string{"/assets/missing.js", "/items/a/captures/b"} {
+		if r := request(server, "GET", path, "", ""); r.Code != 404 {
+			t.Fatalf("asset miss returned shell: %s = %d", path, r.Code)
+		}
+	}
+	if r := request(server, "GET", "/api/v1/items/status", "", ""); r.Code != 401 {
+		t.Fatal("status must require authentication")
 	}
 }

@@ -29,6 +29,7 @@ type Document struct {
 // Query combines all filters with AND; each tag must match. Date bounds are inclusive.
 // Limit defaults to 20 and cannot exceed 100. Offset must be nonnegative.
 type Query struct {
+	Kind          string
 	Text          string
 	Tags          []string
 	Domain        string

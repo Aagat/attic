@@ -8,9 +8,17 @@ export type Delivery =
   | "Not requested"
   | "Preparing document"
   | "Email accepted"
+  | "Preparation failed"
   | "Delivery failed"
   | "Outcome uncertain";
 export interface Item {
+  jobId?: string;
+  hasPdf?: boolean;
+  pdfStatus?: string;
+  indexStatus?: string;
+  suggestedTags?: string[];
+  enrichmentStatus?: string;
+  textAvailable?: boolean;
   id: string;
   title: string;
   url: string;
@@ -26,7 +34,12 @@ export interface Item {
   folder?: string;
   pages?: number;
   fileId?: string;
-  versions: { date: string; status: "Complete" | "Partial" }[];
+  versions: {
+    id?: string;
+    missing?: string[];
+    date: string;
+    status: "Complete" | "Partial";
+  }[];
 }
 const examples: Partial<Item>[] = [
   {

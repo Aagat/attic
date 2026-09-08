@@ -6,6 +6,15 @@ ARG GO_VERSION=1.24.6
 ARG BUILD_ALPINE_VERSION=3.22
 ARG RUNTIME_ALPINE_VERSION=3.22.1
 
+FROM node:22.22.0-alpine AS ui
+WORKDIR /src
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY ui/package.json ./ui/package.json
+RUN pnpm install --frozen-lockfile
+COPY ui ./ui
+RUN pnpm build
+
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${BUILD_ALPINE_VERSION} AS build
 
 ARG TARGETOS=linux
@@ -26,6 +35,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY cmd/attic ./cmd/attic
 COPY internal ./internal
 COPY migrations ./migrations
+COPY --from=ui /src/ui/dist ./internal/httpapi/frontend
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

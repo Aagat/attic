@@ -19,8 +19,42 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
-import { dateLabel, fileStore, safeUrl, type Item } from "../model";
-import { usePreview } from "../state";
+import { dateLabel, safeUrl, type Item } from "../model";
+import { useArchive, useArchiveQuery } from "../state";
+
+function SavedCapture({
+  item,
+  index,
+  reading,
+}: {
+  item: Item;
+  index: number;
+  reading: boolean;
+}) {
+  const { archive } = useArchive();
+  const { data: url, error } = useArchiveQuery(
+    `capture:${item.id}:${item.versions[index]?.id}:${reading}`,
+    (signal) => archive.captureURL(item, index, reading, signal),
+  );
+  if (error)
+    return (
+      <p role="alert" className="p-8 text-sm leading-7">
+        {error}
+      </p>
+    );
+  return url ? (
+    <iframe
+      title={reading ? "Saved reading version" : "Saved original layout"}
+      src={url}
+      sandbox=""
+      className="w-full min-h-[80dvh] border-0"
+    />
+  ) : (
+    <p role="status" className="p-8">
+      Opening saved copy…
+    </p>
+  );
+}
 const prose = [
   "Complex systems are usually built one decision at a time. Each addition feels locally reasonable: another setting, another status, another escape hatch. Yet the systems we return to are often the ones that ask less of us.",
   "Simplicity is not the absence of capability. It is the result of arranging capability so that the common path remains obvious. The archive that survives is the archive whose owner can trust it without tending it every day.",
@@ -28,13 +62,21 @@ const prose = [
 ];
 export function Reader() {
   const { id } = useParams();
-  const { items } = usePreview();
-  const item = items.find((i) => i.id === id);
+  const { archive } = useArchive();
+  const { data: item, error } = useArchiveQuery("item:" + id, (signal) =>
+    archive.get(id!, signal),
+  );
+  if (!item && !error)
+    return (
+      <main id="main" className="p-10" role="status">
+        Loading item…
+      </main>
+    );
   return item ? (
     <ReaderItem key={item.id} item={item} />
   ) : (
     <main id="main" className="p-10 text-center">
-      <h1 className="font-display text-3xl">This item is no longer here</h1>
+      <h1 className="font-display text-3xl">{error}</h1>
       <Link to="/" className="mt-5 inline-block underline">
         Return to library
       </Link>
@@ -42,7 +84,7 @@ export function Reader() {
   );
 }
 function ReaderItem({ item }: { item: Item }) {
-  const { setItems, notify, send, recapture } = usePreview();
+  const { archive, refresh, notify, send, recapture } = useArchive();
   const navigate = useNavigate();
   const [informationOpen, setInformationOpen] = useState(true);
   const [details, setDetails] = useState(false),
@@ -73,9 +115,10 @@ function ReaderItem({ item }: { item: Item }) {
     total = pdf?.numPages || item.pages || 1;
   const current = Math.min(page, total);
   useEffect(() => {
-    if (!item.fileId) return;
+    if (archive.preview ? !item.fileId : !item.hasPdf) return;
     let active = true;
-    fileStore("get", item.fileId)
+    archive
+      .pdf(item)
       .then((f) => {
         if (active) {
           setFile(f);
@@ -91,7 +134,7 @@ function ReaderItem({ item }: { item: Item }) {
     return () => {
       active = false;
     };
-  }, [item.fileId]);
+  }, [item.fileId, item.hasPdf, item.jobId, archive]);
   useEffect(() => {
     if (!file) return;
     let active = true;
@@ -170,7 +213,7 @@ function ReaderItem({ item }: { item: Item }) {
   function download() {
     if (!file) {
       notify(
-        "This sample has no original file. Upload a PDF to try downloading.",
+        "A PDF is not available yet. Try again after preparation finishes.",
       );
       return;
     }
@@ -183,7 +226,7 @@ function ReaderItem({ item }: { item: Item }) {
   }
   async function share() {
     if (!file) {
-      notify("Upload a PDF to try device sharing.");
+      notify("A PDF is not available for sharing yet.");
       return;
     }
     if (navigator.canShare?.({ files: [file] })) {
@@ -228,6 +271,12 @@ function ReaderItem({ item }: { item: Item }) {
                 Original site
               </a>
             )
+          )}
+          {!isPdf && file && (
+            <Button onClick={download}>
+              <Download size={15} />
+              Download PDF
+            </Button>
           )}
           <Button
             onClick={() => {
@@ -371,7 +420,12 @@ function ReaderItem({ item }: { item: Item }) {
                 <div
                   className={`mx-auto min-h-[700px] bg-[var(--paper)] p-6 shadow-sm sm:p-12 ${zoom === 75 ? "max-w-[510px]" : zoom === 100 ? "max-w-[680px]" : zoom === 125 ? "w-[850px]" : "w-[1020px]"}`}
                 >
-                  {item.fileId ? (
+                  {!archive.preview && !item.hasPdf ? (
+                    <p role="alert" className="text-sm">
+                      The original PDF is unavailable. Your saved record is
+                      still here.
+                    </p>
+                  ) : item.fileId || item.hasPdf ? (
                     <>
                       {pdfLoading && (
                         <p role="status" className="text-sm">
@@ -423,6 +477,27 @@ function ReaderItem({ item }: { item: Item }) {
                   )}
                 </div>
               </div>
+            ) : !archive.preview ? (
+              <>
+                {(["reading", "original"] as const).map((view) => (
+                  <Tabs.Content key={view} value={view}>
+                    {item.versions[version] ? (
+                      <SavedCapture
+                        item={item}
+                        index={version}
+                        reading={view === "reading"}
+                      />
+                    ) : (
+                      <div className="p-8 text-sm leading-7">
+                        Your link is saved.{" "}
+                        {item.capture === "Capture failed"
+                          ? "Capture failed. You can request a fresh capture."
+                          : "The saved page will appear when capture finishes."}
+                      </div>
+                    )}
+                  </Tabs.Content>
+                ))}
+              </>
             ) : (
               <>
                 <Tabs.Content
@@ -578,90 +653,29 @@ function ReaderItem({ item }: { item: Item }) {
               <div className="mt-3 rounded border border-[var(--line)] bg-[var(--paper)] p-4">
                 <p className="font-medium">{item.delivery}</p>
                 <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
-                  {item.delivery === "Email accepted"
-                    ? "The email relay accepted this document. This does not confirm arrival on your Kindle."
-                    : item.delivery === "Outcome uncertain"
-                      ? "The email acknowledgement was interrupted. Resending may create a duplicate."
-                      : item.delivery === "Delivery failed"
-                        ? "The email service could not accept the document. Your saved copy is safe."
-                        : item.delivery === "Preparing document"
-                          ? "Your item is saved. Document preparation and delivery are separate steps."
-                          : "Send this item when you want to read it on your Kindle."}
+                  {item.delivery === "Preparation failed"
+                    ? "Document preparation failed. Your saved copy is safe; you can try again."
+                    : item.delivery === "Email accepted"
+                      ? "The email relay accepted this document. This does not confirm arrival on your Kindle."
+                      : item.delivery === "Outcome uncertain"
+                        ? "The email acknowledgement was interrupted. Resending may create a duplicate."
+                        : item.delivery === "Delivery failed"
+                          ? "The email service could not accept the document. Your saved copy is safe."
+                          : item.delivery === "Preparing document"
+                            ? "Your item is saved. Document preparation and delivery are separate steps."
+                            : "Send this item when you want to read it on your Kindle."}
                 </p>
-                {["Delivery failed", "Outcome uncertain"].includes(
-                  item.delivery,
-                ) && (
+                {[
+                  "Preparation failed",
+                  "Delivery failed",
+                  "Outcome uncertain",
+                ].includes(item.delivery) && (
                   <Button className="mt-3" onClick={requestSend}>
                     Retry delivery
                   </Button>
                 )}
               </div>
             </section>
-            <details className="border-t border-[var(--line)] pt-4">
-              <summary className="text-[11px] text-[var(--muted)]">
-                Preview state controls
-              </summary>
-              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">
-                Try recovery states. These controls simulate server updates.
-              </p>
-              <label className="mt-3 grid gap-2">
-                Capture
-                <select
-                  className={input}
-                  aria-label="Capture"
-                  value={item.capture}
-                  onChange={(e) =>
-                    setItems((p) =>
-                      p.map((i) =>
-                        i.id === item.id
-                          ? { ...i, capture: e.target.value as Item["capture"] }
-                          : i,
-                      ),
-                    )
-                  }
-                >
-                  {[
-                    "Preserved",
-                    "Partial copy",
-                    "Capture failed",
-                    "Preserving",
-                    "Original PDF",
-                  ].map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="mt-3 grid gap-2">
-                Delivery
-                <select
-                  className={input}
-                  aria-label="Delivery"
-                  value={item.delivery}
-                  onChange={(e) =>
-                    setItems((p) =>
-                      p.map((i) =>
-                        i.id === item.id
-                          ? {
-                              ...i,
-                              delivery: e.target.value as Item["delivery"],
-                            }
-                          : i,
-                      ),
-                    )
-                  }
-                >
-                  {[
-                    "Not requested",
-                    "Preparing document",
-                    "Email accepted",
-                    "Delivery failed",
-                    "Outcome uncertain",
-                  ].map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </label>
-            </details>
           </aside>
         </div>
       </Tabs.Root>
@@ -676,27 +690,26 @@ function ReaderItem({ item }: { item: Item }) {
           className="grid gap-5"
           onSubmit={async (e) => {
             e.preventDefault();
-            await setItems((p) =>
-              p.map((i) =>
-                i.id === item.id
-                  ? {
-                      ...i,
-                      title: title.trim() || i.title,
-                      notes,
-                      tags: [
-                        ...new Set(
-                          tags
-                            .split(",")
-                            .map((t) => t.trim())
-                            .filter(Boolean),
-                        ),
-                      ],
-                    }
-                  : i,
-              ),
-            );
-            setDetails(false);
-            notify("Notes and tags saved on this device.");
+            try {
+              await archive.edit({
+                ...item,
+                title: title.trim() || item.title,
+                notes,
+                tags: [
+                  ...new Set(
+                    tags
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean),
+                  ),
+                ],
+              });
+              refresh();
+              setDetails(false);
+              notify("Notes and tags saved.");
+            } catch (e) {
+              notify((e as Error).message);
+            }
           }}
         >
           <label className="grid gap-2 text-xs">
@@ -747,24 +760,28 @@ function ReaderItem({ item }: { item: Item }) {
               onChange={(e) => setTags(e.target.value)}
             />
           </label>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[var(--muted)]">Suggested tag</span>
-            <Button
-              type="button"
-              onClick={() =>
-                setTags((t) =>
-                  t
-                    .split(",")
-                    .map((s) => s.trim())
-                    .includes("reference")
-                    ? t
-                    : [t, "reference"].filter(Boolean).join(", "),
-                )
-              }
-            >
-              <Plus size={12} />
-              reference
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {(item.suggestedTags || []).map((tag) => (
+              <Button
+                type="button"
+                key={tag}
+                onClick={() =>
+                  setTags((t) =>
+                    [
+                      ...new Set([
+                        ...t
+                          .split(",")
+                          .map((v) => v.trim())
+                          .filter(Boolean),
+                        tag,
+                      ]),
+                    ].join(", "),
+                  )
+                }
+              >
+                + {tag}
+              </Button>
+            ))}
           </div>
           <div className="flex flex-wrap justify-between gap-3 border-t border-[var(--line)] pt-5">
             <Button
@@ -785,7 +802,7 @@ function ReaderItem({ item }: { item: Item }) {
         open={remove}
         onOpenChange={setRemove}
         title="Remove this item?"
-        description="This removes the item and its local saved file from this preview. Browser bookmarks are not changed."
+        description="This permanently removes the item and its saved copies from Attic. Browser bookmarks are not changed."
       >
         <p className="font-display text-xl">{item.title}</p>
         <div className="mt-6 flex justify-end gap-3">
@@ -794,10 +811,10 @@ function ReaderItem({ item }: { item: Item }) {
             className="bg-[var(--danger)]! text-[var(--paper)]"
             onClick={async () => {
               try {
-                if (item.fileId) await fileStore("delete", item.fileId);
-                setItems((p) => p.filter((i) => i.id !== item.id));
+                await archive.remove(item.id);
+                refresh();
                 navigate("/");
-                notify("Item removed from this preview.");
+                notify("Item removed.");
               } catch {
                 notify("Could not remove the local file. Please try again.");
               }
@@ -811,7 +828,7 @@ function ReaderItem({ item }: { item: Item }) {
         open={resend}
         onOpenChange={setResend}
         title="Send this document again?"
-        description="A previous attempt may already have reached your Kindle. Sending again may create a duplicate. This preview does not send real emails."
+        description="A previous attempt may already have reached your Kindle. Sending again may create a duplicate."
       >
         <div className="flex justify-end gap-3">
           <Button onClick={() => setResend(false)}>Cancel</Button>

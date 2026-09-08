@@ -10,10 +10,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon-192.png", "icon-512.png"],
       manifest: {
-        name: "Attic — UI Preview",
+        name: "Attic",
         short_name: "Attic",
-        description:
-          "Your personal archive. Interactive UI preview with local sample data.",
+        description: "Your personal archive of links and PDFs.",
         theme_color: "#FCFAF7",
         background_color: "#FCFAF7",
         display: "standalone",
@@ -32,9 +31,23 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,mjs,css,html,png,woff2}"],
         navigateFallback: "/index.html",
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/connect\.html/,
+          /^\/extension/,
+        ],
       },
     }),
   ],
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      "/api": "http://localhost:8080",
+      "/connect.html": "http://localhost:8080",
+      "/connect.js": "http://localhost:8080",
+      "/extension": "http://localhost:8080",
+    },
+  },
   preview: { port: 4173, strictPort: true },
 });

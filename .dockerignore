@@ -9,3 +9,15 @@
 !migrations/
 !migrations/**
 **/*_test.go
+
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!ui/
+!ui/**
+ui/node_modules/
+ui/dist/
+ui/test-results/
+ui/playwright-report/
+
+**/._*

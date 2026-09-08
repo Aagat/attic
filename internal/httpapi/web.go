@@ -19,6 +19,9 @@ import (
 var webAssets embed.FS
 
 func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
+	if serveFrontend(w, r) {
+		return true
+	}
 	if s.serveExtension(w, r) {
 		return true
 	}

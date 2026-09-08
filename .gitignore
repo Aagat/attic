@@ -8,3 +8,6 @@ node_modules/
 /ui/test-results/
 /ui/playwright-report/
 *.tsbuildinfo
+
+/internal/httpapi/frontend/*
+!/internal/httpapi/frontend/README.txt

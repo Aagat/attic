@@ -54,6 +54,24 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		return true
 	}
 	tail := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/items"), "/")
+	if tail == "status" {
+		if r.Method != "GET" {
+			methodNotAllowed(w, "GET", correlation)
+			return true
+		}
+		_, total, err := s.library.List(r.Context(), 1, 0)
+		if err != nil {
+			fail(err)
+			return true
+		}
+		bytes, err := s.library.StorageBytes(r.Context())
+		if err != nil {
+			fail(err)
+			return true
+		}
+		respond(200, map[string]any{"total": total, "storage_bytes": bytes, "kindle_configured": s.library.KindleConfigured(), "search_configured": s.search != nil})
+		return true
+	}
 	if tail == "" {
 		switch r.Method {
 		case "GET":
@@ -71,12 +89,12 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			total := 0
 			totalEstimated := false
 			snippets := map[string]string{}
-			if q.Get("q") != "" || q.Get("tag") != "" || q.Get("domain") != "" || q.Get("from") != "" || q.Get("to") != "" || q.Get("capture_status") != "" {
+			if q.Get("kind") != "" || q.Get("q") != "" || q.Get("tag") != "" || q.Get("domain") != "" || q.Get("from") != "" || q.Get("to") != "" || q.Get("capture_status") != "" {
 				if s.search == nil {
 					fail(search.ErrUnavailable)
 					return true
 				}
-				query := search.Query{Text: q.Get("q"), Tags: q["tag"], Domain: q.Get("domain"), CaptureStatus: q.Get("capture_status"), Limit: limit, Offset: offset}
+				query := search.Query{Kind: q.Get("kind"), Text: q.Get("q"), Tags: q["tag"], Domain: q.Get("domain"), CaptureStatus: q.Get("capture_status"), Limit: limit, Offset: offset}
 				for name, target := range map[string]**time.Time{"from": &query.From, "to": &query.To} {
 					if raw := q.Get(name); raw != "" {
 						t, err := time.Parse(time.RFC3339, raw)
@@ -212,10 +230,14 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		}
 		return true
 	}
-	if tail == "export" && r.Method == "GET" {
+	if tail == "export" && (r.Method == "GET" || r.Method == "HEAD") {
 		http.NewResponseController(w).SetWriteDeadline(time.Now().Add(30 * time.Minute))
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", `attachment; filename="attic.zip"`)
+		if r.Method == "HEAD" {
+			w.WriteHeader(200)
+			return true
+		}
 		if err := s.library.Export(r.Context(), w); err != nil {
 			panic(http.ErrAbortHandler)
 		}
@@ -254,7 +276,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 	}
 	parts := strings.Split(tail, "/")
 	id := parts[0]
-	if len(parts) == 3 && parts[1] == "captures" && r.Method == "GET" {
+	if len(parts) == 3 && parts[1] == "captures" && (r.Method == "GET" || r.Method == "HEAD") {
 		body, err := s.library.OpenCapture(r.Context(), id, parts[2])
 		if err != nil {
 			fail(err)
@@ -281,14 +303,18 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("Referrer-Policy", "no-referrer")
-			w.Write(html)
+			if r.Method == "GET" {
+				w.Write(html)
+			}
 			return true
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		io.Copy(w, body)
+		if r.Method == "GET" {
+			io.Copy(w, body)
+		}
 		return true
 	}
 	if len(parts) == 2 && r.Method == "POST" {

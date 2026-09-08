@@ -6,7 +6,9 @@
     "dev": "pnpm --filter @attic/ui dev",
     "build": "pnpm --filter @attic/ui build",
     "preview": "pnpm --filter @attic/ui preview",
-    "test:ui": "pnpm --filter @attic/ui test"
+    "test:ui": "pnpm --filter @attic/ui test",
+    "build:preview": "VITE_UI_PREVIEW=true pnpm build",
+    "build:embed": "pnpm build && node ui/embed.mjs"
   },
   "devDependencies": {
     "prettier": "^3.9.6"

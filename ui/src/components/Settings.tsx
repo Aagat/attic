@@ -10,172 +10,96 @@ import {
   Smartphone,
   Download,
   Send,
-  Check,
   ExternalLink,
-  Globe,
 } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
-import { makeItem, safeUrl, seed, validItems, type Item } from "../model";
-import { usePreview } from "../state";
+import { Badge, Brand, Button, SectionLabel, input } from "./primitives";
+import { safeUrl } from "../model";
+import { useArchive, useArchiveQuery } from "../state";
 export function SettingsPage() {
-  const { items, setItems, openUpload, notify } = usePreview();
+  const { archive, refresh, openUpload, logout, notify } = useArchive();
+  const { data: status, error } = useArchiveQuery("status", () =>
+    archive.status(),
+  );
   const [busy, setBusy] = useState(false),
-    [result, setResult] = useState(""),
-    [reset, setReset] = useState(false),
-    [empty, setEmpty] = useState(false);
+    [result, setResult] = useState("");
   const importer = useRef<HTMLInputElement>(null),
     restore = useRef<HTMLInputElement>(null);
-  async function importFile(file?: File, restoring = false) {
+  async function transfer(
+    file: File | undefined,
+    action: "import" | "restore",
+  ) {
     if (!file) return;
     setBusy(true);
-    setResult("");
     try {
-      if (file.size > 10 * 1024 * 1024)
-        throw new Error("Choose a file smaller than 10 MB for this preview.");
-      const text = await file.text();
-      let incoming: Item[];
-      let skipped = 0;
-      if (restoring) {
-        const data = JSON.parse(text);
-        if (data.format !== "attic-ui-preview-v1" || !validItems(data.items))
-          throw new Error(
-            "Choose an Attic UI preview JSON export. Server archive restore will be added during integration.",
-          );
-        incoming = data.items;
-      } else {
-        const doc = new DOMParser().parseFromString(text, "text/html");
-        const links = [...doc.querySelectorAll("a[href]")];
-        incoming = links.flatMap((a) => {
-          const url = safeUrl(a.getAttribute("href") || "");
-          if (!url) {
-            skipped++;
-            return [];
-          }
-          return [
-            {
-              ...makeItem(url),
-              title: a.textContent?.trim() || new URL(url).hostname,
-              folder: "Imported browser bookmarks",
-            },
-          ];
-        });
-        if (!incoming.length)
-          throw new Error(
-            "No valid web bookmarks were found in this HTML file.",
-          );
-      }
-      const merged = [...items];
-      let added = 0,
-        duplicates = 0;
-      for (const next of incoming) {
-        if (
-          merged.some(
-            (i) => i.id === next.id || (next.url && i.url === next.url),
-          )
-        ) {
-          duplicates++;
-          continue;
-        }
-        merged.push({ ...next, delivery: "Not requested" });
-        added++;
-      }
-      setItems(merged);
-      setResult(
-        `${added} added · ${duplicates} merged · ${skipped} skipped. Existing notes and tags kept. No sites visited or emails sent.`,
-      );
-      notify(
-        restoring
-          ? "Preview records restored."
-          : "Browser bookmarks imported into the preview.",
-      );
+      setResult(await archive.transfer(action, file));
+      refresh();
     } catch (e) {
-      setResult(e instanceof Error ? e.message : "Unable to read this file.");
+      setResult((e as Error).message);
     } finally {
       setBusy(false);
       if (importer.current) importer.current.value = "";
       if (restore.current) restore.current.value = "";
     }
   }
-  function exportRecords() {
-    const blob = new Blob(
-      [JSON.stringify({ format: "attic-ui-preview-v1", items }, null, 2)],
-      { type: "application/json" },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "attic-ui-preview.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setResult(
-      "Preview records exported. Local PDF files are not included; this is not a full archive backup.",
-    );
+  async function backup() {
+    setBusy(true);
+    try {
+      const download = await archive.export();
+      const a = document.createElement("a");
+      a.href = download.url;
+      a.download = download.filename;
+      a.click();
+      if (download.release) setTimeout(download.release, 10000);
+      setResult(
+        "Archive download started. Check your browser downloads for completion.",
+      );
+    } catch (e) {
+      setResult((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <main id="main" className="mx-auto max-w-[1600px] px-5 pb-28 pt-8 sm:px-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl">Settings</h1>
-          <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
-            Manage storage, imports, backups, and required connections.
-          </p>
-        </div>
-      </div>
+      <h1 className="font-display text-4xl">Settings</h1>
+      <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
+        Manage storage, imports, backups, and required connections.
+      </p>
+      {error && <p role="alert">{error}</p>}
       <section className="mt-6 grid gap-7 border border-[var(--line)] bg-[var(--paper)] p-6 md:grid-cols-[220px_1fr_230px]">
         <div>
-          <SectionLabel>Storage used · sample</SectionLabel>
-          <p className="font-display mt-3 text-4xl">38.4 GB</p>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            {items.length} items in this preview
+          <SectionLabel>Stored files</SectionLabel>
+          <p className="font-display mt-3 text-4xl">
+            {status
+              ? `${(status.storageBytes / 1024 / 1024).toFixed(1)} MB`
+              : "…"}
           </p>
+          <p className="mt-2 text-xs">{status?.total ?? "…"} saved items</p>
         </div>
-        <div className="flex flex-col justify-center">
-          <div
-            role="img"
-            aria-label="Sample storage: saved pages 25.6 GB, PDFs 11.9 GB, records and indexes 0.9 GB"
-            className="flex h-3 gap-0.5 overflow-hidden rounded-sm"
-          >
-            <span className="w-2/3 bg-[var(--accent)]" />
-            <span className="w-[31%] bg-[var(--warning)]" />
-            <span className="flex-1 bg-[var(--line)]" />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-4 text-[10px] text-[var(--muted)]">
-            <span>Saved pages · 25.6 GB</span>
-            <span>PDFs · 11.9 GB</span>
-            <span>Records & indexes · 0.9 GB</span>
-          </div>
-          <p className="mt-4 text-[11px] leading-5 text-[var(--muted)]">
-            Nothing is pruned automatically. Remove saved content explicitly
-            from its item page.
+        <p className="self-center text-xs leading-6 text-[var(--muted)]">
+          Nothing is pruned automatically. Remove saved content explicitly from
+          its item page. Storage shown includes preserved files.
+        </p>
+        <div className="space-y-4 text-xs">
+          <SectionLabel>Connections</SectionLabel>
+          <p>
+            Kindle delivery ·{" "}
+            {status ? (status.kindle ? "Configured" : "Not configured") : "…"}
           </p>
-        </div>
-        <div className="border-t border-[var(--line)] pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
-          <SectionLabel>Connections · sample</SectionLabel>
-          <div className="mt-4 flex items-center justify-between text-xs">
-            <span>Kindle delivery</span>
-            <Badge tone="success">Configured</Badge>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-xs">
-            <span>Search</span>
-            <Badge tone="success">Available</Badge>
-          </div>
-          <p className="mt-3 text-[10px] text-[var(--muted)]">
-            Server managed · not connected
+          <p>
+            Search ·{" "}
+            {status ? (status.search ? "Configured" : "Not configured") : "…"}
           </p>
+          <p className="text-[var(--muted)]">Managed on the server</p>
         </div>
       </section>
-      <div className="mb-5 mt-9 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-2xl">Import and backup</h2>
-        <span className="text-[11px] text-[var(--muted)]">
-          Preview actions work with local records.
-        </span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <h2 className="font-display mt-9 mb-6 text-2xl">Import and backup</h2>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           {
             title: "Upload PDF",
-            body: "Keep the original file unchanged. Open it in the reader on this device.",
+            body: "Keep the original file unchanged. Open it in the reader.",
             label: "Choose PDF",
             icon: Upload,
             action: openUpload,
@@ -189,15 +113,17 @@ export function SettingsPage() {
           },
           {
             title: "Export archive",
-            body: "Try a preview records export. Full backups with preserved files await integration.",
-            label: "Export preview records",
+            body: archive.preview
+              ? "Export local preview records."
+              : "Download a ZIP with your records and preserved files.",
+            label: "Export archive",
             icon: Archive,
-            action: exportRecords,
+            action: backup,
           },
           {
             title: "Restore archive",
-            body: "Merge a preview JSON export safely. Local PDF files must remain on this device.",
-            label: "Choose preview export",
+            body: "Merge an Attic archive. Existing records are kept. Restoring does not revisit sites or send documents.",
+            label: "Choose archive",
             icon: RotateCcw,
             action: () => restore.current?.click(),
           },
@@ -206,7 +132,7 @@ export function SettingsPage() {
             key={title}
             className="flex min-h-[230px] flex-col items-start border border-[var(--line)] bg-[var(--paper)] p-5"
           >
-            <Icon size={20} className="text-[var(--muted)]" />
+            <Icon size={20} />
             <h3 className="font-display mt-4 text-2xl">{title}</h3>
             <p className="mb-6 mt-3 text-xs leading-6 text-[var(--muted)]">
               {body}
@@ -226,89 +152,42 @@ export function SettingsPage() {
         ref={importer}
         aria-label="Import HTML bookmarks"
         type="file"
-        accept=".html,.htm,text/html"
-        className="hidden"
-        onChange={(e) => void importFile(e.target.files?.[0])}
+        accept=".html,.htm"
+        hidden
+        onChange={(e) => void transfer(e.target.files?.[0], "import")}
       />
       <input
         ref={restore}
-        aria-label="Restore preview records"
+        aria-label="Restore archive"
         type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={(e) => void importFile(e.target.files?.[0], true)}
+        accept={archive.preview ? ".json" : ".zip"}
+        hidden
+        onChange={(e) => void transfer(e.target.files?.[0], "restore")}
       />
       {(busy || result) && (
-        <div
-          role="status"
-          className="mt-5 rounded border border-[var(--line)] bg-[var(--paper)] p-5 text-sm leading-6"
-        >
-          {busy ? "Checking records…" : result}
-        </div>
+        <p role="status" className="mt-5 p-5 border border-[var(--line)]">
+          {busy ? "Processing archive…" : result}
+        </p>
       )}
-      <section className="mt-8 flex flex-wrap items-center justify-between gap-5 border-y border-[var(--line)] py-6">
+      <section className="mt-8 flex items-center justify-between gap-5 border-y border-[var(--line)] py-6">
         <div>
           <h2 className="font-display text-2xl">Save from anywhere</h2>
-          <p className="mt-2 text-xs text-[var(--muted)]">
+          <p className="mt-2 text-xs">
             Your browser, your phone, your everyday tools.
           </p>
         </div>
-        <Link
-          to="/setup"
-          className="inline-flex min-h-11 items-center gap-2 rounded border border-[var(--line)] bg-[var(--paper)] px-4 text-xs"
-        >
+        <Link to="/setup" className="underline text-xs">
           Set up sharing
-          <ExternalLink size={14} />
         </Link>
       </section>
-      <section className="mt-8">
-        <SectionLabel>Try the preview</SectionLabel>
-        <p className="mb-4 mt-2 text-xs leading-6 text-[var(--muted)]">
-          Explore first use or reset sample records. These controls affect only
-          this UI preview.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            to="/connect"
-            className="inline-flex min-h-11 items-center rounded border border-[var(--line)] bg-[var(--paper)] px-4 text-xs"
-          >
-            Preview connection screen
-          </Link>
-          <Button onClick={() => setEmpty(true)}>Try empty library</Button>
-          <Button onClick={() => setReset(true)}>Reset sample data</Button>
-        </div>
-      </section>
-      <Modal
-        open={reset || empty}
-        onOpenChange={() => {
-          setReset(false);
-          setEmpty(false);
-        }}
-        title={empty ? "Try an empty library?" : "Reset preview records?"}
-        description="This replaces the current preview records. Export them first if you want to keep your changes. Uploaded PDF files remain on this device."
-      >
-        <div className="flex justify-end gap-3">
-          <Button
-            onClick={() => {
-              setReset(false);
-              setEmpty(false);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            primary
-            onClick={() => {
-              setItems(empty ? [] : structuredClone(seed));
-              setReset(false);
-              setEmpty(false);
-              notify("Preview records updated.");
-            }}
-          >
-            Continue
-          </Button>
-        </div>
-      </Modal>
+      {!archive.preview && (
+        <Button
+          className="mt-8"
+          onClick={() => logout().catch((e) => notify(e.message))}
+        >
+          Sign out
+        </Button>
+      )}
     </main>
   );
 }
@@ -317,7 +196,7 @@ interface InstallEvent extends Event {
   userChoice: Promise<{ outcome: string }>;
 }
 export function SetupPage() {
-  const { notify } = usePreview();
+  const { notify, archive } = useArchive();
   const [install, setInstall] = useState<InstallEvent>(),
     [bookmarks, setBookmarks] = useState(false),
     [extensionState, setExtensionState] = useState("Connected");
@@ -389,91 +268,100 @@ export function SetupPage() {
               information stays separate from your tags and notes.
             </p>
           </div>
-          <div className="rounded border border-[var(--line)] bg-[var(--paper)] p-6">
-            <div className="flex items-center justify-between">
-              <Brand />
-              <Badge
-                tone={extensionState === "Connected" ? "success" : "warning"}
-              >
-                {extensionState}
-              </Badge>
-            </div>
-            <SectionLabel>
-              <span className="mt-6 block">
-                Extension popup · interactive preview
-              </span>
-            </SectionLabel>
-            <h3 className="font-display my-4 text-2xl">
-              The unreasonable effectiveness of simple systems
-            </h3>
-            <p className="mb-5 text-xs text-[var(--muted)]">
-              worksinprogress.co
-            </p>
-            <div className="grid gap-3">
-              <Button
-                primary
-                onClick={() =>
-                  notify(
-                    extensionState === "Connected"
-                      ? "Extension save acknowledged (simulation). Capture pending."
-                      : "Save queued locally (simulation). It will retry when connected.",
-                  )
-                }
-              >
-                <Bookmark size={16} />
-                Bookmark
-              </Button>
-              <Button
-                onClick={() =>
-                  notify(
-                    extensionState === "Connected"
-                      ? "Saved; Kindle preparation queued (simulation)."
-                      : "Kindle request queued locally (simulation).",
-                  )
-                }
-              >
-                <Send size={16} />
-                Send to Kindle
-              </Button>
-              <label className="mt-4 flex items-start gap-3 text-xs leading-6">
-                <input
-                  className="mt-1"
-                  type="checkbox"
-                  checked={bookmarks}
-                  onChange={(e) => {
-                    setBookmarks(e.target.checked);
-                    notify(
-                      e.target.checked
-                        ? "Permission flow simulated. A real extension will request browser bookmark access."
-                        : "Automatic bookmark sync disabled in the preview.",
-                    );
-                  }}
-                />
-                Automatically save browser bookmarks
-              </label>
-              {bookmarks && (
-                <Badge tone="success">10,482 synced · sample</Badge>
-              )}
-              <label className="mt-3 grid gap-2 text-xs">
-                Try a connection state
-                <select
-                  className={input}
-                  value={extensionState}
-                  onChange={(e) => setExtensionState(e.target.value)}
+          {archive.preview ? (
+            <div className="rounded border border-[var(--line)] bg-[var(--paper)] p-6">
+              <div className="flex items-center justify-between">
+                <Brand />
+                <Badge
+                  tone={extensionState === "Connected" ? "success" : "warning"}
                 >
-                  {[
-                    "Connected",
-                    "Disconnected",
-                    "Invalid credentials",
-                    "Server unavailable",
-                    "Permission denied",
-                  ].map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
+                  {extensionState}
+                </Badge>
+              </div>
+              <SectionLabel>
+                <span className="mt-6 block">
+                  Extension popup · interactive preview
+                </span>
+              </SectionLabel>
+              <h3 className="font-display my-4 text-2xl">
+                The unreasonable effectiveness of simple systems
+              </h3>
+              <p className="mb-5 text-xs text-[var(--muted)]">
+                worksinprogress.co
+              </p>
+              <div className="grid gap-3">
+                <Button
+                  primary
+                  onClick={() =>
+                    notify(
+                      extensionState === "Connected"
+                        ? "Extension save acknowledged (simulation). Capture pending."
+                        : "Save queued locally (simulation). It will retry when connected.",
+                    )
+                  }
+                >
+                  <Bookmark size={16} />
+                  Bookmark
+                </Button>
+                <Button
+                  onClick={() =>
+                    notify(
+                      extensionState === "Connected"
+                        ? "Saved; Kindle preparation queued (simulation)."
+                        : "Kindle request queued locally (simulation).",
+                    )
+                  }
+                >
+                  <Send size={16} />
+                  Send to Kindle
+                </Button>
+                <label className="mt-4 flex items-start gap-3 text-xs leading-6">
+                  <input
+                    className="mt-1"
+                    type="checkbox"
+                    checked={bookmarks}
+                    onChange={(e) => {
+                      setBookmarks(e.target.checked);
+                      notify(
+                        e.target.checked
+                          ? "Permission flow simulated. A real extension will request browser bookmark access."
+                          : "Automatic bookmark sync disabled in the preview.",
+                      );
+                    }}
+                  />
+                  Automatically save browser bookmarks
+                </label>
+                {bookmarks && (
+                  <Badge tone="success">10,482 synced · sample</Badge>
+                )}
+                <label className="mt-3 grid gap-2 text-xs">
+                  Try a connection state
+                  <select
+                    className={input}
+                    value={extensionState}
+                    onChange={(e) => setExtensionState(e.target.value)}
+                  >
+                    {[
+                      "Connected",
+                      "Disconnected",
+                      "Invalid credentials",
+                      "Server unavailable",
+                      "Permission denied",
+                    ].map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
-          </div>
+          ) : (
+            <a
+              href="/connect.html"
+              className="self-start rounded border border-[var(--line)] p-6 text-sm underline"
+            >
+              Connect browser extension and Apple Shortcut
+            </a>
+          )}
         </Tabs.Content>
         <Tabs.Content value="android" className="mt-7 max-w-2xl">
           <h2 className="font-display text-3xl">Attic in your share sheet</h2>
@@ -501,12 +389,11 @@ export function SetupPage() {
             }}
           >
             <Download size={16} />
-            Install Attic preview
+            Install Attic
           </Button>
           <p className="mt-6 text-xs leading-6 text-[var(--muted)]">
-            The installed preview accepts shared links into local sample data.
-            Server integration will be required to preserve pages or send
-            documents.
+            Shared links open in Attic for you to save. Connect to your server
+            to preserve pages and send documents.
           </p>
         </Tabs.Content>
         <Tabs.Content value="ios" className="mt-7 max-w-2xl">
@@ -523,22 +410,23 @@ export function SetupPage() {
           </ol>
           <div className="rounded bg-[var(--accent-soft)] p-5 text-sm leading-7">
             iOS uses an Apple Shortcut for saving links; it does not support the
-            Android PWA share target. Shortcut connection will be included
-            during integration.
+            Android PWA share target. Open the browser connection guide to
+            configure your Shortcut.
           </div>
         </Tabs.Content>
       </Tabs.Root>
       <p className="mt-10 border-t border-[var(--line)] pt-5 text-xs leading-6 text-[var(--muted)]">
-        Preserved pages no longer rely on the original website. Your real
-        archive will still need a connection to the Attic server. This local
-        preview is not a fully offline archive.
+        Preserved pages no longer rely on the original website. Your archive
+        requires a connection to the Attic server to retrieve saved content.
       </p>
     </main>
   );
 }
 export function ConnectPage() {
   const navigate = useNavigate();
-  const [server, setServer] = useState("https://attic.home"),
+  const { login, archive } = useArchive();
+  const [busy, setBusy] = useState(false);
+  const [server, setServer] = useState(window.location.origin),
     [key, setKey] = useState(""),
     [error, setError] = useState("");
   return (
@@ -563,24 +451,35 @@ export function ConnectPage() {
       <section className="flex items-center justify-center p-8 md:p-16">
         <form
           className="w-full max-w-sm"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             if (!safeUrl(server) || !key.trim()) {
-              setError("Enter a valid server URL and any sample access key.");
+              setError("Enter your access key.");
               return;
             }
-            navigate("/");
+            setBusy(true);
+            setError("");
+            try {
+              await login(key.trim());
+              setKey("");
+              if (window.location.pathname === "/connect") navigate("/");
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           <h2 className="font-display text-3xl">Connect to Attic</h2>
           <p className="mb-8 mt-3 text-sm leading-6 text-[var(--muted)]">
-            Preview this flow with a sample key. No credentials are sent or
-            stored.
+            Enter the access key for this Attic server. Your browser keeps a
+            private session cookie.
           </p>
           <label className="mb-5 grid gap-2 text-[10px] uppercase tracking-wider">
             Server address
             <input
               className={input}
+              readOnly={!archive.preview}
               type="url"
               required
               value={server}
@@ -596,7 +495,7 @@ export function ConnectPage() {
               autoComplete="off"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder="Use any sample key"
+              placeholder="Server access key"
             />
           </label>
           {error && (
@@ -604,15 +503,17 @@ export function ConnectPage() {
               {error}
             </p>
           )}
-          <Button primary type="submit" className="w-full">
+          <Button disabled={busy} primary type="submit" className="w-full">
             Connect to Attic
           </Button>
-          <Link
-            to="/"
-            className="mt-6 block text-center text-xs text-[var(--muted)] underline"
-          >
-            Skip to UI preview
-          </Link>
+          {archive.preview && (
+            <Link
+              to="/"
+              className="mt-6 block text-center text-xs text-[var(--muted)] underline"
+            >
+              Skip to UI preview
+            </Link>
+          )}
         </form>
       </section>
     </main>

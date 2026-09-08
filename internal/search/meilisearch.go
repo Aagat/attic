@@ -182,6 +182,12 @@ func (m *Meilisearch) Search(ctx context.Context, q Query) (Result, error) {
 	for _, tag := range q.Tags {
 		filters = append(filters, "tags = "+quoted(tag))
 	}
+	if q.Kind != "" {
+		if q.Kind != "bookmark" && q.Kind != "pdf" {
+			return Result{}, ErrInvalid
+		}
+		filters = append(filters, "kind = "+quoted(q.Kind))
+	}
 	if q.Domain != "" {
 		filters = append(filters, "domain = "+quoted(q.Domain))
 	}
