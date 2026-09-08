@@ -3,8 +3,6 @@
 package config
 
 import (
-	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"strconv"
@@ -36,7 +34,6 @@ type Config struct {
 	AI      AIConfig
 	Browser BrowserConfig
 	PDF     PDFConfig
-	SMTP    SMTPConfig
 }
 
 type BrowserConfig struct {
@@ -66,17 +63,6 @@ type AIConfig struct {
 	MaxRetries          int
 }
 
-type SMTPConfig struct {
-	Enabled     bool
-	Host        string
-	Port        int
-	TLSMode     string
-	Username    string
-	Password    string
-	Sender      string
-	Destination string
-}
-
 type ValidationError struct {
 	Fields []string
 }
@@ -104,10 +90,6 @@ func LoadFrom(get func(string) string) (Config, error) {
 	if omitReasoningEffort {
 		reasoningEffort = ""
 	}
-	aiAPIKey := get("AI_API_KEY")
-	if strings.TrimSpace(aiAPIKey) == "" {
-		aiAPIKey = get("OPENAI_API_KEY")
-	}
 	config := Config{
 		ListenAddress:  valueOr(get("LISTEN_ADDRESS"), ":8080"),
 		PublicBaseURL:  valueOr(get("PUBLIC_BASE_URL"), "http://localhost:8080"),
@@ -123,7 +105,7 @@ func LoadFrom(get func(string) string) (Config, error) {
 			Provider:            valueOr(get("AI_PROVIDER"), "api"),
 			AuthFile:            valueOr(get("CHATGPT_AUTH_FILE"), "/data/auth/chatgpt.json"),
 			BaseURL:             get("AI_BASE_URL"),
-			APIKey:              aiAPIKey,
+			APIKey:              get("AI_API_KEY"),
 			Model:               valueOr(get("AI_MODEL"), DefaultAIModel),
 			ReasoningEffort:     reasoningEffort,
 			OmitReasoningEffort: omitReasoningEffort,
@@ -132,15 +114,6 @@ func LoadFrom(get func(string) string) (Config, error) {
 		},
 		Browser: BrowserConfig{Executable: valueOr(get("BROWSER_EXECUTABLE"), "/usr/bin/chromium"), NavigationTimeout: 30 * time.Second, RenderTimeout: 45 * time.Second, Concurrency: 1, MaxRedirects: 5, MaxDOMBytes: 10_000_000, MaxDOMNodes: 100_000, MaxScreenshotBytes: 5_000_000, MaxTransferredBytes: 20_000_000, ScreenshotWidth: 1280, ScreenshotHeight: 1600},
 		PDF:     PDFConfig{MaxBytes: 25_000_000, Timeout: 45 * time.Second, MarginMM: 12, BodyFontPT: 11, LineHeight: 1.25},
-		SMTP: SMTPConfig{
-			Host:        get("SMTP_HOST"),
-			Port:        587,
-			TLSMode:     valueOr(get("SMTP_TLS_MODE"), "starttls"),
-			Username:    get("SMTP_USERNAME"),
-			Password:    get("SMTP_PASSWORD"),
-			Sender:      get("SMTP_SENDER"),
-			Destination: get("SMTP_DESTINATION"),
-		},
 	}
 	parseDuration := func(key string, target *time.Duration) error {
 		raw := strings.TrimSpace(get(key))
@@ -241,13 +214,6 @@ func LoadFrom(get func(string) string) (Config, error) {
 		return Config{}, &ValidationError{Fields: []string{"AI_OMIT_RESPONSE_FORMAT"}}
 	}
 	config.AI.OmitResponseFormat = omitResponseFormat
-	if rawPort := strings.TrimSpace(get("SMTP_PORT")); rawPort != "" {
-		port, parseErr := strconv.Atoi(rawPort)
-		if parseErr != nil {
-			return Config{}, &ValidationError{Fields: []string{"SMTP_PORT"}}
-		}
-		config.SMTP.Port = port
-	}
 	if rawMin := strings.TrimSpace(get("DB_POOL_MIN")); rawMin != "" {
 		poolMin, parseErr := strconv.Atoi(rawMin)
 		if parseErr != nil {
@@ -262,11 +228,6 @@ func LoadFrom(get func(string) string) (Config, error) {
 		}
 		config.DBPoolMax = poolMax
 	}
-	smtpEnabled, err := parseBool(get("SMTP_ENABLED"), false)
-	if err != nil {
-		return Config{}, &ValidationError{Fields: []string{"SMTP_ENABLED"}}
-	}
-	config.SMTP.Enabled = smtpEnabled
 	if err := config.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -349,18 +310,6 @@ func (c Config) Validate() error {
 	if c.PDF.MaxBytes < 1 || c.PDF.Timeout <= 0 || c.PDF.MarginMM <= 0 || c.PDF.MarginMM > 50 || c.PDF.BodyFontPT < 6 || c.PDF.BodyFontPT > 30 || c.PDF.LineHeight < 1 || c.PDF.LineHeight > 3 {
 		fields = append(fields, "PDF_LIMITS")
 	}
-	if c.SMTP.Enabled {
-		require("SMTP_HOST", c.SMTP.Host)
-		require("SMTP_SENDER", c.SMTP.Sender)
-		require("SMTP_DESTINATION", c.SMTP.Destination)
-		require("SMTP_PASSWORD", c.SMTP.Password)
-		if c.SMTP.Port <= 0 {
-			fields = append(fields, "SMTP_PORT")
-		}
-		if c.SMTP.TLSMode != "implicit_tls" && c.SMTP.TLSMode != "starttls" {
-			fields = append(fields, "SMTP_TLS_MODE")
-		}
-	}
 	if len(fields) > 0 {
 		return &ValidationError{Fields: uniqueStrings(fields)}
 	}
@@ -396,13 +345,4 @@ func uniqueStrings(values []string) []string {
 		result = append(result, value)
 	}
 	return result
-}
-
-// Secret values must never be formatted into errors.  This helper is useful
-// to callers validating additional fields in future configuration groups.
-func SafeFieldError(field string) error {
-	if strings.TrimSpace(field) == "" {
-		return errors.New("invalid configuration")
-	}
-	return fmt.Errorf("invalid configuration: %s", field)
 }

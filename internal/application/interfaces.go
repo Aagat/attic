@@ -28,7 +28,7 @@ type Runner interface {
 }
 
 // Readiness is separate from both the job interface and the worker.  Liveness
-// must remain useful while external AI or SMTP dependencies are unavailable.
+// must remain useful while external AI dependencies are unavailable.
 type Readiness interface {
 	Live(context.Context) error
 	Ready(context.Context) error

@@ -75,10 +75,7 @@ type AnalyzeRequest struct {
 	Language        string
 
 	// ScreenshotDataURL must be an image data URL (normally base64 encoded).
-	// ImageDataURL is accepted as a compatibility alias; ScreenshotDataURL
-	// takes precedence when both are supplied.
 	ScreenshotDataURL string
-	ImageDataURL      string
 }
 
 // Approved is returned only when the model has classified the input as an
@@ -501,9 +498,6 @@ The object must contain classification, decision, title, completeness, confidenc
 
 func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, followup string) ([]byte, error) {
 	imageDataURL := request.ScreenshotDataURL
-	if imageDataURL == "" {
-		imageDataURL = request.ImageDataURL
-	}
 	metadata := map[string]string{
 		"title":            request.Title,
 		"author":           request.Author,
@@ -603,9 +597,6 @@ func validateAnalyzeRequest(request AnalyzeRequest) error {
 		return &Error{Code: CodeInvalidInput, Message: "source URL must be an HTTP or HTTPS URL"}
 	}
 	imageDataURL := request.ScreenshotDataURL
-	if imageDataURL == "" {
-		imageDataURL = request.ImageDataURL
-	}
 	if !validImageDataURL(imageDataURL) {
 		return &Error{Code: CodeInvalidInput, Message: "an image data URL is required"}
 	}

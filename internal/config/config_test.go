@@ -17,7 +17,7 @@ func TestLoadAppliesSafeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AI.Model != DefaultAIModel || cfg.AI.ReasoningEffort != "medium" || cfg.DefaultProfile != "a5" || cfg.SMTP.Enabled {
+	if cfg.AI.Model != DefaultAIModel || cfg.AI.ReasoningEffort != "medium" || cfg.DefaultProfile != "a5" {
 		t.Fatalf("defaults = %#v", cfg)
 	}
 	if cfg.AI.Timeout != 90*time.Second || cfg.AI.MaxRetries != 2 || cfg.AI.OmitReasoningEffort || cfg.AI.OmitResponseFormat {
@@ -25,19 +25,6 @@ func TestLoadAppliesSafeDefaults(t *testing.T) {
 	}
 	if cfg.MigrationsDir != "/app/migrations" || cfg.DBPoolMin != 1 || cfg.DBPoolMax != 5 {
 		t.Fatalf("database defaults = %#v", cfg)
-	}
-}
-
-func TestOpenAIAPIKeyCompatibilityAlias(t *testing.T) {
-	values := map[string]string{"BEARER_TOKEN": "token", "DATABASE_URL": "postgres://db/attic", "AI_BASE_URL": "https://provider.example/v1", "OPENAI_API_KEY": "alias-secret"}
-	cfg, err := LoadFrom(func(key string) string { return values[key] })
-	if err != nil || cfg.AI.APIKey != "alias-secret" {
-		t.Fatalf("alias config = %#v, %v", cfg.AI, err)
-	}
-	values["AI_API_KEY"] = "preferred-secret"
-	cfg, err = LoadFrom(func(key string) string { return values[key] })
-	if err != nil || cfg.AI.APIKey != "preferred-secret" {
-		t.Fatalf("preferred config = %#v, %v", cfg.AI, err)
 	}
 }
 
@@ -100,22 +87,6 @@ func TestValidationNamesFieldsWithoutSecrets(t *testing.T) {
 	message := err.Error()
 	if !strings.Contains(message, "AI_BASE_URL") || strings.Contains(message, "super-secret") || strings.Contains(message, "provider-secret") {
 		t.Fatalf("unsafe validation message = %q", message)
-	}
-}
-
-func TestEnabledSMTPRequiresTLSAndConnectionFields(t *testing.T) {
-	values := map[string]string{
-		"BEARER_TOKEN":  "token",
-		"DATABASE_URL":  "postgres://db/attic",
-		"AI_BASE_URL":   "https://provider.example/v1",
-		"AI_API_KEY":    "key",
-		"SMTP_ENABLED":  "true",
-		"SMTP_TLS_MODE": "plain",
-		"SMTP_PORT":     "2525",
-	}
-	_, err := LoadFrom(func(key string) string { return values[key] })
-	if err == nil || !strings.Contains(err.Error(), "SMTP_TLS_MODE") {
-		t.Fatalf("SMTP validation = %v", err)
 	}
 }
 

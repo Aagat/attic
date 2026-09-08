@@ -6,8 +6,7 @@ read-only-compatible container. It builds `./cmd/attic` into
 ordered migrations, durable jobs, filesystem artifacts under `/data`, the
 worker, browser rendering, deterministic extraction, mandatory durable AI
 approval, PDF formatting, and readiness/HTTP health endpoints. `/tmp` is the
-bounded ephemeral workspace. SMTP delivery remains deferred; completed PDFs
-end in `ready` and are available through the authenticated artifact endpoint.
+bounded ephemeral workspace. Completed PDFs end in `ready` and are available through the authenticated artifact endpoint.
 
 ## Architecture and navigation
 
@@ -166,16 +165,12 @@ Important settings include:
 - `DATABASE_URL`: the existing PostgreSQL 14+ connection string;
 - `BEARER_TOKEN`: the one-owner bearer credential;
 - `ARTIFACT_ROOT=/data/artifacts`;
-- `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL=gpt-5.6-luna`; `OPENAI_API_KEY`
-  is accepted only as a compatibility alias when `AI_API_KEY` is empty;
+- `AI_PROVIDER`, `CHATGPT_AUTH_FILE` for subscription login, or `AI_BASE_URL`
+  and `AI_API_KEY` for API access; `AI_MODEL` selects the model;
 - `AI_REASONING_EFFORT=medium`, which may be disabled for providers that reject
-  the optional parameter; and
-- `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS_MODE`, credentials,
-  sender, and destination for the reserved delivery configuration. Keep
-  `SMTP_ENABLED=false` until the SMTP adapter is composed.
+  the optional parameter.
 
-SMTP must use implicit TLS or STARTTLS with certificate verification when its
-deferred adapter lands. Submitted page content and bounded screenshots are sent
+Submitted page content and bounded screenshots are sent
 to the explicitly configured AI provider; review that data flow before
 supplying the provider key.
 
@@ -381,7 +376,7 @@ A migration failure stops startup, prevents readiness, and must not create or
 initialize a second database.
 
 AI reachability is not a readiness dependency because provider outages must not
-remove the API from service. SMTP remains disabled.
+remove the API from service.
 
 Check the container and health endpoints:
 
@@ -530,5 +525,4 @@ The Compose example gives the process a bounded `/tmp` tmpfs and persistent
 startup, readiness, health endpoints, and the worker are supplied by the
 current application composition. Browser subprocess, outbound-address,
 screenshot, DOM, AI input, and PDF output limits are validated at startup and
-enforced by their owning modules. SMTP delivery is the remaining deferred
-pipeline stage and does not change the PostgreSQL or artifact-volume contract.
+enforced by their owning modules.
