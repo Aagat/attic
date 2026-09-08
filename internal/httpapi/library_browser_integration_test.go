@@ -97,11 +97,17 @@ func TestLibraryBrowserIntegration(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.AttributeValue("#capture-list a", "href", &href, nil), chromedp.Evaluate(`document.documentElement.scrollWidth > innerWidth`, &overflow)); err != nil {
 		t.Fatal(err)
 	}
-	if href != "/api/v1/items/saved-one/captures/capture-one" {
+	if href != "/api/v1/items/saved-one/captures/capture-one?view=reader" {
 		t.Fatalf("capture href: %q", href)
 	}
 	if overflow {
 		t.Fatal("mobile library overflows")
+	}
+	if err := chromedp.Run(ctx, chromedp.AttributeValue("#capture-list a:nth-of-type(2)", "href", &href, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if href != "/api/v1/items/saved-one/captures/capture-one" {
+		t.Fatalf("original capture href: %q", href)
 	}
 	mu.Lock()
 	if len(intents) != 2 || intents[0] != "bookmark" || intents[1] != "kindle" {

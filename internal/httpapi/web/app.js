@@ -127,9 +127,12 @@ async function openDetails(item) {
   $('accept-tags').hidden = !selectedItem.suggested_tags?.length;
   $('capture-list').replaceChildren();
   for (const capture of selectedItem.captures || []) {
-    const row = element('p');
-    row.append(link(new Date(capture.created_at).toLocaleString() + ' · ' + readable(capture.status), itemPath(item).replace('/items','/api/v1/items') + '/captures/' + encodeURIComponent(capture.id)));
-    if (capture.missing?.length) row.append(element('span', ' · ' + capture.missing.length + ' missing resources', 'hint'));
+    const row = element('div', undefined, 'capture-version');
+    const path = '/api/v1' + itemPath(item) + '/captures/' + encodeURIComponent(capture.id);
+    row.append(element('p', new Date(capture.created_at).toLocaleString() + ' · ' + readable(capture.status)));
+    if (['complete', 'partial'].includes(capture.status)) row.append(link('Read saved page', path + '?view=reader'));
+    row.append(link('Original layout', path));
+    if (capture.missing?.length) row.append(element('span', capture.missing.length + ' missing resources', 'hint'));
     $('capture-list').append(row);
   }
   if (!$('capture-list').children.length) $('capture-list').append(element('p', item.kind === 'pdf' ? 'The original PDF is preserved.' : 'No saved page is available yet.'));
