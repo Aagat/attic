@@ -9,6 +9,25 @@ approval, PDF formatting, and readiness/HTTP health endpoints. `/tmp` is the
 bounded ephemeral workspace. SMTP delivery remains deferred; completed PDFs
 end in `ready` and are available through the authenticated artifact endpoint.
 
+## Architecture and navigation
+
+The domain terms are defined in [CONTEXT.md](../../CONTEXT.md).
+`internal/domain` owns job stage transitions and safe failure categories/messages;
+the memory and PostgreSQL adapters enforce those rules while owning their lease
+and storage mechanics. A new failure category belongs in that domain policy,
+with a persistence check covering both adapters.
+
+`internal/httpapi/web/app.js` owns the reading library and authenticated requests.
+`article-reader.js` exposes `AtticReader.open(jobID)` and `close()`. The reader
+owns metadata, pending downloads, PDF rendering, sharing and cleanup. Its PDF
+renderer is private; callers do not manage render generations, files or workers.
+Closing a reader cancels its requests and clears its document links and resources.
+The browser integration test opens articles through the same visible controls as
+the owner and checks observable rendering, layout stability and cancellation.
+
+No compatibility routes or old renderer globals are retained. The source-only
+refactor keeps the existing HTTP job interface and PDF format.
+
 ## Chromium extension
 
 Download `/attic-chromium.zip` from your running server, extract it, then use
