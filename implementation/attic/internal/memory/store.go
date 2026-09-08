@@ -312,7 +312,7 @@ func (s *Store) SetStage(ctx context.Context, lease *application.Lease, stage do
 	if !ok || job.LeaseToken != lease.Token || job.Status != domain.StatusProcessing || job.Version != lease.CurrentVersion() || !job.LeaseUntil.After(now) {
 		return application.ErrLeaseLost
 	}
-	if stage != job.Stage && nextStage(job.Stage) != stage && !domain.CanRecoverSource(job.Stage, stage) {
+	if !job.Stage.CanTransitionTo(stage) {
 		return application.ErrInvalidStage
 	}
 	job.Stage = stage
@@ -397,6 +397,8 @@ func (s *Store) Fail(ctx context.Context, lease *application.Lease, failure doma
 	if !ok || job.LeaseToken != lease.Token || job.Version != lease.CurrentVersion() || !job.LeaseUntil.After(s.now().UTC()) {
 		return application.ErrLeaseLost
 	}
+	failure.Category = failure.Category.Normalized()
+	failure.Message = failure.Category.Message()
 	failure.OccurredAt = now.UTC()
 	job.Status = domain.StatusFailed
 	job.Stage = ""
@@ -409,21 +411,6 @@ func (s *Store) Fail(ctx context.Context, lease *application.Lease, failure doma
 	s.jobs[job.ID] = job
 	lease.Observe(job.Version, job.LeaseUntil, job.Stage)
 	return nil
-}
-
-func nextStage(stage domain.Stage) domain.Stage {
-	switch stage {
-	case domain.StageFetching:
-		return domain.StageExtracting
-	case domain.StageExtracting:
-		return domain.StageAIAnalyzing
-	case domain.StageAIAnalyzing:
-		return domain.StageFormatting
-	case domain.StageFormatting:
-		return domain.StagePersisting
-	default:
-		return ""
-	}
 }
 
 func contextErr(ctx context.Context) error {

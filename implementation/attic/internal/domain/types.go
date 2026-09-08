@@ -163,7 +163,25 @@ type CursorPosition struct {
 	ID        JobID
 }
 
-// CanRecoverSource permits a new acquisition attempt before artifact persistence.
-func CanRecoverSource(from, to Stage) bool {
-	return to == StageFetching && (from == StageExtracting || from == StageAIAnalyzing || from == StageFormatting)
+// CanTransitionTo owns forward progress, idempotency, and source recovery.
+// Recovery may restart acquisition until artifact persistence begins.
+func (from Stage) CanTransitionTo(to Stage) bool {
+	if !from.Valid() || !to.Valid() {
+		return false
+	}
+	if from == to {
+		return true
+	}
+	switch from {
+	case StageFetching:
+		return to == StageExtracting
+	case StageExtracting:
+		return to == StageAIAnalyzing || to == StageFetching
+	case StageAIAnalyzing:
+		return to == StageFormatting || to == StageFetching
+	case StageFormatting:
+		return to == StagePersisting || to == StageFetching
+	default:
+		return false
+	}
 }

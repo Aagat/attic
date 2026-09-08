@@ -654,7 +654,7 @@ func (s *Store) SetStage(ctx context.Context, lease *application.Lease, stage do
 		return application.ErrLeaseLost
 	}
 	current := domain.Stage(currentStage.String)
-	if stage != current && nextStage(current) != stage && !domain.CanRecoverSource(current, stage) {
+	if !current.CanTransitionTo(stage) {
 		return ErrInvalidStage
 	}
 	result, err := tx.ExecContext(ctx, `
@@ -814,11 +814,8 @@ func (s *Store) Fail(ctx context.Context, lease *application.Lease, failure doma
 	}
 	now = now.UTC()
 	currentTime := s.now().UTC()
-	category := failure.Category
-	if !validFailureCategory(category) {
-		category = domain.FailureInternalError
-	}
-	message := safeFailureMessage(category)
+	category := failure.Category.Normalized()
+	message := category.Message()
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE jobs SET status = 'failed', stage = NULL, failure_category = $3,
 			failure_message = $4, lease_token = NULL, lease_expires_at = NULL,
@@ -938,7 +935,7 @@ func scanJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		job.CompletedAt = &value
 	}
 	if failureCategory.Valid {
-		message := safeFailureMessage(domain.FailureCategory(failureCategory.String))
+		message := domain.FailureCategory(failureCategory.String).Message()
 		// The database value is intentionally not returned.  Failure details can
 		// contain provider/page data; the adapter exposes the stable, bounded
 		// application message instead.
@@ -1033,7 +1030,7 @@ func scanListJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		job.CompletedAt = &value
 	}
 	if failureCategory.Valid {
-		job.Failure = &domain.Failure{Category: domain.FailureCategory(failureCategory.String), Message: safeFailureMessage(domain.FailureCategory(failureCategory.String)), CorrelationID: correlation}
+		job.Failure = &domain.Failure{Category: domain.FailureCategory(failureCategory.String), Message: domain.FailureCategory(failureCategory.String).Message(), CorrelationID: correlation}
 	}
 	if contentID.Valid {
 		content := domain.ContentDocument{ID: domain.ContentID(contentID.String), JobID: job.ID, Title: contentTitle.String, Author: contentAuthor.String, SiteName: contentSite.String, Description: description.String, Language: language.String, AIConfidence: parseFloat(confidence.String), AICompleteness: parseFloat(completeness.String)}
@@ -1069,7 +1066,7 @@ func scanClaimJob(row interface{ Scan(...any) error }) (domain.Job, error) {
 		job.CompletedAt = &value
 	}
 	if failureCategory.Valid {
-		job.Failure = &domain.Failure{Category: domain.FailureCategory(failureCategory.String), Message: safeFailureMessage(domain.FailureCategory(failureCategory.String)), CorrelationID: correlation}
+		job.Failure = &domain.Failure{Category: domain.FailureCategory(failureCategory.String), Message: domain.FailureCategory(failureCategory.String).Message(), CorrelationID: correlation}
 	}
 	return job, nil
 }
@@ -1117,74 +1114,6 @@ func contextErr(ctx context.Context) error {
 		return nil
 	}
 	return ctx.Err()
-}
-
-func nextStage(stage domain.Stage) domain.Stage {
-	switch stage {
-	case domain.StageFetching:
-		return domain.StageExtracting
-	case domain.StageExtracting:
-		return domain.StageAIAnalyzing
-	case domain.StageAIAnalyzing:
-		return domain.StageFormatting
-	case domain.StageFormatting:
-		return domain.StagePersisting
-	default:
-		return ""
-	}
-}
-
-func validFailureCategory(category domain.FailureCategory) bool {
-	switch category {
-	case domain.FailureInvalidInput, domain.FailureBlockedTarget, domain.FailureFetchFailed,
-		domain.FailureRenderTimeout, domain.FailureAccessDenied, domain.FailurePaywallDetected,
-		domain.FailureUnsupportedContent, domain.FailureInsufficientContent,
-		domain.FailureAIUnavailable, domain.FailureAIAuthFailed, domain.FailureAIModelUnsupported,
-		domain.FailureAIInvalidResponse, domain.FailureFormatFailed, domain.FailureStorageFailed,
-		domain.FailureDeliveryRejected, domain.FailureDeliveryTimeout, domain.FailureInternalError:
-		return true
-	default:
-		return false
-	}
-}
-
-func safeFailureMessage(category domain.FailureCategory) string {
-	switch category {
-	case domain.FailureAIUnavailable:
-		return "The AI provider is temporarily unavailable"
-	case domain.FailureAIAuthFailed:
-		return "The AI provider rejected the configured credentials"
-	case domain.FailureAIModelUnsupported:
-		return "The configured AI model is unsupported"
-	case domain.FailureAIInvalidResponse:
-		return "The AI provider returned an invalid response"
-	case domain.FailureUnsupportedContent:
-		return "The page is not a supported article"
-	case domain.FailureInsufficientContent:
-		return "The page did not contain enough readable content"
-	case domain.FailureFormatFailed:
-		return "The PDF could not be generated"
-	case domain.FailureStorageFailed:
-		return "Artifact storage is temporarily unavailable"
-	case domain.FailureFetchFailed:
-		return "The page could not be retrieved"
-	case domain.FailureBlockedTarget:
-		return "The destination was blocked by network policy"
-	case domain.FailureRenderTimeout:
-		return "Page rendering exceeded its deadline"
-	case domain.FailureAccessDenied:
-		return "The page denied access"
-	case domain.FailurePaywallDetected:
-		return "The page appears to be behind a paywall"
-	case domain.FailureDeliveryRejected:
-		return "Email delivery was rejected"
-	case domain.FailureDeliveryTimeout:
-		return "Email delivery could not be confirmed"
-	case domain.FailureInvalidInput:
-		return "The submitted input is invalid"
-	default:
-		return "The job could not be completed"
-	}
 }
 
 func randomToken() string {

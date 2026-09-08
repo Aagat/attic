@@ -213,3 +213,40 @@ func TestArtifactStoreCopiesAndVerifiesBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStoreFailureAndRecoveryPolicy(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore()
+
+	for _, category := range []domain.FailureCategory{domain.FailurePDFQualityFailed, "unknown-provider-error"} {
+		id := domain.JobID("policy" + "-" + string(category))
+		created := time.Now().UTC()
+		if _, err := store.CreateOrReuse(ctx, application.CreateJob{ID: id, Request: application.SubmitURLRequest{URL: "https://example.test/quality", Profile: "scribe"}, CreatedAt: created}); err != nil {
+			t.Fatal(err)
+		}
+		lease, err := store.ClaimNext(ctx, created, time.Minute)
+		if err != nil || lease == nil || lease.Job.ID != id {
+			t.Fatalf("claim failure test: %v, %v", lease, err)
+		}
+		// Exercise restart after formatting, then prohibit recovery once persistence starts.
+		for _, stage := range []domain.Stage{domain.StageExtracting, domain.StageAIAnalyzing, domain.StageFormatting, domain.StageFetching, domain.StageExtracting, domain.StageAIAnalyzing, domain.StageFormatting, domain.StagePersisting} {
+			if err := store.SetStage(ctx, lease, stage); err != nil {
+				t.Fatalf("stage %s: %v", stage, err)
+			}
+		}
+		if err := store.SetStage(ctx, lease, domain.StageFetching); !errors.Is(err, application.ErrInvalidStage) {
+			t.Fatalf("recovery after persistence: %v", err)
+		}
+		if err := store.Fail(ctx, lease, domain.Failure{Category: category, Message: "secret provider details"}, created); err != nil {
+			t.Fatal(err)
+		}
+		job, err := store.Get(ctx, id)
+		want := category.Normalized()
+		if err != nil || job.Status != domain.StatusFailed || job.Failure == nil || job.Failure.Category != want || job.Failure.Message != want.Message() {
+			t.Fatalf("durable failure: %+v, %v", job.Failure, err)
+		}
+		if err := store.RequestDelete(ctx, id, created); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

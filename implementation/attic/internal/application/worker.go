@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -175,17 +174,16 @@ func (w *Worker) handleProcessingError(ctx context.Context, lease *Lease, proces
 		return ErrLeaseLost
 	}
 	category := string(domain.FailureInternalError)
-	message := "The job could not be completed"
 	retryable := false
 	var typed *ProcessingError
 	if errors.As(processErr, &typed) && typed != nil {
 		category = typed.Category
-		message = typed.Message
 		retryable = typed.Retryable
 	}
+	safeCategory := domain.FailureCategory(category).Normalized()
 	failure := domain.Failure{
-		Category:      domain.FailureCategory(category),
-		Message:       safeJobMessage(category, message),
+		Category:      safeCategory,
+		Message:       safeCategory.Message(),
 		CorrelationID: randomOpaqueID(),
 		OccurredAt:    now.UTC(),
 	}
@@ -241,51 +239,6 @@ func (w *Worker) renewDuringProcess(ctx context.Context, cancel context.CancelFu
 			}
 			timer.Reset(w.heartbeat)
 		}
-	}
-}
-
-func safeJobMessage(category, message string) string {
-	// A provider or page can put arbitrary text in its error. Keep that text
-	// out of durable records and client responses by using fixed category
-	// messages instead of echoing adapter details.
-	switch category {
-	case string(domain.FailureAIUnavailable):
-		return "The AI provider is temporarily unavailable"
-	case string(domain.FailureAIAuthFailed):
-		return "The AI provider rejected the configured credentials"
-	case string(domain.FailureAIModelUnsupported):
-		return "The configured AI model is unsupported"
-	case string(domain.FailureAIInvalidResponse):
-		return "The AI provider returned an invalid response"
-	case string(domain.FailureUnsupportedContent):
-		return "The page is not a supported article"
-	case string(domain.FailureInsufficientContent):
-		return "The page did not contain enough readable content"
-	case string(domain.FailurePDFQualityFailed):
-		return "The PDF failed automatic quality checks and was not published"
-	case string(domain.FailureFormatFailed):
-		return "The PDF could not be generated"
-	case string(domain.FailureStorageFailed):
-		return "Artifact storage is temporarily unavailable"
-	case string(domain.FailureFetchFailed):
-		return "The page could not be retrieved"
-	case string(domain.FailureBlockedTarget):
-		return "The destination was blocked by network policy"
-	case string(domain.FailureRenderTimeout):
-		return "Page rendering exceeded its deadline"
-	case string(domain.FailureAccessDenied):
-		return "The page denied access"
-	case string(domain.FailurePaywallDetected):
-		return "The page appears to be behind a paywall"
-	case string(domain.FailureDeliveryRejected):
-		return "Email delivery was rejected"
-	case string(domain.FailureDeliveryTimeout):
-		return "Email delivery could not be confirmed"
-	default:
-		if strings.TrimSpace(message) == "" {
-			return "The job could not be completed"
-		}
-		return "The job could not be completed"
 	}
 }
 
