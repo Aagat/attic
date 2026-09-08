@@ -24,6 +24,46 @@ Closing a reader cancels its requests and clears its document links and resource
 The browser integration test opens articles through the same visible controls as
 the owner and checks observable rendering, layout stability and cancellation.
 
+## Email delivery
+
+Enable `SMTP_ENABLED=true` to email each newly prepared PDF to
+`SMTP_DESTINATION`. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SENDER`, and optional
+`SMTP_USERNAME`/`SMTP_PASSWORD`. Use `SMTP_TLS_MODE=starttls` (normally port 587)
+or `implicit_tls` (normally 465); certificates are verified. The default timeout
+is `SMTP_TIMEOUT=30s`. For Kindle delivery, use your Send to Kindle address and
+add the sender to your Amazon approved personal document email list.
+
+The PDF stays available in the library. SMTP queues only newly completed articles,
+so enabling email does not send the existing library. Its queue is persisted with
+the PDF in the same transaction and saves the intended recipient. Temporary
+failures retry up to three times with backoff. Rejections and unconfirmed delivery
+show **Retry email**, which sends the saved PDF without rerunning AI or formatting.
+A lost acknowledgement or expired delivery lease is not automatically retried:
+the relay may already have accepted it. Manual retry can therefore send a duplicate.
+“Emailed” means the relay accepted the email, not that the device downloaded it.
+
+The delivery module owns SMTP, MIME attachments, deadlines and safe outcome
+classification. The PostgreSQL adapter owns atomic queue claims, attempt history
+and retry scheduling. This seam keeps email failures out of article processing.
+
+### Catch email locally
+
+The development Compose override automatically routes mail to
+[Mailpit](https://mailpit.axllent.org/docs/install/docker/), an SMTP catcher that
+keeps messages locally. Run:
+
+```sh
+docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml up -d --build
+```
+
+Open `http://<server-address>:18025/` to inspect messages and download attachments.
+Submit an article through Attic on port 18080; its email appears after PDF
+preparation succeeds. The SMTP port is internal to Compose. This development
+configuration uses test addresses, no authentication and explicit
+`SMTP_TLS_MODE=none`; it does not forward mail to a real mailbox. Its web inbox
+is visible on the local network and messages are disposable on container replacement.
+The base Compose configuration leaves delivery disabled unless enabled in `.env`.
+
 ## Chromium extension
 
 Download `/attic-chromium.zip` from your running server, extract it, then use

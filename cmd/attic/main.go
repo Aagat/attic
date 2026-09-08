@@ -16,6 +16,7 @@ import (
 	"attic/internal/ai"
 	"attic/internal/application"
 	"attic/internal/config"
+	"attic/internal/delivery"
 	"attic/internal/filesystem"
 	"attic/internal/formatter"
 	"attic/internal/httpapi"
@@ -67,9 +68,14 @@ func run() error {
 
 func runServer(cfg config.Config) error {
 
+	destination := ""
+	if cfg.SMTP.Enabled {
+		destination = cfg.SMTP.Destination
+	}
 	store, err := postgres.Open(context.Background(), cfg.DatabaseURL, postgres.Options{
-		MaxOpenConns: cfg.DBPoolMax,
-		MaxIdleConns: cfg.DBPoolMin,
+		DeliveryDestination: destination,
+		MaxOpenConns:        cfg.DBPoolMax,
+		MaxIdleConns:        cfg.DBPoolMin,
 	})
 	if err != nil {
 		return err
@@ -146,6 +152,25 @@ func runServer(cfg config.Config) error {
 		workerDone <- err
 	}()
 
+	mailDone := make(chan error, 1)
+	if cfg.SMTP.Enabled {
+		sender, err := delivery.NewSMTP(cfg.SMTP)
+		if err != nil {
+			return err
+		}
+		mailWorker := delivery.Worker{Queue: store, Artifacts: artifacts, Sender: sender, Timeout: cfg.SMTP.Timeout}
+		go func() {
+			err := mailWorker.Run(ctx)
+			if err != nil && ctx.Err() == nil {
+				log.Printf("email worker stopped: %v", err)
+				stop()
+			}
+			mailDone <- err
+		}()
+	} else {
+		mailDone <- nil
+	}
+	defer func() { waitForWorker(mailDone) }()
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddress,
 		Handler:           server,

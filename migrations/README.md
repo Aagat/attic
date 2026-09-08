@@ -82,3 +82,8 @@ must handle the persistent artifact volume separately and explicitly.
 - `content_documents_created_keyset_idx` supports a later full catalog/index
   rebuild without adding a search-specific schema now.
 - Attempt and deletion indexes support job inspection and retry workers.
+
+Migration 0004 adds a durable email queue on completed jobs. Only PDF completions
+with email enabled enter it. The recipient is saved at enqueue time. Attempts use
+a shared Message-ID across safe retries; the former global uniqueness index is
+replaced with a lookup index. Rollback refuses to discard duplicate retry history.

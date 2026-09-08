@@ -28,16 +28,18 @@ const (
 )
 
 type Options struct {
-	Now          func() time.Time
-	Scope        string
-	MaxOpenConns int
-	MaxIdleConns int
+	DeliveryDestination string
+	Now                 func() time.Time
+	Scope               string
+	MaxOpenConns        int
+	MaxIdleConns        int
 }
 
 type Store struct {
-	db    *sql.DB
-	now   func() time.Time
-	scope string
+	deliveryDestination string
+	db                  *sql.DB
+	now                 func() time.Time
+	scope               string
 }
 
 func Open(ctx context.Context, databaseURL string, options Options) (*Store, error) {
@@ -77,7 +79,7 @@ func NewStore(db *sql.DB, options Options) (*Store, error) {
 	if options.MaxIdleConns >= 0 {
 		db.SetMaxIdleConns(options.MaxIdleConns)
 	}
-	return &Store{db: db, now: now, scope: scope}, nil
+	return &Store{db: db, now: now, scope: scope, deliveryDestination: options.DeliveryDestination}, nil
 }
 
 func (s *Store) Close() error {
@@ -391,6 +393,21 @@ func (s *Store) CreateRetry(ctx context.Context, sourceID, newID domain.JobID, n
 	if !domain.Status(status.String).Terminal() {
 		return domain.Job{}, application.ErrNotTerminal
 	}
+	// Retrying email reuses the stored PDF and its original destination.
+	if status.String == "delivery_failed" {
+		if _, err := tx.ExecContext(ctx, `UPDATE jobs SET status='ready', delivery_pending=true,delivery_retry_count=0,
+   failure_category=NULL,failure_message=NULL,next_attempt_at=$2,updated_at=$2,version=version+1 WHERE id=$1 AND delivery_destination IS NOT NULL`, string(sourceID), now); err != nil {
+			return domain.Job{}, mapDBError("retry email", err)
+		}
+		job, err := loadJob(ctx, tx, string(sourceID))
+		if err != nil {
+			return domain.Job{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return domain.Job{}, mapDBError("commit email retry", err)
+		}
+		return job, nil
+	}
 	correlationID := randomToken()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO jobs (
@@ -508,19 +525,10 @@ func (s *Store) ClaimNext(ctx context.Context, now time.Time, leaseDuration time
 		return nil, mapDBError("begin claim", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE jobs
-		SET status = 'delivery_failed', stage = NULL,
-			failure_category = 'delivery_timeout',
-			failure_message = 'Email delivery could not be confirmed',
-			lease_token = NULL, lease_expires_at = NULL,
-			completed_at = $1, next_attempt_at = $1, updated_at = $1,
-			version = version + 1
-		WHERE status = 'delivering'
-		  AND lease_expires_at IS NOT NULL
-		  AND lease_expires_at <= $1`, now); err != nil {
-		return nil, mapDBError("expire delivery leases", err)
+	if err := expireDeliveries(ctx, tx, now); err != nil {
+		return nil, err
 	}
+
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE jobs
 		SET status = 'queued', stage = NULL, lease_token = NULL,
@@ -747,10 +755,11 @@ func (s *Store) Complete(ctx context.Context, lease *application.Lease, completi
 	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE jobs SET display_title = $2, canonical_url = NULLIF($7, ''), status = 'ready', stage = NULL,
+ delivery_destination=NULLIF($8,''), delivery_pending=($8<>''),
 			lease_token = NULL, lease_expires_at = NULL, completed_at = $3,
 			updated_at = $3, version = version + 1
 		WHERE id = $1 AND status = 'processing' AND lease_token = $4
-		  AND version = $5 AND lease_expires_at > $6`, string(lease.Job.ID), completion.Content.Title, now, lease.Token, version, leaseNow, completion.CanonicalURL)
+		  AND version = $5 AND lease_expires_at > $6`, string(lease.Job.ID), completion.Content.Title, now, lease.Token, version, leaseNow, completion.CanonicalURL, s.deliveryDestination)
 	if err != nil {
 		return mapDBError("complete job", err)
 	}
@@ -858,7 +867,7 @@ const jobSelect = `
 		SELECT outcome, attempt_number, stable_message_id
 		FROM delivery_attempts
 		WHERE job_id = j.id
-		ORDER BY created_at DESC, id DESC
+		ORDER BY attempt_number DESC
 		LIMIT 1
 	) d ON TRUE
 	WHERE j.id = $1`

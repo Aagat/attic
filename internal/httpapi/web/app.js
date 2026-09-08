@@ -21,6 +21,8 @@ const stages = {
   delivering: "Sending to Kindle",
 };
 const failures = {
+  delivery_rejected: "Email delivery was rejected. Your PDF is still available; retry sends the stored PDF.",
+  delivery_timeout: "Email delivery could not be confirmed. Your PDF is still available. Retrying may send a duplicate.",
   access_denied:
     "The original website and available archive sources could not provide a readable article.",
   paywall_detected:
@@ -145,7 +147,11 @@ function render() {
         }),
       ),
     );
-    const label = job.has_artifact
+    const label = job.status === "delivered"
+      ? "Emailed · Ready to read"
+      : job.status === "delivering"
+        ? "Sending email"
+        : job.has_artifact
       ? "Ready to read"
       : active(job)
         ? stages[job.stage || job.status] || "Working on it"
@@ -191,12 +197,12 @@ function render() {
       actions.append(action("Read PDF", () => reader.open(job.id)));
     if (failed(job))
       actions.append(
-        action("Try again", async () => {
+        action(job.status === "delivery_failed" ? "Retry email" : "Try again", async () => {
           const next = await api(
             "/jobs/" + encodeURIComponent(job.id) + "/retry",
             { method: "POST" },
           );
-          notice("Article queued again.");
+          notice(job.status === "delivery_failed" ? "Email queued again." : "Article queued again.");
           await refresh();
         }),
       );

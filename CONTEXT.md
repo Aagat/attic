@@ -27,3 +27,11 @@ The owner's saved jobs and available reading documents.
 
 **Article reader**:
 The view for inspecting one reading document, its attribution, and its download or sharing options.
+
+**Email delivery**:
+Sending a stored PDF artifact to the owner's configured email destination. Delivery
+has its own attempts and can be retried without preparing the article again.
+
+**Accepted email**:
+An email the SMTP relay acknowledged. Acceptance does not confirm arrival on the
+reading device. An interrupted acknowledgement leaves delivery unconfirmed.

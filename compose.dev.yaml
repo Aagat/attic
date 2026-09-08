@@ -3,11 +3,29 @@
 # VALIDATION_DB_PASSWORD. This database is separate from other local projects.
 services:
   attic:
+    environment:
+      SMTP_ENABLED: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_TLS_MODE: none
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_SENDER: attic@example.test
+      SMTP_DESTINATION: reader@example.test
     ports: !override
       - "0.0.0.0:18080:8080"
     depends_on:
+      mailpit:
+        condition: service_started
       validation-db:
         condition: service_healthy
+  mailpit:
+    image: axllent/mailpit@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:18025:8025"
+    environment:
+      MP_MAX_MESSAGES: "100"
   validation-db:
     image: postgres:16-alpine
     restart: unless-stopped
