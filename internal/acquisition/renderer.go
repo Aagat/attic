@@ -37,6 +37,7 @@ type Renderer interface {
 }
 
 type RenderedPage struct {
+	Truncated   bool
 	FinalURL    string
 	Status      int
 	Title       string
@@ -313,6 +314,12 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	}
 	if r.config.SettleTime > 0 {
 		if err = chromedp.Run(browserCtx, chromedp.Sleep(r.config.SettleTime)); err != nil {
+			return result, r.renderError(ctx, operationCtx, err)
+		}
+	}
+
+	if savedHTML == nil {
+		if err = chromedp.Run(browserCtx, expandPost(&result.Truncated)); err != nil {
 			return result, r.renderError(ctx, operationCtx, err)
 		}
 	}

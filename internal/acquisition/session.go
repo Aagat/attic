@@ -179,7 +179,7 @@ func (s *BrowserSession) Snapshot(ctx context.Context) (RenderedPage, error) {
 	defer s.mu.Unlock()
 	var result RenderedPage
 	var snapshot string
-	err := s.run(ctx, chromedp.Title(&result.Title), chromedp.Location(&result.FinalURL), chromedp.ActionFunc(func(ctx context.Context) error { var e error; snapshot, e = page.CaptureSnapshot().Do(ctx); return e }))
+	err := s.run(ctx, expandPost(&result.Truncated), chromedp.Title(&result.Title), chromedp.Location(&result.FinalURL), chromedp.ActionFunc(func(ctx context.Context) error { var e error; snapshot, e = page.CaptureSnapshot().Do(ctx); return e }))
 	if err != nil {
 		return result, err
 	}
