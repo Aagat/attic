@@ -11,7 +11,36 @@ export interface ArchiveStatus {
   kindle: boolean;
   search: boolean;
 }
+export interface RecoverySession {
+  status: "idle" | "starting" | "working" | "needs_input" | "saved" | "failed";
+  url: string;
+  title: string;
+  message: string;
+  width: number;
+  height: number;
+  screenshot: string;
+}
+export interface RecoveryAction {
+  action:
+    | "start"
+    | "takeover"
+    | "click"
+    | "type"
+    | "scroll"
+    | "key"
+    | "capture"
+    | "close";
+  x?: number;
+  y?: number;
+  text?: string;
+  delta_y?: number;
+}
 export interface Archive {
+  recovery(
+    id: string,
+    action?: RecoveryAction,
+    signal?: AbortSignal,
+  ): Promise<RecoverySession>;
   readonly preview: boolean;
   session(key?: string): Promise<void>;
   signOut(): Promise<void>;

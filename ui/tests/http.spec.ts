@@ -154,3 +154,32 @@ test("rejected remembered token is forgotten without endless retries", async () 
   }, storage).session();
   expect(subsequent[0].method).toBeUndefined();
 });
+
+test("browser recovery shares authenticated requests and passes cancellation", async () => {
+  const requests: { url: string; init?: RequestInit }[] = [];
+  const state = {
+    status: "needs_input",
+    url: "https://example.com/article",
+    title: "Article",
+    message: "Complete verification",
+    width: 1024,
+    height: 768,
+    screenshot: "data:image/png;base64,example",
+  };
+  const archive = createHTTPArchive(async (url, init) => {
+    requests.push({ url: String(url), init });
+    return new Response(JSON.stringify(state));
+  });
+  const controller = new AbortController();
+  expect(await archive.recovery("saved", undefined, controller.signal)).toEqual(
+    state,
+  );
+  expect(requests[0].url).toBe("/api/v1/items/saved/recovery");
+  expect(requests[0].init?.method).toBe("GET");
+  expect(requests[0].init?.signal).toBe(controller.signal);
+  expect(requests[0].init?.credentials).toBe("same-origin");
+  const action = { action: "click" as const, x: 345, y: 120 };
+  await archive.recovery("saved", action, controller.signal);
+  expect(requests[1].init?.method).toBe("POST");
+  expect(JSON.parse(requests[1].init?.body as string)).toEqual(action);
+});

@@ -445,3 +445,23 @@ test("sidebar generates PDF without requesting Kindle delivery", async ({
     sidebar.getByText("Not requested", { exact: true }),
   ).toBeVisible();
 });
+
+test("browser recovery explains availability and fits the mobile reader", async ({
+  page,
+}) => {
+  await page.goto("/items/sample-1");
+  await page
+    .getByRole("button", { name: "Continue capture", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Continue capture",
+    exact: true,
+  });
+  await expect(dialog.getByRole("status")).toHaveText(
+    "Browser recovery is available when connected to your Attic server.",
+  );
+  const bounds = await dialog.boundingBox();
+  expect(bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  await expect(dialog).toHaveCount(0);
+});

@@ -1,4 +1,4 @@
-import type { Archive, LibraryPage } from "./contract";
+import type { Archive, LibraryPage, RecoverySession } from "./contract";
 import { ArchiveError } from "./contract";
 import type { Item } from "../model";
 interface WireItem {
@@ -244,6 +244,13 @@ export function createHTTPArchive(
         storageBytes: r.storage_bytes,
         estimated: r.total_estimated,
       } satisfies LibraryPage;
+    },
+    async recovery(id, action, signal) {
+      return request<RecoverySession>(path(id) + "/recovery", {
+        method: action ? "POST" : "GET",
+        body: action ? JSON.stringify(action) : undefined,
+        signal,
+      });
     },
     async get(id, signal) {
       return item(await request<WireItem>(path(id), { signal }));

@@ -50,6 +50,18 @@ export function createPreviewArchive(): Archive {
         storageBytes: 38400000000,
       };
     },
+    async recovery() {
+      return {
+        status: "failed",
+        url: "",
+        title: "",
+        message:
+          "Browser recovery is available when connected to your Attic server.",
+        width: 1024,
+        height: 768,
+        screenshot: "",
+      };
+    },
     async get(id) {
       await ensure();
       const i = items.find((i) => i.id === id);

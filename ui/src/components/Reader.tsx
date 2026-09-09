@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
+import { BrowserRecovery } from "./BrowserRecovery";
 import { dateLabel, safeUrl, type Item } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
 
@@ -89,6 +90,7 @@ function ReaderItem({ item }: { item: Item }) {
   const [format, setFormat] = useState(item.kind === "PDF" ? "pdf" : "reading");
   const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
   const showPdf = item.kind === "PDF" || (format === "pdf" && hasPdf);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [informationOpen, setInformationOpen] = useState(true);
   const [details, setDetails] = useState(false),
     [remove, setRemove] = useState(false),
@@ -274,6 +276,11 @@ function ReaderItem({ item }: { item: Item }) {
                 Original site
               </a>
             )
+          )}
+          {!isPdf && (
+            <Button onClick={() => setRecoveryOpen(true)}>
+              Continue capture
+            </Button>
           )}
           <Button
             onClick={() => {
@@ -627,7 +634,7 @@ function ReaderItem({ item }: { item: Item }) {
                   </p>
                   <p className="mt-1 text-[11px]">
                     {item.capture === "Needs browser capture"
-                      ? "Open this page in Chromium, complete any verification, then save it with the Attic extension. Your bookmark and earlier copies remain available."
+                      ? "Choose Continue capture to recover the page here, including on mobile. You can also save an open page with the Chromium extension."
                       : item.capture === "Preserved" &&
                           item.versions[version]?.status === "Partial"
                         ? "Content extracted and preserved. Some page resources could not be saved; details are listed below."
@@ -742,6 +749,12 @@ function ReaderItem({ item }: { item: Item }) {
           </aside>
         </div>
       </Tabs.Root>
+      {recoveryOpen && (
+        <BrowserRecovery
+          itemID={item.id}
+          onClose={() => setRecoveryOpen(false)}
+        />
+      )}
       <Modal
         open={details}
         onOpenChange={setDetails}
