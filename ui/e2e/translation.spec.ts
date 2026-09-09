@@ -55,11 +55,11 @@ test("reader shows preparation, translated text, and the preserved original", as
   await expect(page.getByText(/Preparing your translation/)).toBeVisible();
   item = { ...item, reading_available: true, pdf_status: "ready" };
   await expect(
-    page.locator('iframe[title="Translated reading version"]'),
+    page.locator('iframe[title="Saved reading version"]'),
   ).toBeVisible({ timeout: 10000 });
   await expect(
     page
-      .frameLocator('iframe[title="Translated reading version"]')
+      .frameLocator('iframe[title="Saved reading version"]')
       .getByText("Translated article"),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Original layout" }).click();

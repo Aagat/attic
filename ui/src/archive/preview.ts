@@ -170,6 +170,12 @@ export function createPreviewArchive(): Archive {
     async captureURL() {
       throw new Error("Preview captures are samples.");
     },
+    async editor() {
+      throw new Error("Editing requires a connected Attic server.");
+    },
+    async saveReading() {
+      throw new Error("Editing requires a connected Attic server.");
+    },
     async translate() {
       throw new Error("Translation requires a connected Attic server.");
     },

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
+import { ReadingEditor } from "./ReadingEditor";
 import { BrowserRecovery } from "./BrowserRecovery";
 import { dateLabel, safeUrl, type Item } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
@@ -69,7 +70,7 @@ const languages = [
   ["ko", "Korean"],
   ["zh", "Chinese"],
 ];
-function TranslatedReading({ item }: { item: Item }) {
+function ApprovedReading({ item }: { item: Item }) {
   const { archive } = useArchive();
   const { data: url, error } = useArchiveQuery(
     `reading:${item.id}:${item.jobId}`,
@@ -83,14 +84,14 @@ function TranslatedReading({ item }: { item: Item }) {
     );
   return url ? (
     <iframe
-      title="Translated reading version"
+      title="Saved reading version"
       src={url}
       sandbox=""
       className="w-full min-h-[80dvh] border-0"
     />
   ) : (
     <p role="status" className="p-8">
-      Opening translation…
+      Opening reading version…
     </p>
   );
 }
@@ -136,6 +137,7 @@ function ReaderItem({ item }: { item: Item }) {
   const [format, setFormat] = useState(item.kind === "PDF" ? "pdf" : "reading");
   const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
   const showPdf = item.kind === "PDF" || (format === "pdf" && hasPdf);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [language, setLanguage] = useState(item.outputLanguage || "en");
   const [translating, setTranslating] = useState(false);
@@ -568,9 +570,10 @@ function ReaderItem({ item }: { item: Item }) {
               <>
                 {(["reading", "original"] as const).map((view) => (
                   <Tabs.Content key={view} value={view}>
-                    {view === "reading" && item.outputLanguage ? (
+                    {view === "reading" &&
+                    (item.outputLanguage || item.readingAvailable) ? (
                       item.readingAvailable ? (
-                        <TranslatedReading item={item} />
+                        <ApprovedReading item={item} />
                       ) : (
                         <p
                           role={
@@ -741,6 +744,16 @@ function ReaderItem({ item }: { item: Item }) {
             {!isPdf && (
               <section>
                 <SectionLabel>Reading PDF</SectionLabel>
+                {!archive.preview &&
+                  (item.readingAvailable || item.versions.length > 0) && (
+                    <Button
+                      className="mt-3"
+                      onClick={() => setEditorOpen(true)}
+                    >
+                      <Pencil size={15} />
+                      Edit reading version
+                    </Button>
+                  )}
                 <div className="mt-3">
                   {hasPdf ? (
                     <Button onClick={download} disabled={!file}>
@@ -905,6 +918,18 @@ function ReaderItem({ item }: { item: Item }) {
           </aside>
         </div>
       </Tabs.Root>
+      {editorOpen && (
+        <ReadingEditor
+          itemID={item.id}
+          onClose={() => setEditorOpen(false)}
+          onSaved={() => {
+            setEditorOpen(false);
+            setFormat("reading");
+            refresh();
+            notify("Reading version saved. Generating PDF…");
+          }}
+        />
+      )}
       {recoveryOpen && (
         <BrowserRecovery
           itemID={item.id}

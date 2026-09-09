@@ -68,6 +68,11 @@ export interface Archive {
     reading: boolean,
     signal?: AbortSignal,
   ): Promise<string>;
+  editor(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<{ html: string; revision: string }>;
+  saveReading(id: string, html: string, revision: string): Promise<Item>;
   translate(id: string, language: string): Promise<Item>;
   readingURL(item: Item, signal?: AbortSignal): Promise<string>;
   pdf(item: Item): Promise<File>;

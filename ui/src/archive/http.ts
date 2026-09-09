@@ -322,6 +322,19 @@ export function createHTTPArchive(
       await request(url.replace("/api/v1", ""), { method: "HEAD", signal });
       return url;
     },
+    async editor(id, signal) {
+      return request<{ html: string; revision: string }>(path(id) + "/editor", {
+        signal,
+      });
+    },
+    async saveReading(id, html, revision) {
+      return item(
+        await request<WireItem>(path(id) + "/editor", {
+          method: "PUT",
+          body: JSON.stringify({ html, revision }),
+        }),
+      );
+    },
     async translate(id, language) {
       return item(
         await request<WireItem>(path(id) + "/translate", {
