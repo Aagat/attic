@@ -17,7 +17,7 @@ func TestStatusLifecycleClassification(t *testing.T) {
 
 func TestStageTransitions(t *testing.T) {
 	allowed := map[Stage][]Stage{
-		StageFetching:    {StageFetching, StageExtracting},
+		StageFetching:    {StageFetching, StageExtracting, StageFormatting},
 		StageExtracting:  {StageExtracting, StageAIAnalyzing, StageFetching},
 		StageAIAnalyzing: {StageAIAnalyzing, StageFormatting, StageFetching},
 		StageFormatting:  {StageFormatting, StagePersisting, StageFetching},

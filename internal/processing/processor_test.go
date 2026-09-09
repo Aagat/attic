@@ -281,3 +281,39 @@ func TestOwnerEditsRealPDF(t *testing.T) {
 		t.Fatalf("PDF text: %s %v", text, err)
 	}
 }
+
+func TestEditedReadingCompletesThroughWorkerStages(t *testing.T) {
+	forbidden := errors.New("owner edit must not fetch or use AI")
+	p, err := processing.New(rendererFunc(func(context.Context, string) (acquisition.RenderedPage, error) {
+		return acquisition.RenderedPage{}, forbidden
+	}), approverFunc(func(context.Context, domain.JobID, ai.ApprovalInput, func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		return application.ApprovedArticle{}, forbidden
+	}), formatterFunc(func(context.Context, formatter.Article) (formatter.Result, error) {
+		return formatter.Result{PDF: []byte("%PDF-edited\nstartxref\n%%EOF")}, nil
+	}), processing.WithReadingEdits(editedSource{application.ArticleDraft{Title: "Owner reading edit", SemanticHTML: "<p>Edited article text.</p>"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := application.NewArchive(memory.NewStore(), memory.NewArtifactStore(), application.ArchiveOptions{Processor: p, MinContentChars: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := archive.SubmitURL(context.Background(), application.SubmitURLRequest{URL: "https://example.com/edited", Profile: "a5"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := application.NewWorker(archive, application.WorkerOptions{Processor: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed, err := worker.RunOnce(context.Background()); err != nil || !claimed {
+		t.Fatalf("worker: %v %v", claimed, err)
+	}
+	detail, err := archive.GetJob(context.Background(), job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Status != domain.StatusReady || !detail.HasArtifact {
+		t.Fatalf("edited PDF failed in real worker: %+v", detail)
+	}
+}

@@ -174,7 +174,8 @@ func (from Stage) CanTransitionTo(to Stage) bool {
 	}
 	switch from {
 	case StageFetching:
-		return to == StageExtracting
+		// Persisted owner edits are already reviewed and can go straight to formatting.
+		return to == StageExtracting || to == StageFormatting
 	case StageExtracting:
 		return to == StageAIAnalyzing || to == StageFetching
 	case StageAIAnalyzing:
