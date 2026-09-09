@@ -15,6 +15,7 @@ import (
 
 	"attic/internal/acquisition"
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // ReplayCSP must also be sent as a response header. The embedded policy protects
@@ -100,6 +101,24 @@ func convert(page acquisition.RenderedPage) (Result, error) {
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode {
+			// Legacy layout and form wrappers can contain the whole article.
+			// Neutralize the wrapper; dropping its subtree would lose that content.
+			switch n.Data {
+			case "center", "form":
+				if n.Data == "center" {
+					style := "text-align:center;" + attribute(n, "style")
+					attrs := n.Attr[:0]
+					for _, a := range n.Attr {
+						if a.Key != "style" {
+							attrs = append(attrs, a)
+						}
+					}
+					n.Attr = append(attrs, html.Attribute{Key: "style", Val: style})
+				}
+				n.Data, n.DataAtom = "div", atom.Div
+			case "font":
+				n.Data, n.DataAtom = "span", atom.Span
+			}
 			if !allowedTag(n.Data) {
 				if n.Data == "iframe" || n.Data == "object" || n.Data == "embed" {
 					r.missing["unsupported embedded content"] = true
