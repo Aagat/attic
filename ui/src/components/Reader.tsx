@@ -419,6 +419,7 @@ function ReaderItem({ item }: { item: Item }) {
                 <Tabs.Trigger
                   key={value}
                   value={value}
+                  disabled={editorOpen && value !== "reading"}
                   className="min-h-11 rounded border border-transparent px-3 text-xs data-[state=active]:border-[var(--line)] data-[state=active]:bg-[var(--paper)]"
                 >
                   {label}
@@ -577,8 +578,19 @@ function ReaderItem({ item }: { item: Item }) {
               <>
                 {(["reading", "original"] as const).map((view) => (
                   <Tabs.Content key={view} value={view}>
-                    {view === "reading" &&
-                    (item.outputLanguage || item.readingAvailable) ? (
+                    {view === "reading" && editorOpen ? (
+                      <ReadingEditor
+                        itemID={item.id}
+                        onClose={() => setEditorOpen(false)}
+                        onSaved={() => {
+                          setEditorOpen(false);
+                          setFormat("reading");
+                          refresh();
+                          notify("Reading version saved. Generating PDF…");
+                        }}
+                      />
+                    ) : view === "reading" &&
+                      (item.outputLanguage || item.readingAvailable) ? (
                       item.readingAvailable ? (
                         <ApprovedReading item={item} />
                       ) : (
@@ -755,7 +767,11 @@ function ReaderItem({ item }: { item: Item }) {
                   (item.readingAvailable || item.versions.length > 0) && (
                     <Button
                       className="mt-3"
-                      onClick={() => setEditorOpen(true)}
+                      disabled={editorOpen}
+                      onClick={() => {
+                        setFormat("reading");
+                        setEditorOpen(true);
+                      }}
                     >
                       <Pencil size={15} />
                       Edit reading version
@@ -925,18 +941,6 @@ function ReaderItem({ item }: { item: Item }) {
           </aside>
         </div>
       </Tabs.Root>
-      {editorOpen && (
-        <ReadingEditor
-          itemID={item.id}
-          onClose={() => setEditorOpen(false)}
-          onSaved={() => {
-            setEditorOpen(false);
-            setFormat("reading");
-            refresh();
-            notify("Reading version saved. Generating PDF…");
-          }}
-        />
-      )}
       {recoveryOpen && (
         <BrowserRecovery
           itemID={item.id}

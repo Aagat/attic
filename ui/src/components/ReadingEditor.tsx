@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useContentFrameHeight } from "../contentFrame";
 import editorStyles from "./reading-editor.css?url";
-import { Button, Modal, input } from "./primitives";
+import { Button, input } from "./primitives";
 import { useArchive } from "../state";
 
 const selectable =
@@ -56,7 +57,50 @@ export function ReadingEditor({
   const resizeFrame = useContentFrameHeight();
   const selected = useRef<Element | null>(null);
   const hovered = useRef<Element | null>(null);
-  const [ancestors, setAncestors] = useState<Element[]>([]);
+  const toolbar = useRef<HTMLDivElement>(null);
+  const [selectedElement, setSelectedElement] = useState<Element | null>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  useEffect(() => {
+    if (!selectedElement) return;
+    const place = () => {
+      const frameRect = frame.current?.getBoundingClientRect();
+      const rect = selectedElement.getBoundingClientRect();
+      const controls = toolbar.current?.getBoundingClientRect();
+      if (!frameRect || !controls) return;
+      const above = frameRect.top + rect.top - controls.height - 10;
+      const below = frameRect.top + rect.bottom + 10;
+      const top =
+        above >= 72
+          ? above
+          : below + controls.height < window.innerHeight - 8
+            ? below
+            : 72;
+      setPosition({
+        top: Math.max(
+          8,
+          Math.min(top, window.innerHeight - controls.height - 8),
+        ),
+        left: Math.max(
+          8,
+          Math.min(
+            frameRect.left + rect.left,
+            window.innerWidth - controls.width - 8,
+          ),
+        ),
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    const observer = new ResizeObserver(place);
+    observer.observe(frame.current!);
+    observer.observe(toolbar.current!);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      observer.disconnect();
+    };
+  }, [selectedElement]);
   function clearHover() {
     hovered.current?.removeAttribute("data-attic-hover");
     hovered.current = null;
@@ -70,6 +114,7 @@ export function ReadingEditor({
   const [selection, setSelection] = useState("");
   const [text, setText] = useState("");
   const [editable, setEditable] = useState(false);
+  const [editingText, setEditingText] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -89,8 +134,9 @@ export function ReadingEditor({
     selected.current?.removeAttribute("data-attic-selected");
     selected.current = null;
     setSelection("");
-    setAncestors([]);
+    setSelectedElement(null);
     setEditable(false);
+    setEditingText(false);
   }
   function html() {
     const body = frame.current!.contentDocument!.body.cloneNode(
@@ -118,15 +164,7 @@ export function ReadingEditor({
     selected.current = element;
     element.setAttribute("data-attic-selected", "");
     setSelection(label(element));
-    const path: Element[] = [];
-    for (
-      let node: Element | null = element;
-      node && node !== frame.current?.contentDocument?.body;
-      node = node.parentElement
-    ) {
-      if (node.matches(selectable)) path.unshift(node);
-    }
-    setAncestors(path);
+    setSelectedElement(element);
     setText(element.textContent || "");
     setEditable(
       element.children.length === 0 && !["IMG", "HR"].includes(element.tagName),
@@ -174,146 +212,134 @@ export function ReadingEditor({
     doc.addEventListener("submit", (event) => event.preventDefault());
   }
   return (
-    <Modal
-      open
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
-      title="Edit reading version"
-      wide
-    >
-      <div className="space-y-4">
-        {error && (
-          <p role="alert" className="text-sm text-[var(--danger)]">
-            {error}
-          </p>
-        )}
-        {!source && !error && <p role="status">Opening reading version…</p>}
-        {source && (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                disabled={!selection || busy}
-                onClick={() => {
-                  remember();
-                  clearHover();
-                  selected.current?.remove();
-                  clearSelection();
-                }}
-              >
-                Hide selected
-              </Button>
-              <Button
-                disabled={
-                  busy || !selected.current?.parentElement?.closest(selectable)
-                }
-                onClick={() =>
-                  select(
-                    selected.current?.parentElement?.closest(selectable) ||
-                      null,
-                  )
-                }
-              >
-                Select parent
-              </Button>
-              <Button
-                disabled={!history.length || busy}
-                onClick={() => {
-                  const previous = history.at(-1)!;
-                  clearSelection();
-                  clearHover();
-                  frame.current!.contentDocument!.body.innerHTML = previous;
-                  setHistory(history.slice(0, -1));
-                }}
-              >
-                Undo
-              </Button>
-              {selection && (
-                <span className="text-xs text-[var(--muted)]">
-                  Selected: {selection}
-                </span>
-              )}
-            </div>
-            {!!ancestors.length && (
-              <nav
-                aria-label="Selected element path"
-                className="flex flex-wrap items-center gap-1 text-xs"
-              >
-                {ancestors.map((element, index) => (
-                  <span key={index} className="inline-flex items-center gap-1">
-                    {index > 0 && <span aria-hidden="true">›</span>}
-                    <button
-                      className="min-h-9 rounded px-2 hover:bg-[var(--accent-soft)]"
-                      aria-current={
-                        element === selected.current ? "true" : undefined
-                      }
-                      disabled={busy}
-                      onClick={() => select(element)}
-                    >
-                      {label(element)}
-                    </button>
-                  </span>
-                ))}
-              </nav>
-            )}
-            <iframe
-              ref={frame}
-              title="Reading editor"
-              sandbox="allow-same-origin"
-              srcDoc={source}
-              onLoad={bind}
-              className={`min-h-64 w-full rounded border border-[var(--line)] bg-white ${busy ? "pointer-events-none" : ""}`}
-            />
-            {editable && (
-              <div className="space-y-2">
-                <label className="grid gap-2 text-xs">
-                  Selected text
-                  <textarea
-                    className={input}
-                    rows={3}
-                    value={text}
-                    disabled={busy}
-                    onChange={(event) => setText(event.target.value)}
-                  />
-                </label>
-                <Button
-                  disabled={busy || text === selected.current?.textContent}
-                  onClick={() => {
-                    remember();
-                    if (selected.current) selected.current.textContent = text;
-                    clearSelection();
-                  }}
-                >
-                  Apply text
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            primary
-            disabled={!source || !history.length || busy}
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                await archive.saveReading(itemID, html(), revision);
-                onSaved();
-              } catch (error) {
-                setError((error as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {busy ? "Saving…" : "Save and generate PDF"}
-          </Button>
-        </div>
+    <section aria-label="Edit reading version" className="relative">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--paper)] p-3">
+        <span className="mr-auto text-sm">Editing reading version</span>
+        <Button
+          disabled={!history.length || busy}
+          onClick={() => {
+            const previous = history.at(-1)!;
+            clearSelection();
+            clearHover();
+            frame.current!.contentDocument!.body.innerHTML = previous;
+            setHistory(history.slice(0, -1));
+          }}
+        >
+          Undo
+        </Button>
+        <Button disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          primary
+          disabled={!source || !history.length || busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await archive.saveReading(itemID, html(), revision);
+              onSaved();
+            } catch (error) {
+              setError((error as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Saving…" : "Save and generate PDF"}
+        </Button>
       </div>
-    </Modal>
+      {error && (
+        <p role="alert" className="text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+      {!source && !error && <p role="status">Opening reading version…</p>}
+      {source && (
+        <>
+          <iframe
+            ref={frame}
+            title="Reading editor"
+            sandbox="allow-same-origin"
+            srcDoc={source}
+            onLoad={bind}
+            className={`min-h-[80dvh] w-full border-0 bg-white ${busy ? "pointer-events-none" : ""}`}
+          />
+          {selection &&
+            createPortal(
+              <div
+                ref={toolbar}
+                role="toolbar"
+                aria-label="Selected element actions"
+                className="fixed z-50 max-w-[calc(100vw-16px)] rounded-lg border border-[var(--line)] bg-[var(--paper)] p-2 shadow-lg"
+                style={position}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs">{selection}</span>
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      remember();
+                      clearHover();
+                      selected.current?.remove();
+                      clearSelection();
+                    }}
+                  >
+                    Hide selected
+                  </Button>
+                  <Button
+                    disabled={
+                      busy ||
+                      !selected.current?.parentElement?.closest(selectable)
+                    }
+                    onClick={() =>
+                      select(
+                        selected.current?.parentElement?.closest(selectable) ||
+                          null,
+                      )
+                    }
+                  >
+                    Select parent
+                  </Button>
+                  {editable && (
+                    <Button
+                      disabled={busy}
+                      onClick={() => setEditingText(!editingText)}
+                    >
+                      Edit text
+                    </Button>
+                  )}
+                </div>
+                {editable && editingText && (
+                  <div className="space-y-2">
+                    <label className="grid gap-2 text-xs">
+                      Selected text
+                      <textarea
+                        className={input}
+                        rows={3}
+                        value={text}
+                        disabled={busy}
+                        onChange={(event) => setText(event.target.value)}
+                      />
+                    </label>
+                    <Button
+                      disabled={busy || text === selected.current?.textContent}
+                      onClick={() => {
+                        remember();
+                        if (selected.current)
+                          selected.current.textContent = text;
+                        clearSelection();
+                      }}
+                    >
+                      Apply text
+                    </Button>
+                  </div>
+                )}
+              </div>,
+              document.body,
+            )}
+        </>
+      )}
+    </section>
   );
 }

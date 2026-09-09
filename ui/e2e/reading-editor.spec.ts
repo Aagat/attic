@@ -110,9 +110,27 @@ test("reading edits preserve structure, undo removals, and save without email", 
   await editor.getByText("bold words").click();
   await expect(editor.locator("strong")).toHaveCSS("outline-style", "solid");
   await expect(editor.locator("strong")).toHaveCSS("outline-width", "2px");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const controls = page.getByRole("toolbar", {
+    name: "Selected element actions",
+  });
+  await expect(controls).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "Original layout" }),
+  ).toBeDisabled();
+  await expect
+    .poll(async () => {
+      const element = await editor.locator("strong").boundingBox();
+      const toolbar = await controls.boundingBox();
+      if (!element || !toolbar) return false;
+      return (
+        toolbar.y + toolbar.height <= element.y ||
+        toolbar.y >= element.y + element.height
+      );
+    })
+    .toBe(true);
   await page
-    .getByRole("navigation", { name: "Selected element path" })
-    .getByRole("button", { name: "Paragraph", exact: true })
+    .getByRole("button", { name: "Select parent", exact: true })
     .click();
   await expect(editor.locator("p").first()).toHaveAttribute(
     "data-attic-selected",
@@ -143,6 +161,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
     .getByRole("button", { name: "Hide selected", exact: true })
     .click();
   await editor.getByText("bold words").click();
+  await page.getByRole("button", { name: "Edit text", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Selected text" })
     .fill("clean words");
