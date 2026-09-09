@@ -22,21 +22,21 @@ $('setup').addEventListener('submit', async event => {
   server = url.origin;
   origin = url.protocol + '//' + url.hostname + '/*';
  } catch {
-  $('status').textContent = 'Enter the server address without a path, query or credentials.';
+  $('status').textContent = 'Invalid server address.';
   return;
  }
  const key = $('key').value.trim();
- if (!key) { $('status').textContent = 'Enter your Attic access key.'; return; }
+ if (!key) { $('status').textContent = 'Access key required.'; return; }
  button.disabled = true;
  try {
   // The permission request must happen before any await, during the submit gesture.
   const granted = await chrome.permissions.request({origins: [origin]});
-  if (!granted) { $('status').textContent = 'Allow access to your Attic server to connect.'; return; }
-  $('status').textContent = 'Checking your connection…';
+  if (!granted) { $('status').textContent = 'Server access not permitted.'; return; }
+  $('status').textContent = 'Connecting…';
   const response = await fetch(server + '/api/v1/session', {
    credentials: 'omit', redirect: 'error', headers: {Authorization: 'Bearer ' + key}, signal: AbortSignal.timeout(15000)
   });
-  if (!response.ok) throw new Error(response.status === 401 ? 'Access key rejected. Check the key and try again.' : 'Server returned HTTP ' + response.status + '.');
+  if (!response.ok) throw new Error(response.status === 401 ? 'Access key rejected.' : 'Server returned HTTP ' + response.status + '.');
   const body = await response.json();
   if (body.authenticated !== true) throw new Error('This address is not an Attic server.');
   await chrome.storage.local.set({server, key});
@@ -45,12 +45,12 @@ $('setup').addEventListener('submit', async event => {
   const permissions = await chrome.permissions.getAll();
   const unused = (permissions.origins || []).filter(granted => granted !== origin);
   if (unused.length) await chrome.permissions.remove({origins: unused});
-  $('status').textContent = 'Connected. Open an article and click the Attic toolbar button.';
+  $('status').textContent = 'Connected.';
   $('library').href = server;
   $('library').hidden = false;
   $('disconnect').hidden = false;
  } catch (error) {
-  $('status').textContent = error.name === 'TimeoutError' ? 'Connection timed out. Check the server address and try again.' : error instanceof TypeError ? 'Cannot reach Attic. Check the address and your network connection.' : error.message;
+  $('status').textContent = error.name === 'TimeoutError' ? 'Connection timed out.' : error instanceof TypeError ? 'Cannot reach Attic.' : error.message;
  } finally { button.disabled = false; }
 });
 $('disconnect').addEventListener('click', async () => {
@@ -65,7 +65,7 @@ $('disconnect').addEventListener('click', async () => {
   $('library').hidden = true;
   $('disconnect').hidden = true;
   $('status').textContent = 'Disconnected.';
- } catch { $('status').textContent = 'Could not disconnect. Try again.'; }
+ } catch { $('status').textContent = 'Could not disconnect.'; }
 });
 
 $('bookmark-sync').addEventListener('change', async () => {
@@ -73,14 +73,14 @@ $('bookmark-sync').addEventListener('change', async () => {
   const enabled = $('bookmark-sync').checked;
   if (enabled && !await chrome.permissions.request({permissions: ['bookmarks']})) {
    $('bookmark-sync').checked = false;
-   throw new Error('Allow bookmark access to enable automatic saving.');
+   throw new Error('Bookmark access not permitted.');
   }
   await chrome.storage.local.set({bookmarkSync: enabled});
   if (!enabled) {
    await chrome.storage.local.remove('pendingBookmarks');
    await chrome.permissions.remove({permissions: ['bookmarks']});
   }
-  $('sync-status').textContent = enabled ? 'Importing browser bookmarks…' : 'Automatic browser bookmarking is off. Your Attic copies are preserved.';
+  $('sync-status').textContent = enabled ? 'Importing browser bookmarks…' : 'Automatic saving is off.';
   await chrome.runtime.sendMessage({type: 'reconcile'});
   const state = await chrome.storage.local.get(['syncStatus']);
   if (enabled) $('sync-status').textContent = state.syncStatus || 'Waiting for connection.';
@@ -90,7 +90,7 @@ $('sync-now').addEventListener('click', async () => {
  $('sync-status').textContent = 'Checking bookmarks…';
  await chrome.runtime.sendMessage({type: 'reconcile'});
  const state = await chrome.storage.local.get(['syncStatus']);
- $('sync-status').textContent = state.syncStatus || 'Connect to Attic first.';
+ $('sync-status').textContent = state.syncStatus || 'Not connected.';
 });
 chrome.storage.onChanged.addListener(changes => {
  if (changes.syncStatus) $('sync-status').textContent = changes.syncStatus.newValue || '';

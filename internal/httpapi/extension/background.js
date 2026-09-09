@@ -23,19 +23,19 @@ function webURL(raw) {
 }
 
 async function request(config, path, body, requestID) {
-  if (!config.server || !config.key) throw new Error('Connect to Attic in extension settings first.');
+  if (!config.server || !config.key) throw new Error('Not connected to Attic.');
   const endpoint = new URL(config.server);
   if (!await chrome.permissions.contains({origins: [endpoint.protocol + '//' + endpoint.hostname + '/*']})) {
-    throw new Error('Reconnect to Attic in extension settings to allow server access.');
+    throw new Error('Server access not permitted.');
   }
   const response = await fetch(config.server + path, {
     method: 'POST', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000),
     headers: {Authorization: 'Bearer ' + config.key, ...(body instanceof FormData ? {} : {'Content-Type': 'application/json'}), 'Idempotency-Key': requestID || crypto.randomUUID()},
     body: body instanceof FormData ? body : JSON.stringify(body),
   });
-  if (response.status === 401) throw new Error('Access key rejected. Reconnect in extension settings.');
+  if (response.status === 401) throw new Error('Access key rejected.');
   if (!response.ok) {
-    const error = new Error('Attic returned HTTP ' + response.status + '. The save will retry.');
+    const error = new Error('Attic returned HTTP ' + response.status + '.');
     error.status = response.status;
     throw error;
   }
@@ -44,7 +44,7 @@ async function request(config, path, body, requestID) {
 
 async function enqueueSave(message) {
   const config = await chrome.storage.local.get(['server', 'key', 'pendingSaves']);
-  if (!config.server || !config.key) throw new Error('Connect to Attic in extension settings first.');
+  if (!config.server || !config.key) throw new Error('Not connected to Attic.');
   const id = message.requestID || crypto.randomUUID();
   const item = {url: webURL(message.url), title: message.title || '', action: message.action === 'kindle' ? 'kindle' : 'bookmark'};
   if (Number.isInteger(message.tabID)) item.capturing = Date.now();
@@ -53,12 +53,12 @@ async function enqueueSave(message) {
     try {
       const params = new URLSearchParams({id, tab: message.tabID, url: item.url});
       await chrome.tabs.create({url: chrome.runtime.getURL('capture.html') + '?' + params, active: false});
-      return {queued: true, message: 'Capturing this page; the save will continue if you close this popup.'};
+      return {queued: true, message: 'Capturing page…'};
     } catch { await updateSaves(pending => { delete pending[id].capturing; }); }
   }
   await reconcile();
   const state = await chrome.storage.local.get(['pendingSaves', 'syncStatus']);
-  return {queued: Boolean(state.pendingSaves?.[id]), message: state.pendingSaves?.[id] ? 'Saved in this browser; Attic will retry when connected.' : 'Saved to Attic.'};
+  return {queued: Boolean(state.pendingSaves?.[id]), message: state.pendingSaves?.[id] ? 'Queued in this browser.' : 'Saved in Attic.'};
 }
 
 // One owner serializes durable queues, bookmark scans, and network retries.
@@ -117,7 +117,7 @@ async function syncOnce() {
         catch (error) {
           if (![400, 413, 422].includes(error.status)) throw error;
           // Unusable browser copies fall back to the saved URL's normal capture.
-          await chrome.storage.local.set({captureStatus: 'Browser copy unavailable; Attic will capture the saved link.'});
+          await chrome.storage.local.set({captureStatus: 'Browser copy unavailable;'});
         }
         item.uploaded = true;
         await updateSaves(pending => { pending[id] = item; });
@@ -162,7 +162,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     let exists = false;
     await updateSaves(pending => { if (pending[message.requestID]) { exists = true; delete pending[message.requestID].capturing; } });
     if (!exists) { await snapshots.remove(message.requestID); return; }
-    if (message.error) await chrome.storage.local.set({captureStatus: message.error + ' Attic will capture the saved link.'});
+    if (message.error) await chrome.storage.local.set({captureStatus: message.error + ''});
     reconcile();
   })() : message.type === 'save' ? enqueueSave(message) : message.type === 'reconcile' ? reconcile() : undefined;
   if (!operation) return;

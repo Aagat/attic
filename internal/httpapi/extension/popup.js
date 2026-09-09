@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 (async () => {
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  $('title').textContent = tab?.title || tab?.url || 'Open a web page to save it.';
+  $('title').textContent = tab?.title || tab?.url || 'No web page selected.';
   for (const action of ['bookmark', 'kindle']) $(''+action).addEventListener('click', async () => {
     $('bookmark').disabled = $('kindle').disabled = true;
     $('status').textContent = 'Saving…';

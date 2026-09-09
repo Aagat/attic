@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Save to Attic",
-  "version": "0.4.0",
-  "description": "Preserve bookmarks and send reading documents to Kindle with your own Attic server.",
+  "name": "Attic",
+  "version": "0.4.1",
+  "description": "Bookmarks, search, and Kindle delivery.",
   "permissions": [
     "activeTab",
     "pageCapture",
@@ -15,7 +15,7 @@
     "https://*/*"
   ],
   "action": {
-    "default_title": "Save to Attic",
+    "default_title": "Attic",
     "default_icon": "icon-192.png",
     "default_popup": "popup.html"
   },

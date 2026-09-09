@@ -1,4 +1,4 @@
-# Save to Attic for Chromium
+# Attic for Chromium
 
 1. Download `/attic-chromium.zip` from your Attic server and extract it, or use this directory.
 2. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the directory containing `manifest.json`.

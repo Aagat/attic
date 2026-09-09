@@ -14,25 +14,25 @@
   }
   async function connection() {
     const config = await chrome.storage.local.get(['server', 'key']);
-    if (!config.server || !config.key) throw new Error('Connect to Attic in extension settings');
+    if (!config.server || !config.key) throw new Error('Not connected to Attic');
     const server = new URL(config.server);
     if (!['http:', 'https:'].includes(server.protocol) || server.username || server.password || server.pathname !== '/' || server.search || server.hash) {
-      throw new Error('Reconnect to Attic in extension settings');
+      throw new Error('Connection required');
     }
     if (!await chrome.permissions.contains({origins: [server.protocol + '//' + server.hostname + '/*']})) {
-      throw new Error('Reconnect to Attic in extension settings');
+      throw new Error('Connection required');
     }
     return {server: server.origin, key: config.key};
   }
   chrome.omnibox.onInputStarted.addListener(() => {
     cancel();
-    defaultSuggestion('Search your Attic library');
+    defaultSuggestion('Search Attic');
   });
   chrome.omnibox.onInputChanged.addListener((text, suggest) => {
     cancel();
     const current = generation;
     const query = text.trim().slice(0, 1000);
-    defaultSuggestion(query ? 'Search Attic for <match>' + escape(query) + '</match>' : 'Search your Attic library');
+    defaultSuggestion(query ? 'Search Attic for <match>' + escape(query) + '</match>' : 'Search Attic');
     suggest([]);
     if (!query) return;
     timer = setTimeout(async () => {
@@ -47,9 +47,9 @@
           credentials: 'omit', redirect: 'error', signal: request.signal,
           headers: {Authorization: 'Bearer ' + config.key},
         });
-        if (!response.ok) throw new Error(response.status === 401 ? 'Reconnect to Attic in extension settings' : 'Suggestions unavailable — press Enter to search Attic');
+        if (!response.ok) throw new Error(response.status === 401 ? 'Connection required' : 'Suggestions unavailable');
         const data = await response.json();
-        if (!Array.isArray(data.items)) throw new Error('Suggestions unavailable — press Enter to search Attic');
+        if (!Array.isArray(data.items)) throw new Error('Suggestions unavailable');
         if (current !== generation) return;
         const results = [];
         for (const item of data.items.slice(0, 5)) {
@@ -66,7 +66,7 @@
       } catch (error) {
         if (current === generation) {
           suggest([]);
-          defaultSuggestion(escape(error.name === 'AbortError' ? 'Suggestions timed out — press Enter to search Attic' : error.message));
+          defaultSuggestion(escape(error.name === 'AbortError' ? 'Suggestions timed out' : error.message));
         }
       } finally {
         clearTimeout(timeout);
