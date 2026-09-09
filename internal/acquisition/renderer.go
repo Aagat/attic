@@ -3,7 +3,6 @@ package acquisition
 import (
 	"context"
 	_ "embed"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -11,12 +10,8 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/chromedp/cdproto/browser"
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
@@ -185,26 +180,14 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	resolve := r.resolve
-	if savedHTML != nil {
-		// Chromium also makes process-level requests outside target interception.
-		// Deny them before DNS resolution when replaying a saved document.
-		resolve = func(context.Context, string) ([]net.IP, error) { return nil, ErrBlockedTarget }
-	}
-	proxy, err := newPolicyProxy(proxyConfig{resolve: resolve, dialTimeout: r.config.DialTimeout, maxBytes: r.config.MaxTransferredBytes, maxRequests: r.config.MaxRequests})
+	policy, err := newBrowserPolicy(proxyConfig{resolve: r.resolve, dialTimeout: r.config.DialTimeout, maxBytes: r.config.MaxTransferredBytes, maxRequests: r.config.MaxRequests}, r.config.MaxRedirects, u.String(), savedHTML)
 	if err != nil {
-		return result, fmt.Errorf("start browser policy proxy: %w", err)
+		return result, fmt.Errorf("start browser policy: %w", err)
 	}
-	budget := requestBudget{maximum: r.config.MaxRequests}
-	var interceptionBlocked atomic.Int64
 	defer func() {
-		result.Diagnostics = proxy.diagnostics()
-		if intercepted := budget.count.Load(); intercepted > result.Diagnostics.Requests {
-			result.Diagnostics.Requests = intercepted
-		}
-		result.Diagnostics.BlockedRequests += interceptionBlocked.Load()
-		if closeErr := proxy.Close(); err == nil && closeErr != nil {
-			err = fmt.Errorf("close browser policy proxy: %w", closeErr)
+		result.Diagnostics = policy.diagnostics()
+		if closeErr := policy.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close browser policy: %w", closeErr)
 		}
 	}()
 
@@ -214,14 +197,9 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	opts = append(opts,
 		chromedp.ExecPath(r.config.Executable),
 		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.ProxyServer(proxy.URL()),
-		chromedp.Flag("proxy-bypass-list", "<-loopback>"),
-		chromedp.Flag("disable-quic", true),
-		chromedp.Flag("disable-popup-blocking", false),
-		chromedp.Flag("force-webrtc-ip-handling-policy", "disable_non_proxied_udp"),
-		chromedp.Flag("disable-features", "WebRtcHideLocalIpsWithMdns,MediaRouter,OptimizationHints,AutofillServerCommunication"),
 		chromedp.WindowSize(int(r.config.ScreenshotWidth), int(r.config.ScreenshotHeight)),
 	)
+	opts = append(opts, policy.options()...)
 	allocatorCtx, allocatorCancel := chromedp.NewExecAllocator(operationCtx, opts...)
 	// allocatorCancel cancels the exec.Cmd context, waits for Chromium, and
 	// removes its temporary profile even after timeout or caller cancellation.
@@ -231,72 +209,18 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 
 	var responseMu sync.Mutex
 	responseStatuses := make(map[string]int)
-	var policyMu sync.Mutex
-	var policyErr error
-	var redirects int64
-	var servedSaved atomic.Bool
 	chromedp.ListenTarget(browserCtx, func(event any) {
-		switch e := event.(type) {
-		case *network.EventResponseReceived:
-			if e.Type == network.ResourceTypeDocument {
-				responseMu.Lock()
-				responseStatuses[e.Response.URL] = int(e.Response.Status)
-				responseMu.Unlock()
-			}
-		case *fetch.EventRequestPaused:
-			go func() {
-				targetContext := chromedp.FromContext(browserCtx)
-				if targetContext == nil || targetContext.Target == nil {
-					return
-				}
-				executorCtx := cdp.WithExecutor(browserCtx, targetContext.Target)
-
-				if savedHTML != nil {
-					if e.ResourceType == network.ResourceTypeDocument && e.Request.URL == u.String() && servedSaved.CompareAndSwap(false, true) {
-						_ = fetch.FulfillRequest(e.RequestID, 200).WithResponseHeaders([]*fetch.HeaderEntry{
-							{Name: "Content-Type", Value: "text/html; charset=utf-8"},
-							{Name: "Content-Security-Policy", Value: "default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; sandbox"},
-						}).WithBody(base64.StdEncoding.EncodeToString(savedHTML)).Do(executorCtx)
-					} else {
-						interceptionBlocked.Add(1)
-						_ = fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executorCtx)
-					}
-					return
-				}
-				target, parseErr := url.Parse(e.Request.URL)
-				policyMu.Lock()
-				if budget.exceeded() && policyErr == nil {
-					policyErr = ErrRequestLimit
-				}
-				if e.RedirectedRequestID != "" {
-					redirects++
-					if redirects > r.config.MaxRedirects && policyErr == nil {
-						policyErr = ErrTooManyRedirects
-					}
-				}
-				blocked := policyErr != nil || parseErr != nil || ValidateURL(target) != nil
-				if blocked && policyErr == nil {
-					policyErr = ErrBlockedTarget
-				}
-				policyMu.Unlock()
-				if blocked {
-					interceptionBlocked.Add(1)
-					_ = fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executorCtx)
-					return
-				}
-				_ = fetch.ContinueRequest(e.RequestID).Do(executorCtx)
-			}()
+		if e, ok := event.(*network.EventResponseReceived); ok && e.Type == network.ResourceTypeDocument {
+			responseMu.Lock()
+			responseStatuses[e.Response.URL] = int(e.Response.Status)
+			responseMu.Unlock()
 		}
 	})
 
 	// Initialize the target on browserCtx. The context used for a target's first
 	// Run owns its event loop, so using a short-lived navigation context here
 	// would tear the target down as soon as navigation completed.
-	err = chromedp.Run(browserCtx,
-		network.Enable(),
-		fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", RequestStage: fetch.RequestStageRequest}}),
-		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDeny),
-	)
+	err = policy.install(browserCtx)
 	if err != nil {
 		return result, r.renderError(ctx, operationCtx, err)
 	}
@@ -304,9 +228,7 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	err = chromedp.Run(navigationCtx, chromedp.Navigate(u.String()))
 	navigationCancel()
 	if err != nil {
-		policyMu.Lock()
-		blockedErr := policyErr
-		policyMu.Unlock()
+		blockedErr := policy.failure()
 		if blockedErr != nil {
 			return result, blockedErr
 		}
@@ -390,9 +312,7 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 		}
 	}
 	responseMu.Unlock()
-	policyMu.Lock()
-	blockedErr := policyErr
-	policyMu.Unlock()
+	blockedErr := policy.failure()
 	// Blocking an unsafe subresource does not invalidate an otherwise complete
 	// public document. Exhausting a configured resource/redirect budget does:
 	// continuing would send a knowingly truncated render to the AI stage.
@@ -403,15 +323,6 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 		return result, blockedErr
 	}
 	return result, nil
-}
-
-type requestBudget struct {
-	maximum int64
-	count   atomic.Int64
-}
-
-func (b *requestBudget) exceeded() bool {
-	return b != nil && b.count.Add(1) > b.maximum
 }
 
 func (r *ChromiumRenderer) renderError(parent, operation context.Context, err error) error {

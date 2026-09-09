@@ -11,9 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
@@ -33,7 +31,7 @@ type BrowserSession struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	allocatorCancel context.CancelFunc
-	proxy           *policyProxy
+	policy          *browserPolicy
 	mu              sync.Mutex
 	closeOnce       sync.Once
 }
@@ -56,22 +54,21 @@ func OpenBrowserSession(parent context.Context, executable, profiles, raw string
 	if err = os.Chmod(profile, 0700); err != nil {
 		return nil, err
 	}
-	proxy, err := newPolicyProxy(proxyConfig{maxBytes: 128 << 20, maxRequests: 2048})
+	policy, err := newBrowserPolicy(proxyConfig{maxBytes: 128 << 20, maxRequests: 2048}, 20, "", nil)
 	if err != nil {
 		return nil, err
 	}
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	opts = append(opts, chromedp.ExecPath(executable), chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", false), chromedp.ProxyServer(proxy.URL()), chromedp.Flag("proxy-bypass-list", "<-loopback>"),
-		chromedp.Flag("disable-quic", true), chromedp.Flag("disable-dev-shm-usage", true), chromedp.Flag("disable-popup-blocking", false),
-		chromedp.Flag("force-webrtc-ip-handling-policy", "disable_non_proxied_udp"), chromedp.WindowSize(RecoveryWidth, RecoveryHeight))
+		chromedp.Flag("headless", false), chromedp.Flag("disable-dev-shm-usage", true), chromedp.WindowSize(RecoveryWidth, RecoveryHeight))
+	opts = append(opts, policy.options()...)
 	allocator, ac := chromedp.NewExecAllocator(context.WithoutCancel(parent), opts...)
 	ctx, cancel := chromedp.NewContext(allocator)
 	initCancel := context.AfterFunc(parent, cancel)
 	defer initCancel()
 	initTimer := time.AfterFunc(45*time.Second, cancel)
 	defer initTimer.Stop()
-	s := &BrowserSession{ctx: ctx, cancel: cancel, allocatorCancel: ac, proxy: proxy, statuses: make(map[string]int), frameStatuses: make(map[cdp.FrameID]int)}
+	s := &BrowserSession{ctx: ctx, cancel: cancel, allocatorCancel: ac, policy: policy, statuses: make(map[string]int), frameStatuses: make(map[cdp.FrameID]int)}
 	chromedp.ListenTarget(ctx, func(event any) {
 		if e, ok := event.(*network.EventResponseReceived); ok && e.Type == network.ResourceTypeDocument {
 			s.responseMu.Lock()
@@ -84,29 +81,22 @@ func OpenBrowserSession(parent context.Context, executable, profiles, raw string
 			s.mainFrame = e.Frame.ID
 			s.responseMu.Unlock()
 		}
-		if e, ok := event.(*fetch.EventRequestPaused); ok {
-			go func() {
-				c := chromedp.FromContext(ctx)
-				if c == nil || c.Target == nil {
-					return
-				}
-				exec := cdp.WithExecutor(ctx, c.Target)
-				target, parseErr := url.Parse(e.Request.URL)
-				if parseErr != nil || ValidateURL(target) != nil {
-					_ = fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(exec)
-					return
-				}
-				_ = fetch.ContinueRequest(e.RequestID).Do(exec)
-			}()
-		}
 	})
-	if err = chromedp.Run(ctx, network.Enable(), fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", RequestStage: fetch.RequestStageRequest}}), browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDeny), chromedp.EmulateViewport(RecoveryWidth, RecoveryHeight)); err != nil {
+	if err = policy.install(ctx); err == nil {
+		err = chromedp.Run(ctx, chromedp.EmulateViewport(RecoveryWidth, RecoveryHeight))
+	}
+	if err != nil {
 		s.Close()
 		return nil, err
 	}
+
 	nav, stop := context.WithTimeout(ctx, 35*time.Second)
 	err = chromedp.Run(nav, chromedp.Navigate(raw))
 	stop()
+	if policyErr := policy.exhausted(); policyErr != nil {
+		s.Close()
+		return nil, policyErr
+	}
 	// A timed out load can still contain an interactive verification page.
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		s.Close()
@@ -122,7 +112,7 @@ func (s *BrowserSession) Close() {
 		stop()
 		s.cancel()
 		s.allocatorCancel()
-		_ = s.proxy.Close()
+		_ = s.policy.Close()
 	})
 }
 func (s *BrowserSession) run(parent context.Context, actions ...chromedp.Action) error {
@@ -133,13 +123,23 @@ func (s *BrowserSession) run(parent context.Context, actions ...chromedp.Action)
 	defer stop()
 	end := context.AfterFunc(parent, stop)
 	defer end()
-	return chromedp.Run(ctx, actions...)
+	if err := s.policy.exhausted(); err != nil {
+		return err
+	}
+	err := chromedp.Run(ctx, actions...)
+	if policyErr := s.policy.exhausted(); policyErr != nil {
+		return policyErr
+	}
+	return err
 }
 func (s *BrowserSession) Frame(ctx context.Context) (BrowserFrame, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var f BrowserFrame
 	err := s.run(ctx, chromedp.Location(&f.URL), chromedp.Title(&f.Title), chromedp.Evaluate(`(document.body?.innerText || '').slice(0,20000)`, &f.Text), chromedp.CaptureScreenshot(&f.Screenshot))
+	if err != nil {
+		return f, err
+	}
 	u, e := url.Parse(f.URL)
 	if e != nil || ValidateURL(u) != nil {
 		return f, ErrBlockedTarget
@@ -191,6 +191,7 @@ func (s *BrowserSession) Snapshot(ctx context.Context) (RenderedPage, error) {
 		return result, ErrBlockedTarget
 	}
 	result.MHTML = []byte(snapshot)
+	result.Diagnostics = s.policy.diagnostics()
 	s.responseMu.Lock()
 	u.Fragment = ""
 	result.Status = s.statuses[u.String()]
