@@ -16,7 +16,7 @@ import (
 func (l *Library) SavedPage(ctx context.Context, jobID domain.JobID) (acquisition.RenderedPage, bool, error) {
 	var page acquisition.RenderedPage
 	var encoded []byte
-	err := l.db.QueryRowContext(ctx, `SELECT c.artifact,c.final_url,c.title FROM saved_captures c JOIN saved_items i ON i.id=c.item_id WHERE i.job_id=$1 AND c.status IN ('complete','partial') AND c.text_content<>'' ORDER BY c.created_at DESC LIMIT 1`, string(jobID)).Scan(&encoded, &page.FinalURL, &page.Title)
+	err := l.db.QueryRowContext(ctx, `SELECT c.artifact,c.final_url,c.title FROM saved_captures c JOIN saved_items i ON i.id=c.item_id WHERE (i.job_id=$1 OR EXISTS(SELECT 1 FROM reading_editions e WHERE e.job_id=$1 AND e.item_id=i.id)) AND c.status IN ('complete','partial') AND c.text_content<>'' ORDER BY c.created_at DESC LIMIT 1`, string(jobID)).Scan(&encoded, &page.FinalURL, &page.Title)
 	if errors.Is(err, sql.ErrNoRows) {
 		return page, false, nil
 	}

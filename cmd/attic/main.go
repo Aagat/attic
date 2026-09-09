@@ -137,7 +137,7 @@ func runServer(cfg config.Config) error {
 		return acquisition.OpenBrowserSession(ctx, cfg.Browser.Executable, filepath.Join(cfg.ArtifactRoot, "..", "browser-profiles"), raw)
 	}, aiClient, saved.SaveRecoveredPage)
 	defer recoveryBrowser.Close()
-	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithArchives(acquisition.Archives{}), processing.WithSavedPages(saved, renderer), processing.WithBrowserRecovery(recovery.PageRecovery{Browser: recoveryBrowser, Renderer: renderer}))
+	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithOutputLanguages(saved), processing.WithArchives(acquisition.Archives{}), processing.WithSavedPages(saved, renderer), processing.WithBrowserRecovery(recovery.PageRecovery{Browser: recoveryBrowser, Renderer: renderer}))
 	if err != nil {
 		return err
 	}

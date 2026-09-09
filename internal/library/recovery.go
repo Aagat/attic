@@ -52,7 +52,7 @@ func (l *Library) ResumeRecovered(ctx context.Context) error {
 		return safe(err)
 	}
 	for _, c := range candidates {
-		if err = l.prepare(ctx, c.id, "recovery:"+c.job, c.destination, c.job); err != nil {
+		if err = l.prepare(ctx, c.id, "recovery:"+c.job, c.destination, c.job, nil); err != nil {
 			return err
 		}
 	}

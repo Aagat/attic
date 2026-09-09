@@ -73,6 +73,8 @@ type Capture struct {
 	Text      string          `json:"-"`
 }
 type Detail struct {
+	OutputLanguage   string `json:"output_language"`
+	ReadingAvailable bool   `json:"reading_available"`
 	Item
 	Captures []Capture `json:"captures"`
 }
@@ -258,6 +260,9 @@ func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
 		return Detail{}, err
 	}
 	d := Detail{Item: i, Captures: []Capture{}}
+	if err := l.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT language FROM reading_editions WHERE job_id=$1),''), EXISTS(SELECT 1 FROM content_documents WHERE job_id=$1)`, i.JobID).Scan(&d.OutputLanguage, &d.ReadingAvailable); err != nil {
+		return d, safe(err)
+	}
 	rows, err := l.db.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at,source FROM saved_captures WHERE item_id=$1 ORDER BY created_at DESC`, id)
 	if err != nil {
 		return d, safe(err)
@@ -332,15 +337,15 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 	if l.destination == "" {
 		return ErrSMTPDisabled
 	}
-	return l.prepare(ctx, id, key, l.destination, "")
+	return l.prepare(ctx, id, key, l.destination, "", nil)
 }
 
 // GeneratePDF prepares a reading document without requesting email delivery.
 func (l *Library) GeneratePDF(ctx context.Context, id, key string) error {
-	return l.prepare(ctx, id, key, "", "")
+	return l.prepare(ctx, id, key, "", "", nil)
 }
 
-func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob string) error {
+func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob string, selection *string) error {
 	if key == "" {
 		key = opaque()
 	}
@@ -375,6 +380,32 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 	if err != nil {
 		return safe(err)
 	}
+	var language string
+	if jobID != "" {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT language FROM reading_editions WHERE job_id=$1),'')`, jobID).Scan(&language); err != nil {
+			return safe(err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, jobID, id, language); err != nil {
+			return safe(err)
+		}
+	}
+	if selection != nil {
+		if kind != "bookmark" {
+			return ErrInvalid
+		}
+		language = *selection
+		jobID = ""
+		err := tx.QueryRowContext(ctx, `SELECT e.job_id FROM reading_editions e JOIN jobs j ON j.id=e.job_id WHERE e.item_id=$1 AND e.language=$2 ORDER BY j.created_at DESC LIMIT 1`, id, language).Scan(&jobID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return safe(err)
+		}
+		if language == "" {
+			if _, err := tx.ExecContext(ctx, `UPDATE saved_items SET job_id=NULLIF($2,''),version=version+1,updated_at=now() WHERE id=$1`, id, jobID); err != nil {
+				return safe(err)
+			}
+			return safe(tx.Commit())
+		}
+	}
 	var hasPDF bool
 	if jobID != "" {
 		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM artifacts WHERE job_id=$1 AND availability='available')`, jobID).Scan(&hasPDF)
@@ -383,10 +414,9 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 		}
 	}
 	if hasPDF {
-		if destination == "" {
-			return safe(tx.Commit())
+		if destination != "" {
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, destination)
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, destination)
 	} else {
 		var active bool
 		if jobID != "" {
@@ -401,6 +431,9 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 			}
 			jobID = opaque()
 			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,submitted_url,title_hint,output_profile,correlation_id,delivery_destination) VALUES($1,$2,$3,$4,$1,NULLIF($5,''))`, jobID, raw, title, l.profile, destination)
+			if err == nil {
+				_, err = tx.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES($1,$2,$3)`, jobID, id, language)
+			}
 		} else if destination != "" {
 			// A Kindle request may join PDF generation already in progress.
 			_, err = tx.ExecContext(ctx, `UPDATE jobs SET delivery_destination=$2 WHERE id=$1`, jobID, destination)

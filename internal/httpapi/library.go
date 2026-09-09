@@ -319,9 +319,37 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		}
 		return true
 	}
+	if len(parts) == 2 && parts[1] == "reading" && (r.Method == "GET" || r.Method == "HEAD") {
+		body, err := s.library.Reading(r.Context(), id)
+		if err != nil {
+			fail(err)
+			return true
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		if r.Method == "GET" {
+			w.Write(body)
+		}
+		return true
+	}
 	if len(parts) == 2 && r.Method == "POST" {
 		var err error
 		switch parts[1] {
+		case "translate":
+			var request struct {
+				Language *string `json:"language"`
+			}
+			if !decode(&request) {
+				return true
+			}
+			if request.Language == nil {
+				fail(library.ErrInvalid)
+				return true
+			}
+			err = s.library.Translate(r.Context(), id, *request.Language, r.Header.Get("Idempotency-Key"))
 		case "capture":
 			r.Body = http.MaxBytesReader(w, r.Body, capture.MaxBrowserCaptureBytes+(1<<20))
 			if r.ParseMultipartForm(1<<20) != nil {
