@@ -49,3 +49,20 @@
     background: var(--accent-soft);
   }
 }
+
+/* Hide the indicators, not the scrollable content, in the installed mobile app. */
+html.mobile-pwa,
+html.mobile-pwa * {
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+html.mobile-pwa::-webkit-scrollbar,
+html.mobile-pwa *::-webkit-scrollbar {
+  display: none;
+}
+/* Prevent iOS from zooming the viewport when a small form control receives focus. */
+html.mobile-pwa input,
+html.mobile-pwa select,
+html.mobile-pwa textarea {
+  font-size: 16px;
+}

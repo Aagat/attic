@@ -8,6 +8,8 @@ import "@fontsource/newsreader/400.css";
 import "@fontsource/newsreader/500.css";
 import "./styles.css";
 import { App } from "./App";
+import { configureMobilePWA } from "./mobile-pwa";
+configureMobilePWA();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
