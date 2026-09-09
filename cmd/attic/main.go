@@ -25,8 +25,10 @@ import (
 	"attic/internal/library"
 	"attic/internal/postgres"
 	"attic/internal/processing"
+	"attic/internal/recovery"
 	"attic/internal/search"
 	"attic/internal/subscription"
+	"path/filepath"
 )
 
 const (
@@ -131,7 +133,11 @@ func runServer(cfg config.Config) error {
 		return err
 	}
 	defer saved.Close()
-	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithArchives(acquisition.Archives{}), processing.WithSavedPages(saved, renderer))
+	recoveryBrowser := recovery.New(func(ctx context.Context, raw string) (recovery.Browser, error) {
+		return acquisition.OpenBrowserSession(ctx, cfg.Browser.Executable, filepath.Join(cfg.ArtifactRoot, "..", "browser-profiles"), raw)
+	}, aiClient, saved.SaveRecoveredPage)
+	defer recoveryBrowser.Close()
+	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithArchives(acquisition.Archives{}), processing.WithSavedPages(saved, renderer), processing.WithBrowserRecovery(recovery.PageRecovery{Browser: recoveryBrowser, Renderer: renderer}))
 	if err != nil {
 		return err
 	}
@@ -154,7 +160,7 @@ func runServer(cfg config.Config) error {
 			return err
 		}
 	}
-	server := httpapi.NewServerWithOptions(archive, readiness, cfg.BearerToken, httpapi.Options{Library: saved, Search: index})
+	server := httpapi.NewServerWithOptions(archive, readiness, cfg.BearerToken, httpapi.Options{Library: saved, Search: index, Recovery: recoveryBrowser})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -164,7 +170,7 @@ func runServer(cfg config.Config) error {
 		go func() { defer background.Done(); run(ctx) }()
 	}
 	start(func(ctx context.Context) error {
-		return saved.RunCaptures(ctx, capture.New(renderer, acquisition.Archives{}))
+		return saved.RunCaptures(ctx, recovery.Capturer{Base: capture.New(renderer, acquisition.Archives{}), Browser: recoveryBrowser})
 	})
 	start(saved.RunCleanup)
 	start(func(ctx context.Context) error { return saved.RunEnrichment(ctx, aiClient) })

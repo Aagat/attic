@@ -47,13 +47,22 @@ func WithSavedPages(source SavedPages, renderer SavedRenderer) func(*Processor) 
 	return func(p *Processor) { p.saved = source; p.savedRenderer = renderer }
 }
 
+type BrowserRecovery interface {
+	Recover(context.Context, string) (acquisition.RenderedPage, error)
+}
+
+func WithBrowserRecovery(browser BrowserRecovery) func(*Processor) {
+	return func(p *Processor) { p.browserRecovery = browser }
+}
+
 type Processor struct {
-	saved         SavedPages
-	savedRenderer SavedRenderer
-	archives      ArchiveResolver
-	renderer      acquisition.Renderer
-	approver      Approver
-	formatter     formatter.Formatter
+	browserRecovery BrowserRecovery
+	saved           SavedPages
+	savedRenderer   SavedRenderer
+	archives        ArchiveResolver
+	renderer        acquisition.Renderer
+	approver        Approver
+	formatter       formatter.Formatter
 }
 
 func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatter, options ...func(*Processor)) (*Processor, error) {
@@ -95,7 +104,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 		}
 	}
 	result, originalErr := p.processSource(ctx, job, pc, job.SubmittedURL, false)
-	if originalErr == nil || p.archives == nil || !recoverable(originalErr) || ctx.Err() != nil {
+	if originalErr == nil || (p.archives == nil && p.browserRecovery == nil) || !recoverable(originalErr) || ctx.Err() != nil {
 		return result, originalErr
 	}
 	// Discovery and all source attempts share a total deadline; individual browser,
@@ -103,7 +112,10 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 	recoveryCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
 	defer cancel()
 	slog.Info("article recovery started", "job_id", job.ID)
-	sources := p.archives.Candidates(recoveryCtx, job.SubmittedURL)
+	var sources []string
+	if p.archives != nil {
+		sources = p.archives.Candidates(recoveryCtx, job.SubmittedURL)
+	}
 	seen := map[string]bool{job.SubmittedURL: true}
 	transientArchiveFailure := false
 	for i, source := range sources {
@@ -139,6 +151,14 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 	}
 	if ctx.Err() != nil {
 		return application.ProcessResult{}, ctx.Err()
+	}
+	if p.browserRecovery != nil && recoveryCtx.Err() == nil {
+		if err := pc.SetStage(domain.StageFetching); err != nil {
+			return application.ProcessResult{}, err
+		}
+		if page, err := p.browserRecovery.Recover(recoveryCtx, job.SubmittedURL); err == nil {
+			return p.processPage(recoveryCtx, job, pc, page, job.SubmittedURL, true)
+		}
 	}
 	// Let the existing durable retry budget retry temporary archive outages too.
 	var originalFailure *application.ProcessingError

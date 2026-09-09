@@ -20,6 +20,7 @@ import (
 	"attic/internal/application"
 	"attic/internal/domain"
 	"attic/internal/library"
+	"attic/internal/recovery"
 	"attic/internal/search"
 )
 
@@ -35,9 +36,10 @@ const (
 // Options controls transport limits and the clock used by the authentication
 // limiter. Zero values select conservative production defaults.
 type Options struct {
-	Library *library.Library
-	Search  search.Index
-	Now     func() time.Time
+	Recovery *recovery.Manager
+	Library  *library.Library
+	Search   search.Index
+	Now      func() time.Time
 
 	AuthFailureLimit      int
 	AuthFailureWindow     time.Duration
@@ -46,6 +48,7 @@ type Options struct {
 }
 
 type Server struct {
+	recovery           *recovery.Manager
 	library            *library.Library
 	search             search.Index
 	archive            application.JobArchive
@@ -82,7 +85,7 @@ func NewServerWithOptions(archive application.JobArchive, readiness application.
 		options.MaxRequestURIBytes = defaultMaxRequestURIBytes
 	}
 	return &Server{
-		library: options.Library, search: options.Search,
+		library: options.Library, search: options.Search, recovery: options.Recovery,
 		sessions:           make(map[[32]byte]time.Time),
 		archive:            archive,
 		readiness:          readiness,
@@ -130,6 +133,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.authFailures.clear(remoteIP)
 	if r.URL.Path == "/api/v1/session" {
 		s.handleSession(w, r, correlationID)
+		return
+	}
+	if s.serveRecovery(w, r, correlationID) {
 		return
 	}
 	if s.serveLibrary(w, r, correlationID) {

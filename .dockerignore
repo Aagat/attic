@@ -21,3 +21,5 @@ ui/test-results/
 ui/playwright-report/
 
 **/._*
+!scripts/
+!scripts/start-attic.sh

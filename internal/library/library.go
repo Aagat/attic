@@ -332,15 +332,15 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 	if l.destination == "" {
 		return ErrSMTPDisabled
 	}
-	return l.prepare(ctx, id, key, l.destination)
+	return l.prepare(ctx, id, key, l.destination, "")
 }
 
 // GeneratePDF prepares a reading document without requesting email delivery.
 func (l *Library) GeneratePDF(ctx context.Context, id, key string) error {
-	return l.prepare(ctx, id, key, "")
+	return l.prepare(ctx, id, key, "", "")
 }
 
-func (l *Library) prepare(ctx context.Context, id, key, destination string) error {
+func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob string) error {
 	if key == "" {
 		key = opaque()
 	}
@@ -356,6 +356,9 @@ func (l *Library) prepare(ctx context.Context, id, key, destination string) erro
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE(job_id,''),COALESCE(url,''),title,kind FROM saved_items WHERE id=$1 FOR UPDATE`, id).Scan(&jobID, &raw, &title, &kind)
 	if err != nil {
 		return safe(err)
+	}
+	if expectedJob != "" && jobID != expectedJob {
+		return nil
 	}
 	var actionID string
 	err = tx.QueryRowContext(ctx, `INSERT INTO item_actions(key,item_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING key`, key, id).Scan(&actionID)

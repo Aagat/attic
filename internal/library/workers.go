@@ -23,7 +23,7 @@ func (l *Library) CaptureOnce(ctx context.Context, c Capturer) (bool, error) {
 	var id, raw, token string
 	var attempts int
 	token = opaque()
-	err := l.db.QueryRowContext(ctx, `UPDATE saved_items SET capture_status='capturing',capture_token=$1,capture_until=now()+interval '4 minutes',capture_attempts=capture_attempts+1
+	err := l.db.QueryRowContext(ctx, `UPDATE saved_items SET capture_status='capturing',capture_token=$1,capture_until=now()+interval '6 minutes',capture_attempts=capture_attempts+1
  WHERE id=(SELECT id FROM saved_items WHERE (capture_status='queued' AND capture_next<=now()) OR (capture_status='capturing' AND capture_until<now()) ORDER BY capture_next FOR UPDATE SKIP LOCKED LIMIT 1)
  RETURNING id,url,capture_attempts`, token).Scan(&id, &raw, &attempts)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -56,7 +56,7 @@ func (l *Library) persistCapture(ctx context.Context, id, token, captureID, sour
 	if err := tx.QueryRowContext(ctx, `SELECT capture_token FROM saved_items WHERE id=$1 FOR UPDATE`, id).Scan(&current); err != nil {
 		return safe(err)
 	}
-	if source == "server" && current.String != token {
+	if source == "server" && token != "" && current.String != token {
 		return nil
 	}
 	var exists bool
@@ -94,7 +94,13 @@ func (l *Library) persistCapture(ctx context.Context, id, token, captureID, sour
 }
 
 func (l *Library) RunCaptures(ctx context.Context, c Capturer) error {
-	return loop(ctx, func() error { _, err := l.CaptureOnce(ctx, c); return err })
+	return loop(ctx, func() error {
+		if err := l.ResumeRecovered(ctx); err != nil {
+			return err
+		}
+		_, err := l.CaptureOnce(ctx, c)
+		return err
+	})
 }
 func loop(ctx context.Context, f func() error) error {
 	for {

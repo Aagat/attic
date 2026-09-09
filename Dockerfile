@@ -58,7 +58,7 @@ RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-c
     && mkdir -p /data/artifacts \
     && chown -R attic:attic /data
 
-RUN apk add --no-cache poppler-utils
+RUN apk add --no-cache poppler-utils xvfb
 
 COPY --from=build --chown=attic:attic /out/attic /usr/local/bin/attic
 # The migration runner consumes a directory. Keep that directory in the
@@ -72,6 +72,8 @@ ENV LISTEN_ADDRESS=0.0.0.0:8080 \
     TMPDIR=/tmp \
     HOME=/tmp
 
+COPY --chmod=755 scripts/start-attic.sh /usr/local/bin/start-attic
+
 WORKDIR /app
 USER 10001:10001
 
@@ -82,4 +84,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1
 
-ENTRYPOINT ["/usr/local/bin/attic"]
+ENTRYPOINT ["/usr/local/bin/start-attic"]
