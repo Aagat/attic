@@ -93,7 +93,37 @@ function item(w: WireItem): Item {
     textAvailable: w.text_available,
   };
 }
-export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
+type KeyStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+const accessKeyStorage = "attic-access-key";
+export function createHTTPArchive(
+  transport: typeof fetch = fetch,
+  storage?: KeyStorage,
+): Archive {
+  let rememberedKey = "";
+  try {
+    storage ??= globalThis.localStorage;
+    rememberedKey = storage?.getItem(accessKeyStorage) || "";
+  } catch {
+    /* Browser storage can be disabled. Keep this tab usable. */
+  }
+  function remember(key: string) {
+    rememberedKey = key;
+    try {
+      if (key) storage?.setItem(accessKeyStorage, key);
+      else storage?.removeItem(accessKeyStorage);
+    } catch {
+      /* This tab can still authenticate without persistent storage. */
+    }
+  }
+  let reconnecting: Promise<void> | undefined;
+  async function signIn(key: string) {
+    await request("/session", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + key },
+    });
+    remember(key);
+  }
+
   async function request<T>(
     path: string,
     options: RequestInit = {},
@@ -101,7 +131,7 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
   ): Promise<T> {
     let response: Response;
     try {
-      response = await transport("/api/v1" + path, {
+      const init = {
         ...options,
         credentials: "same-origin",
         cache: "no-store",
@@ -111,9 +141,27 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
             : {}),
           ...options.headers,
         },
-      });
+      } satisfies RequestInit;
+      response = await transport("/api/v1" + path, init);
+      if (
+        response.status === 401 &&
+        (path !== "/session" || !options.method) &&
+        rememberedKey
+      ) {
+        // Authentication rejected the request before any mutation ran. Reconnect
+        // once, then retry the same body and idempotency key.
+        reconnecting ??= signIn(rememberedKey).finally(() => {
+          reconnecting = undefined;
+        });
+        await reconnecting;
+        response = await transport("/api/v1" + path, init);
+      }
     } catch (error) {
-      if ((error as Error).name === "AbortError") throw error;
+      if (
+        error instanceof ArchiveError ||
+        (error as Error).name === "AbortError"
+      )
+        throw error;
       throw new ArchiveError(
         "Cannot reach Attic. Check your connection and try again.",
       );
@@ -127,8 +175,11 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
         const body = await response.json();
         message = body.error?.message || message;
       } catch {}
-      if (response.status === 401)
-        window.dispatchEvent(new Event("attic-session-expired"));
+      if (response.status === 401) {
+        remember("");
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new Event("attic-session-expired"));
+      }
       throw new ArchiveError(message, response.status);
     }
     if (response.status === 204 || options.method === "HEAD")
@@ -141,15 +192,12 @@ export function createHTTPArchive(transport: typeof fetch = fetch): Archive {
   return {
     preview: false,
     async session(key) {
-      await request(
-        "/session",
-        key
-          ? { method: "POST", headers: { Authorization: "Bearer " + key } }
-          : {},
-      );
+      if (key) await signIn(key);
+      else await request("/session");
     },
     async signOut() {
       await request("/session", { method: "DELETE" });
+      remember("");
     },
     async list(p, signal) {
       const q = new URLSearchParams({

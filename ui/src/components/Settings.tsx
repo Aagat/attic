@@ -472,8 +472,8 @@ export function ConnectPage() {
         >
           <h2 className="font-display text-3xl">Connect to Attic</h2>
           <p className="mb-8 mt-3 text-sm leading-6 text-[var(--muted)]">
-            Enter the access key for this Attic server. Your browser keeps a
-            private session cookie.
+            Enter your access key once. This browser remembers it and signs you
+            in automatically until you sign out or clear its site data.
           </p>
           <label className="mb-5 grid gap-2 text-[10px] uppercase tracking-wider">
             Server address

@@ -344,9 +344,10 @@ HTTPS). Automatic email delivery is not connected. The interface works on
 phones and desktops. `/?url=<encoded-article-url>` can prefill the submission
 field without automatically submitting it.
 
-Sign-in uses a random HttpOnly, SameSite cookie; the access key is not stored in
-browser local storage or URLs. Sessions expire after 30 days, on sign-out, or
-when the server restarts. API clients can continue using bearer authentication.
+The browser remembers your bearer token in local storage and automatically
+reestablishes its HttpOnly, SameSite session after restarts or session expiry.
+Enter it once per browser/site address. Signing out clears the remembered token;
+clearing site data also requires signing in again. API clients use the same bearer token.
 Use HTTPS when exposing the service outside your trusted private network.
 
 The in-app preview renders one page at a time without relying on a browser's
@@ -636,7 +637,7 @@ enforced by their owning modules.
 
 The production Docker image builds and embeds the pnpm/React application. Open
 Attic's root URL and connect with its owner access key. The browser exchanges it
-for an HttpOnly session cookie; it does not persist the access key. Library
+for an HttpOnly session cookie and remembers the key for automatic sign-in. Library
 queries, PDFs, captures, imports and ZIP backups use the authenticated server API.
 The PWA caches the application shell only; reading saved content requires a server
 connection. Desktop Chromium and mobile WebKit are covered by the remote tests.
