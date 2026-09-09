@@ -26,13 +26,14 @@ interface WireItem {
     created_at: string;
     status: string;
     missing: string[];
+    source?: "browser" | "server";
   }[];
 }
 const captures: Record<string, Item["capture"]> = {
   complete: "Preserved",
   partial: "Preserved",
   failed: "Capture failed",
-  blocked: "Capture failed",
+  blocked: "Needs browser capture",
   not_captured: "Not captured",
   queued: "Capture queued",
   capturing: "Preserving",
@@ -83,6 +84,7 @@ function item(w: WireItem): Item {
         date: c.created_at,
         status: c.status === "partial" ? "Partial" : "Complete",
         missing: c.missing || [],
+        source: c.source,
       })),
     jobId: w.job_id,
     hasPdf: w.has_pdf,
@@ -222,6 +224,7 @@ export function createHTTPArchive(
               Preserved: "preserved",
               "Partial copy": "partial",
               "Capture failed": "failed",
+              "Needs browser capture": "blocked",
               "Not captured": "not_captured",
               "Capture queued": "queued",
               Preserving: "capturing",

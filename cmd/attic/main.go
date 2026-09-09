@@ -126,7 +126,12 @@ func runServer(cfg config.Config) error {
 	}
 	pdf := formatter.PDF{MaxBytes: cfg.PDF.MaxBytes, Timeout: cfg.PDF.Timeout, PandocPath: "/usr/bin/pandoc",
 		MarginMM: cfg.PDF.MarginMM, BodyFontPT: cfg.PDF.BodyFontPT, LineHeight: cfg.PDF.LineHeight}
-	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithArchives(acquisition.Archives{}))
+	saved, err := library.Open(context.Background(), library.Options{DatabaseURL: cfg.DatabaseURL, ArtifactRoot: cfg.ArtifactRoot, Profile: cfg.DefaultProfile, Destination: destination})
+	if err != nil {
+		return err
+	}
+	defer saved.Close()
+	processor, err := processing.New(renderer, approver, formatter.Checked{Renderer: pdf}, processing.WithArchives(acquisition.Archives{}), processing.WithSavedPages(saved, renderer))
 	if err != nil {
 		return err
 	}
@@ -142,11 +147,6 @@ func runServer(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	saved, err := library.Open(context.Background(), library.Options{DatabaseURL: cfg.DatabaseURL, ArtifactRoot: cfg.ArtifactRoot, Profile: cfg.DefaultProfile, Destination: destination})
-	if err != nil {
-		return err
-	}
-	defer saved.Close()
 	var index search.Index
 	if cfg.SearchURL != "" {
 		index, err = search.NewMeilisearch(search.Config{URL: cfg.SearchURL, APIKey: cfg.SearchAPIKey, Index: cfg.SearchIndex, Timeout: 15 * time.Second})

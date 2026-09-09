@@ -132,6 +132,7 @@ export function Library() {
           {[
             "Preserved",
             "Capture failed",
+            "Needs browser capture",
             "Not captured",
             "Capture queued",
             "Preserving",
@@ -277,7 +278,9 @@ export function Library() {
                 </span>
                 <Badge
                   tone={
-                    i.capture === "Capture failed"
+                    ["Capture failed", "Needs browser capture"].includes(
+                      i.capture,
+                    )
                       ? "danger"
                       : [
                             "Preserving",

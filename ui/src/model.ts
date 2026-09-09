@@ -2,6 +2,7 @@ import { randomId } from "./id";
 export type CaptureStatus =
   | "Preserved"
   | "Partial copy"
+  | "Needs browser capture"
   | "Capture failed"
   | "Not captured"
   | "Capture queued"
@@ -41,6 +42,7 @@ export interface Item {
   versions: {
     id?: string;
     missing?: string[];
+    source?: "browser" | "server";
     date: string;
     status: "Complete" | "Partial";
   }[];
@@ -227,6 +229,7 @@ export function validItems(value: unknown): value is Item[] {
         [
           "Preserved",
           "Partial copy",
+          "Needs browser capture",
           "Capture failed",
           "Not captured",
           "Capture queued",

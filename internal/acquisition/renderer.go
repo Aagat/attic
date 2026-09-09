@@ -3,6 +3,7 @@ package acquisition
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -139,21 +140,36 @@ func NewChromiumRenderer(cfg ChromiumConfig) (*ChromiumRenderer, error) {
 }
 
 func (r *ChromiumRenderer) Render(ctx context.Context, raw string) (RenderedPage, error) {
-	return r.render(ctx, raw, false)
+	return r.render(ctx, raw, false, nil)
 }
 
 // Snapshot preserves loaded cross-origin images and styles within the same protected browser.
 func (r *ChromiumRenderer) Snapshot(ctx context.Context, raw string) (RenderedPage, error) {
-	return r.render(ctx, raw, true)
+	return r.render(ctx, raw, true, nil)
 }
 
-func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool) (result RenderedPage, err error) {
+// RenderSaved renders an already sanitized snapshot without contacting its website.
+// It retains the original URL for extraction and blocks all external resources.
+func (r *ChromiumRenderer) RenderSaved(ctx context.Context, raw string, html []byte) (RenderedPage, error) {
+	if len(html) == 0 || len(html) > 64<<20 {
+		return RenderedPage{}, ErrDOMTooLarge
+	}
+	return r.render(ctx, raw, false, html)
+}
+
+func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool, savedHTML []byte) (result RenderedPage, err error) {
 	if r == nil {
 		return result, errors.New("nil renderer")
 	}
 	u, parseErr := url.Parse(raw)
 	if parseErr != nil || ValidateURL(u) != nil {
 		return result, ErrBlockedTarget
+	}
+	if savedHTML != nil {
+		u.Fragment = ""
+		if u.Path == "" {
+			u.Path = "/"
+		}
 	}
 	// Waiting callers remain cancellable and do not consume browser resources.
 	if err := ctx.Err(); err != nil {
@@ -168,7 +184,13 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	proxy, err := newPolicyProxy(proxyConfig{resolve: r.resolve, dialTimeout: r.config.DialTimeout, maxBytes: r.config.MaxTransferredBytes, maxRequests: r.config.MaxRequests})
+	resolve := r.resolve
+	if savedHTML != nil {
+		// Chromium also makes process-level requests outside target interception.
+		// Deny them before DNS resolution when replaying a saved document.
+		resolve = func(context.Context, string) ([]net.IP, error) { return nil, ErrBlockedTarget }
+	}
+	proxy, err := newPolicyProxy(proxyConfig{resolve: resolve, dialTimeout: r.config.DialTimeout, maxBytes: r.config.MaxTransferredBytes, maxRequests: r.config.MaxRequests})
 	if err != nil {
 		return result, fmt.Errorf("start browser policy proxy: %w", err)
 	}
@@ -211,6 +233,7 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 	var policyMu sync.Mutex
 	var policyErr error
 	var redirects int64
+	var servedSaved atomic.Bool
 	chromedp.ListenTarget(browserCtx, func(event any) {
 		switch e := event.(type) {
 		case *network.EventResponseReceived:
@@ -226,6 +249,19 @@ func (r *ChromiumRenderer) render(ctx context.Context, raw string, snapshot bool
 					return
 				}
 				executorCtx := cdp.WithExecutor(browserCtx, targetContext.Target)
+
+				if savedHTML != nil {
+					if e.ResourceType == network.ResourceTypeDocument && e.Request.URL == u.String() && servedSaved.CompareAndSwap(false, true) {
+						_ = fetch.FulfillRequest(e.RequestID, 200).WithResponseHeaders([]*fetch.HeaderEntry{
+							{Name: "Content-Type", Value: "text/html; charset=utf-8"},
+							{Name: "Content-Security-Policy", Value: "default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; sandbox"},
+						}).WithBody(base64.StdEncoding.EncodeToString(savedHTML)).Do(executorCtx)
+					} else {
+						interceptionBlocked.Add(1)
+						_ = fetch.FailRequest(e.RequestID, network.ErrorReasonBlockedByClient).Do(executorCtx)
+					}
+					return
+				}
 				target, parseErr := url.Parse(e.Request.URL)
 				policyMu.Lock()
 				if budget.exceeded() && policyErr == nil {

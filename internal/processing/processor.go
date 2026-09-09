@@ -35,11 +35,25 @@ func WithArchives(resolver ArchiveResolver) func(*Processor) {
 	return func(p *Processor) { p.archives = resolver }
 }
 
+type SavedPages interface {
+	SavedPage(context.Context, domain.JobID) (acquisition.RenderedPage, bool, error)
+}
+type SavedRenderer interface {
+	RenderSaved(context.Context, string, []byte) (acquisition.RenderedPage, error)
+}
+
+// WithSavedPages prioritizes preserved content without another visit to the source.
+func WithSavedPages(source SavedPages, renderer SavedRenderer) func(*Processor) {
+	return func(p *Processor) { p.saved = source; p.savedRenderer = renderer }
+}
+
 type Processor struct {
-	archives  ArchiveResolver
-	renderer  acquisition.Renderer
-	approver  Approver
-	formatter formatter.Formatter
+	saved         SavedPages
+	savedRenderer SavedRenderer
+	archives      ArchiveResolver
+	renderer      acquisition.Renderer
+	approver      Approver
+	formatter     formatter.Formatter
 }
 
 func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatter, options ...func(*Processor)) (*Processor, error) {
@@ -56,6 +70,29 @@ func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatt
 func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.ProcessorContext) (application.ProcessResult, error) {
 	if p == nil || p.renderer == nil || p.approver == nil || p.formatter == nil || pc.SetStage == nil || pc.ApproveArticle == nil {
 		return application.ProcessResult{}, processingError(domain.FailureInternalError, false)
+	}
+	if p.saved != nil && p.savedRenderer != nil {
+		saved, found, err := p.saved.SavedPage(ctx, job.ID)
+		if err != nil {
+			return application.ProcessResult{}, processingError(domain.FailureFetchFailed, true)
+		}
+		if found {
+			page, renderErr := p.savedRenderer.RenderSaved(ctx, saved.FinalURL, saved.DOM)
+			if renderErr != nil {
+				return application.ProcessResult{}, mapRenderError(ctx, renderErr)
+			}
+			if page.Title == "" {
+				page.Title = saved.Title
+			}
+			result, savedErr := p.processPage(ctx, job, pc, page, saved.FinalURL, true)
+			if savedErr == nil || !recoverable(savedErr) || ctx.Err() != nil {
+				return result, savedErr
+			}
+			// Only an unusable preserved article falls back to a fresh source.
+			if err := pc.SetStage(domain.StageFetching); err != nil {
+				return application.ProcessResult{}, err
+			}
+		}
 	}
 	result, originalErr := p.processSource(ctx, job, pc, job.SubmittedURL, false)
 	if originalErr == nil || p.archives == nil || !recoverable(originalErr) || ctx.Err() != nil {
@@ -131,6 +168,10 @@ func (p *Processor) processSource(ctx context.Context, job domain.Job, pc applic
 	if err != nil {
 		return application.ProcessResult{}, mapRenderError(ctx, err)
 	}
+	return p.processPage(ctx, job, pc, page, requestedURL, archived)
+}
+
+func (p *Processor) processPage(ctx context.Context, job domain.Job, pc application.ProcessorContext, page acquisition.RenderedPage, requestedURL string, archived bool) (application.ProcessResult, error) {
 	if len(page.Screenshot) == 0 {
 		return application.ProcessResult{}, processingError(domain.FailureFetchFailed, true)
 	}

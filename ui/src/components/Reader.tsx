@@ -492,13 +492,15 @@ function ReaderItem({ item }: { item: Item }) {
                     ) : (
                       <div className="p-8 text-sm leading-7">
                         Your link is saved.{" "}
-                        {item.capture === "Capture failed"
-                          ? "Capture failed. You can request a fresh capture."
-                          : item.capture === "Not captured"
-                            ? "This item has no saved page yet. Request a capture to preserve it."
-                            : item.capture === "Capture status unavailable"
-                              ? "Capture status is unavailable. You can request a fresh capture."
-                              : "The saved page will appear when capture finishes."}
+                        {item.capture === "Needs browser capture"
+                          ? "This site blocked server capture. Open it in Chromium, complete any verification, then save the page with the Attic extension."
+                          : item.capture === "Capture failed"
+                            ? "Capture failed. You can request a fresh capture."
+                            : item.capture === "Not captured"
+                              ? "This item has no saved page yet. Request a capture to preserve it."
+                              : item.capture === "Capture status unavailable"
+                                ? "Capture status is unavailable. You can request a fresh capture."
+                                : "The saved page will appear when capture finishes."}
                       </div>
                     )}
                   </Tabs.Content>
@@ -624,14 +626,16 @@ function ReaderItem({ item }: { item: Item }) {
                     {item.capture}
                   </p>
                   <p className="mt-1 text-[11px]">
-                    {item.capture === "Preserved" &&
-                    item.versions[version]?.status === "Partial"
-                      ? "Content extracted and preserved. Some page resources could not be saved; details are listed below."
-                      : item.capture === "Not captured"
-                        ? "This bookmark has not been captured. Request a capture to preserve a local copy."
-                        : item.versions.length
-                          ? "Earlier saved copies remain available, even if a new capture fails."
-                          : "The bookmark is kept. Capture does not determine whether it stays saved."}
+                    {item.capture === "Needs browser capture"
+                      ? "Open this page in Chromium, complete any verification, then save it with the Attic extension. Your bookmark and earlier copies remain available."
+                      : item.capture === "Preserved" &&
+                          item.versions[version]?.status === "Partial"
+                        ? "Content extracted and preserved. Some page resources could not be saved; details are listed below."
+                        : item.capture === "Not captured"
+                          ? "This bookmark has not been captured. Request a capture to preserve a local copy."
+                          : item.versions.length
+                            ? "Earlier saved copies remain available, even if a new capture fails."
+                            : "The bookmark is kept. Capture does not determine whether it stays saved."}
                   </p>
                 </div>
               </section>
@@ -666,9 +670,11 @@ function ReaderItem({ item }: { item: Item }) {
                       <span>
                         {dateLabel(v.date)}
                         <span className="mt-1 block text-[10px] text-[var(--muted)]">
-                          {index === 0
-                            ? "Original source"
-                            : "Retained snapshot"}
+                          {v.source === "browser"
+                            ? "Captured in your browser"
+                            : v.source === "server"
+                              ? "Captured by Attic"
+                              : "Retained snapshot"}
                         </span>
                       </span>
                       <Badge tone="success">Preserved</Badge>

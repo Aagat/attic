@@ -9,6 +9,7 @@ test("capture states reflect the server, including items never captured", async 
     partial: "Preserved",
     complete: "Preserved",
     failed: "Capture failed",
+    blocked: "Needs browser capture",
     unexpected: "Capture status unavailable",
   })) {
     const archive = createHTTPArchive(
@@ -30,6 +31,7 @@ test("capture filters use persisted server states", async () => {
   for (const [label, status] of Object.entries({
     Preserved: "preserved",
     "Not captured": "not_captured",
+    "Needs browser capture": "blocked",
     "Capture queued": "queued",
     Preserving: "capturing",
     "Original PDF": "not_applicable",
