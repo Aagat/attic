@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"attic/internal/ai"
+	"attic/internal/application"
 	"attic/internal/domain"
 )
 
@@ -28,15 +29,21 @@ type archiveManifest struct {
 	Sources    []archiveSource    `json:"browser_sources"`
 	Tombstones []archiveTombstone `json:"tombstones"`
 }
+type archiveEditedReading struct {
+	Draft    application.ArticleDraft `json:"draft"`
+	Language string                   `json:"language"`
+}
+
 type archiveItem struct {
-	Editions    []archiveEdition `json:"reading_editions,omitempty"`
-	Content     json.RawMessage  `json:"approved_content,omitempty"`
-	Item        Item             `json:"item"`
-	Text        string           `json:"text"`
-	SourceTitle string           `json:"source_title"`
-	TitleEdited bool             `json:"title_edited"`
-	Captures    []archiveCapture `json:"captures"`
-	PDF         *domain.Artifact `json:"pdf,omitempty"`
+	EditedReading *archiveEditedReading `json:"edited_reading,omitempty"`
+	Editions      []archiveEdition      `json:"reading_editions,omitempty"`
+	Content       json.RawMessage       `json:"approved_content,omitempty"`
+	Item          Item                  `json:"item"`
+	Text          string                `json:"text"`
+	SourceTitle   string                `json:"source_title"`
+	TitleEdited   bool                  `json:"title_edited"`
+	Captures      []archiveCapture      `json:"captures"`
+	PDF           *domain.Artifact      `json:"pdf,omitempty"`
 }
 type archiveEdition struct {
 	JobID    string          `json:"job_id"`
@@ -98,6 +105,18 @@ func (l *Library) Export(ctx context.Context, out io.Writer) error {
 	for idx := range manifest.Items {
 		item := &manifest.Items[idx]
 		if err := tx.QueryRowContext(ctx, `SELECT source_title,title_edited FROM saved_items WHERE id=$1`, item.Item.ID).Scan(&item.SourceTitle, &item.TitleEdited); err != nil {
+			return safe(err)
+		}
+		var draft []byte
+		var language string
+		err := tx.QueryRowContext(ctx, `SELECT r.draft,e.language FROM reading_edits r JOIN reading_editions e ON e.job_id=r.job_id WHERE r.job_id=$1`, item.Item.JobID).Scan(&draft, &language)
+		if err == nil {
+			edit := &archiveEditedReading{Language: language}
+			if json.Unmarshal(draft, &edit.Draft) != nil {
+				return ErrStorage
+			}
+			item.EditedReading = edit
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return safe(err)
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at,source FROM saved_captures WHERE item_id=$1 ORDER BY created_at,id`, item.Item.ID)
@@ -332,6 +351,11 @@ func readArchive(input io.ReaderAt, size int64) (archiveManifest, map[string]*zi
 				return manifest, nil, err
 			}
 		}
+		if edit := item.EditedReading; edit != nil {
+			if item.Item.JobID == "" || len(item.Item.JobID) > 200 || !ai.ValidTargetLanguage(edit.Language) || strings.TrimSpace(edit.Draft.SemanticHTML) == "" || strings.TrimSpace(edit.Draft.PlainText) == "" {
+				return manifest, nil, ErrInvalid
+			}
+		}
 		editionIDs := map[string]bool{}
 		for _, edition := range item.Editions {
 			if edition.JobID == "" || len(edition.JobID) > 200 || editionIDs[edition.JobID] || !ai.ValidTargetLanguage(edition.Language) || edition.PDF.MediaType != "application/pdf" {
@@ -531,6 +555,41 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 		if selectedJob == "" || edition.JobID == item.JobID {
 			selectedJob = editionJob
 		}
+	}
+	if edit := entry.EditedReading; edit != nil {
+		identity := sha256.Sum256([]byte(id + "/" + item.JobID))
+		restoredID := "restore-" + hex.EncodeToString(identity[:16])
+		var editedJob string
+		err := tx.QueryRowContext(ctx, `SELECT job_id FROM reading_editions WHERE item_id=$1 AND job_id IN ($2,$3) ORDER BY job_id LIMIT 1`, id, item.JobID, restoredID).Scan(&editedJob)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", safe(err)
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			editedJob = restoredID
+			var submittedURL *string
+			source := "upload"
+			if item.URL != "" {
+				submittedURL = &item.URL
+				source = "url"
+			}
+			profile := l.profile
+			if profile == "" {
+				profile = "kindle-scribe"
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,source_kind,submitted_url,title_hint,display_title,output_profile,status,correlation_id,created_at,updated_at,completed_at,delivery_pending,failure_category,failure_message) VALUES($1,$2,$3,$4,$4,$5,'failed',$1,$6,$6,$6,false,'format_failed','Generate PDF to finish this restored reading version')`, editedJob, source, submittedURL, item.Title, profile, item.UpdatedAt)
+			if err != nil {
+				return "", safe(err)
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES($1,$2,$3)`, editedJob, id, edit.Language)
+			if err != nil {
+				return "", safe(err)
+			}
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO reading_edits(job_id,draft) VALUES($1,$2) ON CONFLICT(job_id) DO NOTHING`, editedJob, jsonValue(edit.Draft))
+		if err != nil {
+			return "", safe(err)
+		}
+		selectedJob = editedJob
 	}
 	// A restore may add editions, but cannot change a current local selection.
 	if jobID == "" && selectedJob != "" {

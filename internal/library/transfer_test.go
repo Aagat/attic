@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"attic/internal/application"
 	"attic/internal/domain"
 	"attic/internal/postgres"
 )
@@ -258,6 +259,56 @@ func TestExportRestoreIntegration(t *testing.T) {
 	if err != nil || detail.Title != "Newer local edit" || detail.Notes != "new notes" || detail.JobID != originalJob {
 		t.Fatalf("restore overwrote edits: %+v err=%v", detail, err)
 	}
+	// Edits must survive backup before a PDF exists, including failed generation.
+	draft := application.ArticleDraft{Title: "Clean reading", SemanticHTML: "<p>Keep only this.</p>", PlainText: "Keep only this.", Language: "es", ExtractionMethod: "user-edited"}
+	if _, err := source.db.ExecContext(ctx, `INSERT INTO jobs(id,source_kind,submitted_url,title_hint,display_title,output_profile,status,correlation_id,created_at,updated_at,delivery_pending) VALUES('pending-edit','url','https://example.com/article','Clean reading','Clean reading','kindle-scribe','queued','pending-edit',now(),now(),true)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.db.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES('pending-edit','saved-bookmark','es')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.db.ExecContext(ctx, `INSERT INTO reading_edits(job_id,draft) VALUES('pending-edit',$1)`, jsonValue(draft)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.db.ExecContext(ctx, `UPDATE saved_items SET job_id='pending-edit' WHERE id='saved-bookmark'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{"queued", "failed"} {
+		if _, err := source.db.ExecContext(ctx, `UPDATE jobs SET status=$1,failure_category=CASE WHEN $1='failed' THEN 'format_failed' ELSE NULL END WHERE id='pending-edit'`, status); err != nil {
+			t.Fatal(err)
+		}
+		var editedBackup bytes.Buffer
+		if err := source.Export(ctx, &editedBackup); err != nil {
+			t.Fatal(err)
+		}
+		restored := makeLibrary()
+		for attempt := 0; attempt < 2; attempt++ {
+			if _, err := restored.Restore(ctx, bytes.NewReader(editedBackup.Bytes()), int64(editedBackup.Len())); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var raw []byte
+		var restoredStatus, language string
+		var delivery bool
+		if err := restored.db.QueryRowContext(ctx, `SELECT r.draft,e.language,j.status,j.delivery_pending FROM saved_items i JOIN jobs j ON j.id=i.job_id JOIN reading_editions e ON e.job_id=j.id JOIN reading_edits r ON r.job_id=j.id WHERE i.id='saved-bookmark'`).Scan(&raw, &language, &restoredStatus, &delivery); err != nil {
+			t.Fatal(err)
+		}
+		var got application.ArticleDraft
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got != draft || language != "es" || restoredStatus != "failed" || delivery {
+			t.Fatalf("edited reading changed or queued: %+v language=%s status=%s delivery=%v", got, language, restoredStatus, delivery)
+		}
+		if _, err := destination.Restore(ctx, bytes.NewReader(editedBackup.Bytes()), int64(editedBackup.Len())); err != nil {
+			t.Fatal(err)
+		}
+		var selected string
+		if err := destination.db.QueryRowContext(ctx, `SELECT job_id FROM saved_items WHERE id='saved-bookmark'`).Scan(&selected); err != nil || selected != originalJob {
+			t.Fatalf("restore changed local selection: %s %v", selected, err)
+		}
+	}
+
 }
 
 func TestArchiveValidatesReadingEditions(t *testing.T) {
