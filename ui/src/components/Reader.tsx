@@ -8,6 +8,7 @@ import {
   Share2,
   Send,
   Info,
+  Pencil,
   ExternalLink,
   RefreshCw,
   CheckCircle2,
@@ -308,9 +309,20 @@ function ReaderItem({ item }: { item: Item }) {
       <Tabs.Root value={format} onValueChange={setFormat}>
         <section className="flex flex-wrap items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-5 sm:px-8">
           <div className="min-w-0 max-w-3xl">
-            <h1 className="font-display text-2xl leading-tight">
-              {item.title}
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-display text-2xl leading-tight">{item.title}</h1>
+              <Button
+                aria-label="Edit title"
+                onClick={() => {
+                  setTitle(item.title);
+                  setNotes(item.notes);
+                  setTags(item.tags.join(", "));
+                  setDetails(true);
+                }}
+              >
+                <Pencil size={15} />
+              </Button>
+            </div>
             <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
               {item.author && `${item.author} · `}
               {item.source} · Saved {dateLabel(item.saved)}
@@ -782,7 +794,7 @@ function ReaderItem({ item }: { item: Item }) {
               });
               refresh();
               setDetails(false);
-              notify("Notes and tags saved.");
+              notify("Title, notes and tags saved.");
             } catch (e) {
               notify((e as Error).message);
             }
@@ -792,6 +804,8 @@ function ReaderItem({ item }: { item: Item }) {
             Title
             <input
               required
+              autoFocus
+              maxLength={1000}
               className={input}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
