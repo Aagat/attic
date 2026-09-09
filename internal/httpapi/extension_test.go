@@ -3,6 +3,8 @@ package httpapi
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 )
@@ -23,16 +25,36 @@ func TestExtensionDownloadContainsOnlyPackagedSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found, omnibox := false, false
 	for _, file := range reader.File {
 		if !strings.HasPrefix(file.Name, "attic/") || strings.Contains(file.Name, "..") || strings.Contains(file.Name, ".env") {
 			t.Fatalf("unsafe archive entry: %s", file.Name)
 		}
 		if file.Name == "attic/manifest.json" {
 			found = true
+			body, err := file.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(body)
+			body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var manifest struct {
+				Omnibox struct {
+					Keyword string `json:"keyword"`
+				} `json:"omnibox"`
+			}
+			if json.Unmarshal(data, &manifest) != nil || manifest.Omnibox.Keyword != "a" {
+				t.Fatal("missing omnibox keyword")
+			}
+		}
+		if file.Name == "attic/omnibox.js" {
+			omnibox = true
 		}
 	}
-	if !found {
-		t.Fatal("missing extension manifest")
+	if !found || !omnibox {
+		t.Fatal("missing extension manifest or omnibox module")
 	}
 }

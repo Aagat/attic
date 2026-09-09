@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Save to Attic",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Preserve bookmarks and send reading documents to Kindle with your own Attic server.",
   "permissions": [
     "activeTab",
@@ -20,7 +20,8 @@
     "default_popup": "popup.html"
   },
   "icons": {
-    "192": "icon-192.png"
+    "192": "icon-192.png",
+    "16": "icon-192.png"
   },
   "background": {
     "service_worker": "background.js"
@@ -28,5 +29,8 @@
   "options_page": "options.html",
   "optional_permissions": [
     "bookmarks"
-  ]
+  ],
+  "omnibox": {
+    "keyword": "a"
+  }
 }

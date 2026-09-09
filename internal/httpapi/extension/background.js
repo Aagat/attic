@@ -1,5 +1,5 @@
 'use strict';
-importScripts('snapshots.js');
+importScripts('snapshots.js', 'omnibox.js');
 
 const alarmName = 'attic-reconcile';
 let running;

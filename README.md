@@ -113,6 +113,15 @@ docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compos
 
 ## Chromium extension
 
+Download **Chromium extension** from Settings, unzip it, and load its `attic` folder
+at `chrome://extensions` with Developer mode enabled. For updates, replace the
+files in the existing unpacked folder and click Reload.
+
+Type `a`, press Tab, then enter a search in the address bar. Matching saved items
+come from your configured Attic server; select one to open its reader, or press
+Enter for the full library search. This uses [Chromium’s omnibox keyword mode](https://developer.chrome.com/docs/extensions/reference/api/omnibox)
+and the extension’s existing server connection; normal address-bar typing is not sent.
+
 Download `/attic-chromium.zip` from your running server, extract it, then use
 **Load unpacked** in `chrome://extensions` (Developer mode enabled). Connect
 with your server address and Attic access key in the extension's Options,

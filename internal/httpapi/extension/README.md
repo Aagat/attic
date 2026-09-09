@@ -18,3 +18,14 @@ The extension connects to an Attic server at its origin root (for example `https
 This is an unpacked extension. Keep its directory in place and click **Reload** at `chrome://extensions` after updating the files. Browser bookmark access does not provide access to mobile Safari bookmarks.
 
 Run `node tests/extension.test.mjs` from the repository root for behavior checks.
+
+## Search from the address bar
+
+Type `a`, press Tab, then type a query. Suggestions are matching saved items from
+your configured Attic server; choose one to open its reader, or press Enter to
+search the full library. Search needs Attic’s search index to be configured.
+Only queries entered in this keyword mode are sent to Attic, with your existing
+access key. Normal address-bar typing is not sent.
+
+Download updates from Attic Settings, replace the unpacked files in the existing
+extension directory, then click Reload at `chrome://extensions`.
