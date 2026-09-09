@@ -20,8 +20,7 @@ A dated local copy of a bookmarked page, with its source and completeness record
 New captures do not replace earlier successful copies.
 
 **Suggested tags**:
-Editable classifications proposed for a saved item to help the owner find it later.
-They are distinct from tags the owner has chosen.
+AI classifications automatically added to a saved item's editable tags to help the owner find it later. The original suggestions remain recorded as classification metadata.
 
 **Article**:
 The authored content the owner wants to read, including its attribution, illustrations, tables and code.

@@ -199,7 +199,7 @@ func TestExportRestoreIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Title != "My edited title" || detail.Notes != "remember this" || len(detail.Tags) != 1 || len(detail.Captures) != 2 || detail.Captures[0].FinalURL != "https://archive.example/snapshot" || !detail.SavedAt.Equal(manifest.Items[0].Item.SavedAt) || !detail.HasPDF || detail.IndexStatus != "pending" {
+	if detail.Title != "My edited title" || detail.Notes != "remember this" || strings.Join(detail.Tags, ",") != "research,systems" || len(detail.Captures) != 2 || detail.Captures[0].FinalURL != "https://archive.example/snapshot" || !detail.SavedAt.Equal(manifest.Items[0].Item.SavedAt) || !detail.HasPDF || detail.IndexStatus != "pending" {
 		t.Fatalf("round-trip: %+v", detail)
 	}
 	reader, err := destination.files.Open(ctx, detail.Captures[0].Artifact)

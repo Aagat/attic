@@ -622,7 +622,7 @@ func TestLibraryIntegrationFailedEnrichmentPreservesSuggestions(t *testing.T) {
 	if detail.EnrichmentStatus != "failed" || detail.Classification != suggested.Classification || strings.Join(detail.SuggestedTags, ",") != "systems,performance" {
 		t.Fatalf("failed enrichment erased previous suggestions: %+v", detail.Item)
 	}
-	if detail.Notes != "My note" || strings.Join(detail.Tags, ",") != "manual" || detail.Text != "Captured source" {
+	if detail.Notes != "My note" || strings.Join(detail.Tags, ",") != "manual,systems,performance" || detail.Text != "Captured source" {
 		t.Fatalf("failed enrichment changed canonical content or annotations: %+v", detail.Item)
 	}
 }
@@ -679,7 +679,7 @@ func TestLibraryIntegrationStaleEnrichmentLeavesNewVersionPending(t *testing.T) 
 		t.Fatal(err)
 	}
 	detail, err = l.Get(ctx, item.ID)
-	if err != nil || detail.EnrichmentStatus != "complete" || detail.Classification != "reference" || strings.Join(detail.SuggestedTags, ",") != "current" {
+	if err != nil || detail.EnrichmentStatus != "complete" || detail.Classification != "reference" || strings.Join(detail.SuggestedTags, ",") != "current" || strings.Join(detail.Tags, ",") != "chosen,current" {
 		t.Fatalf("current version did not complete on retry: %+v %v", detail.Item, err)
 	}
 }
@@ -786,5 +786,33 @@ func TestFilterSuggestionsUseCanonicalItems(t *testing.T) {
 	}
 	if _, err = l.Suggestions(ctx, "invalid", ""); !errors.Is(err, ErrInvalid) {
 		t.Fatal(err)
+	}
+}
+
+func TestApplyExistingSuggestedTags(t *testing.T) {
+	l := integrationLibrary(t, "")
+	ctx := context.Background()
+	item, _, err := l.Save(ctx, SaveRequest{URL: "https://example.com/tag-migration", Tags: []string{"manual", "shared"}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.db.ExecContext(ctx, `UPDATE saved_items SET suggested_tags='["shared","systems","systems"]'::jsonb WHERE id=$1`, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	migration, err := os.ReadFile("../../migrations/0009_apply_suggested_tags.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := l.db.ExecContext(ctx, string(migration)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	detail, err := l.Get(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(detail.Tags, ",") != "manual,shared,systems" {
+		t.Fatalf("merged tags: %v", detail.Tags)
 	}
 }

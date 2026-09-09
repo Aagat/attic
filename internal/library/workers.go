@@ -160,7 +160,7 @@ func (l *Library) IndexOnce(ctx context.Context, index search.Index) error {
 	if u, err := url.Parse(i.URL); err == nil {
 		host = u.Hostname()
 	}
-	err = index.Upsert(ctx, search.Document{ID: i.ID, Title: i.Title, URL: i.URL, Notes: i.Notes, Tags: append(append([]string{}, i.Tags...), i.SuggestedTags...), Text: i.Text + "\n" + i.Classification + "\n" + strings.Join(i.Folders, " "), Domain: host, Kind: i.Kind, CaptureStatus: i.CaptureStatus, SavedAt: i.SavedAt})
+	err = index.Upsert(ctx, search.Document{ID: i.ID, Title: i.Title, URL: i.URL, Notes: i.Notes, Tags: i.Tags, Text: i.Text + "\n" + i.Classification + "\n" + strings.Join(i.Folders, " "), Domain: host, Kind: i.Kind, CaptureStatus: i.CaptureStatus, SavedAt: i.SavedAt})
 	if err != nil {
 		tx.ExecContext(ctx, `UPDATE saved_items SET index_error=true WHERE id=$1`, i.ID)
 		tx.Commit()

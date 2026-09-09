@@ -994,29 +994,7 @@ function ReaderItem({ item }: { item: Item }) {
               onChange={(e) => setTags(e.target.value)}
             />
           </label>
-          <div className="flex flex-wrap gap-2">
-            {(item.suggestedTags || []).map((tag) => (
-              <Button
-                type="button"
-                key={tag}
-                onClick={() =>
-                  setTags((t) =>
-                    [
-                      ...new Set([
-                        ...t
-                          .split(",")
-                          .map((v) => v.trim())
-                          .filter(Boolean),
-                        tag,
-                      ]),
-                    ].join(", "),
-                  )
-                }
-              >
-                + {tag}
-              </Button>
-            ))}
-          </div>
+
           <div className="flex flex-wrap justify-between gap-3 border-t border-[var(--line)] pt-5">
             <Button
               type="button"

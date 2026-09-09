@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 
 	"attic/internal/ai"
@@ -27,7 +28,8 @@ func (l *Library) EnrichOnce(ctx context.Context, e Enricher) error {
 	}
 	var id, text string
 	var version int64
-	err = tx.QueryRowContext(ctx, `SELECT id,title||E'\n'||text_content,version FROM saved_items WHERE enrichment_status='pending' AND (text_content<>'' OR capture_status IN ('failed','blocked','not_applicable')) ORDER BY updated_at LIMIT 1`).Scan(&id, &text, &version)
+	var rawTags []byte
+	err = tx.QueryRowContext(ctx, `SELECT id,title||E'\n'||text_content,version,tags FROM saved_items WHERE enrichment_status='pending' AND (text_content<>'' OR capture_status IN ('failed','blocked','not_applicable')) ORDER BY updated_at LIMIT 1`).Scan(&id, &text, &version, &rawTags)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -38,11 +40,16 @@ func (l *Library) EnrichOnce(ctx context.Context, e Enricher) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	var tags []string
+	if err := json.Unmarshal(rawTags, &tags); err != nil {
+		return safe(err)
+	}
+	tags = applyTags(tags, enrichment.Tags)
 	status := "complete"
 	if enrichErr != nil {
 		status = "failed"
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET classification=CASE WHEN $4='failed' THEN classification ELSE $2 END,suggested_tags=CASE WHEN $4='failed' THEN suggested_tags ELSE $3::jsonb END,enrichment_status=$4,version=version+1 WHERE id=$1 AND version=$5`, id, enrichment.Classification, jsonValue(enrichment.Tags), status, version)
+	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET tags=CASE WHEN $4='failed' THEN tags ELSE $6::jsonb END,classification=CASE WHEN $4='failed' THEN classification ELSE $2 END,suggested_tags=CASE WHEN $4='failed' THEN suggested_tags ELSE $3::jsonb END,enrichment_status=$4,version=version+1 WHERE id=$1 AND version=$5`, id, enrichment.Classification, jsonValue(enrichment.Tags), status, version, jsonValue(tags))
 	if err != nil {
 		return safe(err)
 	}
@@ -54,4 +61,20 @@ func (l *Library) RunEnrichment(ctx context.Context, e Enricher) error {
 func (l *Library) RetryEnrichment(ctx context.Context, id string) error {
 	_, err := l.db.ExecContext(ctx, `UPDATE saved_items SET enrichment_status='pending' WHERE id=$1`, id)
 	return safe(err)
+}
+
+// Existing owner tags are never truncated when new classifications are applied.
+func applyTags(existing, suggested []string) []string {
+	tags := append([]string{}, existing...)
+	seen := make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		seen[tag] = true
+	}
+	for _, tag := range cleanTags(suggested) {
+		if !seen[tag] {
+			tags = append(tags, tag)
+			seen[tag] = true
+		}
+	}
+	return tags
 }

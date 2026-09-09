@@ -430,7 +430,7 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 			rawURL = &item.URL
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO saved_items(id,kind,url,title,notes,tags,folders,source_title,title_edited,saved_at,updated_at,text_content,classification,suggested_tags,enrichment_status,capture_status)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, id, item.Kind, rawURL, item.Title, item.Notes, jsonValue(item.Tags), jsonValue(item.Folders), entry.SourceTitle, entry.TitleEdited, item.SavedAt, item.UpdatedAt, entry.Text, item.Classification, jsonValue(item.SuggestedTags), item.EnrichmentStatus, captureStatus)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, id, item.Kind, rawURL, item.Title, item.Notes, jsonValue(applyTags(item.Tags, item.SuggestedTags)), jsonValue(item.Folders), entry.SourceTitle, entry.TitleEdited, item.SavedAt, item.UpdatedAt, entry.Text, item.Classification, jsonValue(item.SuggestedTags), item.EnrichmentStatus, captureStatus)
 		if err != nil {
 			return "", safe(err)
 		}
