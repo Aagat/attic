@@ -169,6 +169,26 @@ export function SettingsPage() {
           {busy ? "Processing archive…" : result}
         </p>
       )}
+      <section className="mt-8 border border-[var(--line)] bg-[var(--paper)] p-6">
+        <h2 className="font-display text-2xl">Chromium extension</h2>
+        <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+          Save pages and search your library from the address bar: type <kbd>a</kbd>,
+          press Tab, then enter your search. Suggestions come from your Attic server.
+        </p>
+        <a
+          href="/attic-chromium.zip"
+          download
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded border border-[var(--line)] px-4 text-sm"
+        >
+          <Download size={16} /> Download Chromium extension
+        </a>
+        <p className="mt-4 text-xs leading-6 text-[var(--muted)]">
+          Unzip the download, open <code>chrome://extensions</code>, enable Developer
+          mode, then choose Load unpacked and select the attic folder. Connect your
+          server and access key in the extension’s settings. To update, replace the
+          files in your existing extension folder and click Reload.
+        </p>
+      </section>
       <section className="mt-8 flex items-center justify-between gap-5 border-y border-[var(--line)] py-6">
         <div>
           <h2 className="font-display text-2xl">Save from anywhere</h2>
@@ -254,7 +274,11 @@ export function SetupPage() {
               send it to Kindle. You can also save links from the context menu.
             </p>
             <ol className="mt-6 list-decimal space-y-4 pl-5 text-sm leading-6">
-              <li>Load the existing Attic extension in your browser.</li>
+              <li>
+                <a href="/attic-chromium.zip" download className="underline">Download the Chromium extension</a>,
+                unzip it, then use Load unpacked at <code>chrome://extensions</code>
+                with Developer mode enabled.
+              </li>
               <li>
                 Enter your server address and access key in extension settings.
               </li>
