@@ -17,6 +17,8 @@ export type Delivery =
   | "Delivery failed"
   | "Outcome uncertain";
 export interface Item {
+  outputLanguage?: string;
+  readingAvailable?: boolean;
   jobId?: string;
   hasPdf?: boolean;
   pdfStatus?: string;

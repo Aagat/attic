@@ -17,6 +17,8 @@ interface WireItem {
   enrichment_status: string;
   has_pdf: boolean;
   job_id?: string;
+  output_language?: string;
+  reading_available?: boolean;
   snippet?: string;
   text_available: boolean;
   suggested_tags: string[];
@@ -86,6 +88,8 @@ function item(w: WireItem): Item {
         missing: c.missing || [],
         source: c.source,
       })),
+    outputLanguage: w.output_language || "",
+    readingAvailable: !!w.reading_available,
     jobId: w.job_id,
     hasPdf: w.has_pdf,
     pdfStatus: w.pdf_status,
@@ -310,6 +314,19 @@ export function createHTTPArchive(
       if (!url) throw new ArchiveError("No saved copy is available yet.");
       await request(url.replace("/api/v1", ""), { method: "HEAD", signal });
       return url;
+    },
+    async translate(id, language) {
+      return item(
+        await request<WireItem>(path(id) + "/translate", {
+          method: "POST",
+          body: JSON.stringify({ language }),
+        }),
+      );
+    },
+    async readingURL(i, signal) {
+      const url = path(i.id) + "/reading";
+      await request(url, { method: "HEAD", signal });
+      return "/api/v1" + url + "?job=" + encodeURIComponent(i.jobId || "");
     },
     async export() {
       await request("/items/export", { method: "HEAD" });

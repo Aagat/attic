@@ -157,6 +157,12 @@ export function createPreviewArchive(): Archive {
     async captureURL() {
       throw new Error("Preview captures are samples.");
     },
+    async translate() {
+      throw new Error("Translation requires a connected Attic server.");
+    },
+    async readingURL() {
+      throw new Error("Preview reading versions are samples.");
+    },
     async export() {
       const url = URL.createObjectURL(
         new Blob([JSON.stringify({ format: "attic-ui-preview-v1", items })], {

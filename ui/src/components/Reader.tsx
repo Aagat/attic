@@ -57,6 +57,43 @@ function SavedCapture({
     </p>
   );
 }
+const languages = [
+  ["en", "English"],
+  ["es", "Spanish"],
+  ["fr", "French"],
+  ["de", "German"],
+  ["it", "Italian"],
+  ["pt", "Portuguese"],
+  ["nl", "Dutch"],
+  ["ja", "Japanese"],
+  ["ko", "Korean"],
+  ["zh", "Chinese"],
+];
+function TranslatedReading({ item }: { item: Item }) {
+  const { archive } = useArchive();
+  const { data: url, error } = useArchiveQuery(
+    `reading:${item.id}:${item.jobId}`,
+    (signal) => archive.readingURL(item, signal),
+  );
+  if (error)
+    return (
+      <p role="alert" className="p-8 text-sm">
+        {error}
+      </p>
+    );
+  return url ? (
+    <iframe
+      title="Translated reading version"
+      src={url}
+      sandbox=""
+      className="w-full min-h-[80dvh] border-0"
+    />
+  ) : (
+    <p role="status" className="p-8">
+      Opening translation…
+    </p>
+  );
+}
 const prose = [
   "Complex systems are usually built one decision at a time. Each addition feels locally reasonable: another setting, another status, another escape hatch. Yet the systems we return to are often the ones that ask less of us.",
   "Simplicity is not the absence of capability. It is the result of arranging capability so that the common path remains obvious. The archive that survives is the archive whose owner can trust it without tending it every day.",
@@ -92,6 +129,22 @@ function ReaderItem({ item }: { item: Item }) {
   const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
   const showPdf = item.kind === "PDF" || (format === "pdf" && hasPdf);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [language, setLanguage] = useState(item.outputLanguage || "en");
+  const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState("");
+  async function translate(target: string) {
+    setTranslating(true);
+    setTranslationError("");
+    try {
+      await archive.translate(item.id, target);
+      setFormat("reading");
+      refresh();
+    } catch (error) {
+      setTranslationError((error as Error).message);
+    } finally {
+      setTranslating(false);
+    }
+  }
   const [informationOpen, setInformationOpen] = useState(true);
   const [details, setDetails] = useState(false),
     [remove, setRemove] = useState(false),
@@ -121,6 +174,10 @@ function ReaderItem({ item }: { item: Item }) {
     total = pdf?.numPages || item.pages || 1;
   const current = Math.min(page, total);
   useEffect(() => {
+    setFile(undefined);
+    setFileError("");
+    setPdf(undefined);
+    setPdfError("");
     if (archive.preview ? !item.fileId : !item.hasPdf) return;
     let active = true;
     archive
@@ -310,7 +367,9 @@ function ReaderItem({ item }: { item: Item }) {
         <section className="flex flex-wrap items-center justify-between gap-5 border-b border-[var(--line)] bg-[var(--paper)] px-5 py-5 sm:px-8">
           <div className="min-w-0 max-w-3xl">
             <div className="flex items-start gap-3">
-              <h1 className="font-display text-2xl leading-tight">{item.title}</h1>
+              <h1 className="font-display text-2xl leading-tight">
+                {item.title}
+              </h1>
               <Button
                 aria-label="Edit title"
                 onClick={() => {
@@ -502,7 +561,22 @@ function ReaderItem({ item }: { item: Item }) {
               <>
                 {(["reading", "original"] as const).map((view) => (
                   <Tabs.Content key={view} value={view}>
-                    {item.versions[version] ? (
+                    {view === "reading" && item.outputLanguage ? (
+                      item.readingAvailable ? (
+                        <TranslatedReading item={item} />
+                      ) : (
+                        <p
+                          role={
+                            item.pdfStatus === "failed" ? "alert" : "status"
+                          }
+                          className="p-8 text-sm leading-7"
+                        >
+                          {item.pdfStatus === "failed"
+                            ? "Translation failed. Try translating again or switch to Original."
+                            : "Preparing your translation. The original saved copy is still available in Original layout."}
+                        </p>
+                      )
+                    ) : item.versions[version] ? (
                       <SavedCapture
                         item={item}
                         index={version}
@@ -599,6 +673,64 @@ function ReaderItem({ item }: { item: Item }) {
                 <PanelRightClose size={18} />
               </Button>
             </div>
+            {!isPdf && (
+              <section>
+                <SectionLabel>Language</SectionLabel>
+                <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">
+                  {item.outputLanguage
+                    ? `Reading in ${languages.find(([code]) => code === item.outputLanguage)?.[1] || item.outputLanguage}.`
+                    : "Reading the original language."}{" "}
+                  Translate the extracted article and its PDF.
+                </p>
+                <label className="mt-3 block">
+                  <span className="sr-only">Translation language</span>
+                  <select
+                    className={`${input} min-h-11`}
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                  >
+                    {languages.map(([code, label]) => (
+                      <option key={code} value={code}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    disabled={
+                      translating ||
+                      (!archive.preview &&
+                        !item.textAvailable &&
+                        !item.readingAvailable)
+                    }
+                    onClick={() => void translate(language)}
+                  >
+                    {translating ? "Updating…" : "Translate"}
+                  </Button>
+                  {item.outputLanguage && (
+                    <Button
+                      disabled={translating}
+                      onClick={() => void translate("")}
+                    >
+                      Original
+                    </Button>
+                  )}
+                </div>
+                {translationError && (
+                  <p role="alert" className="mt-2 text-[var(--danger)]">
+                    {translationError}
+                  </p>
+                )}
+                {!archive.preview &&
+                  !item.textAvailable &&
+                  !item.readingAvailable && (
+                    <p className="mt-2 text-[11px] text-[var(--muted)]">
+                      Available after article text is extracted.
+                    </p>
+                  )}
+              </section>
+            )}
             {!isPdf && (
               <section>
                 <SectionLabel>Reading PDF</SectionLabel>

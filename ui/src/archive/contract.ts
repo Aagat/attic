@@ -63,6 +63,8 @@ export interface Archive {
     reading: boolean,
     signal?: AbortSignal,
   ): Promise<string>;
+  translate(id: string, language: string): Promise<Item>;
+  readingURL(item: Item, signal?: AbortSignal): Promise<string>;
   pdf(item: Item): Promise<File>;
   status(): Promise<ArchiveStatus>;
   reset?(items: Item[]): Promise<void>;
