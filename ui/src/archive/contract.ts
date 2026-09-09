@@ -45,6 +45,11 @@ export interface Archive {
   session(key?: string): Promise<void>;
   signOut(): Promise<void>;
   list(params: URLSearchParams, signal?: AbortSignal): Promise<LibraryPage>;
+  suggestions(
+    field: "tag" | "source",
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<string[]>;
   get(id: string, signal?: AbortSignal): Promise<Item>;
   save(url: string, kindle: boolean, key: string): Promise<Item>;
   edit(item: Item): Promise<void>;

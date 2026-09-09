@@ -277,6 +277,13 @@ export function createHTTPArchive(
     async remove(id) {
       await request(path(id), { method: "DELETE" });
     },
+    async suggestions(field, query, signal) {
+      const result = await request<{ suggestions: string[] }>(
+        "/items/suggestions?" + new URLSearchParams({ field, q: query }),
+        { signal },
+      );
+      return result.suggestions;
+    },
     async act(id, action, key) {
       await request(path(id) + "/" + action, {
         method: "POST",

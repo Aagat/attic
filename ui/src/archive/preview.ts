@@ -62,6 +62,19 @@ export function createPreviewArchive(): Archive {
         screenshot: "",
       };
     },
+    async suggestions(field, query) {
+      await ensure();
+      return [
+        ...new Set(
+          items.flatMap((item) =>
+            field === "tag" ? item.tags : [item.source],
+          ),
+        ),
+      ]
+        .filter((value) => value.toLowerCase().includes(query.toLowerCase()))
+        .sort()
+        .slice(0, 20);
+    },
     async get(id) {
       await ensure();
       const i = items.find((i) => i.id === id);

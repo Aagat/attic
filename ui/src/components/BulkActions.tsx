@@ -57,23 +57,16 @@ export function BulkActions({
     );
   }
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded border border-[var(--line)] bg-[var(--paper)] p-3 text-xs">
-      <label className="flex min-h-11 items-center gap-2">
-        <input
-          type="checkbox"
-          aria-label="Select this page"
-          disabled={busy || !items.length}
-          checked={
-            !!items.length && items.every((item) => selected.includes(item.id))
-          }
-          onChange={(event) =>
-            setSelected(
-              event.target.checked ? items.map((item) => item.id) : [],
-            )
-          }
-        />
-        {selected.length ? `${selected.length} selected` : "Select"}
-      </label>
+    <div className="mb-4 grid gap-3 rounded border border-[var(--line)] bg-[var(--paper)] p-3 text-xs">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-medium">{selected.length} selected</h2>
+        <Button
+          disabled={busy || items.every((item) => selected.includes(item.id))}
+          onClick={() => setSelected(items.map((item) => item.id))}
+        >
+          Select this page
+        </Button>
+      </div>
       {busy && <span role="status">Working…</span>}
       {!!selected.length && (
         <>
@@ -87,7 +80,7 @@ export function BulkActions({
             Retry captures
           </Button>
           <input
-            className={input + " min-w-0 w-40"}
+            className={input + " min-w-0 w-full"}
             aria-label="Tags to add"
             placeholder="Tags, comma separated"
             value={tags}

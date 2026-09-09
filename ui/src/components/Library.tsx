@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import * as Popover from "@radix-ui/react-popover";
 import {
   Search,
@@ -13,16 +13,44 @@ import {
   Plus,
 } from "lucide-react";
 import { Badge, Button, input } from "./primitives";
+import { FilterAutocomplete } from "./FilterAutocomplete";
 import { BulkActions } from "./BulkActions";
 import { SaveForm } from "./SaveForm";
 import { dateLabel } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
 export function Library() {
   const { archive, openSave, hiddenItems } = useArchive();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const search = useRef<HTMLInputElement>(null);
-  const query = params.get("q") || "",
-    kind = params.get("kind") || "",
+  const [query, setQuery] = useState(() => {
+    if (params.has("q")) return params.get("q") || "";
+    try {
+      return sessionStorage.getItem("attic-library-query") || "";
+    } catch {
+      return "";
+    }
+  });
+  useEffect(() => {
+    if (params.has("q")) {
+      setQuery(params.get("q") || "");
+      setParams(
+        (previous) => {
+          previous.delete("q");
+          return previous;
+        },
+        { replace: true },
+      );
+    }
+  }, [params, setParams]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("attic-library-query", query);
+    } catch {
+      /* Search still works without storage. */
+    }
+  }, [query]);
+  const kind = params.get("kind") || "",
     source = params.get("source") || "",
     tag = params.get("tag") || "",
     status = params.get("status") || "",
@@ -31,11 +59,22 @@ export function Library() {
   const [bulkBusy, setBulkBusy] = useState(false);
   useEffect(() => {
     setSelected([]);
-  }, [params.toString()]);
+  }, [params.toString(), query]);
   const [filterOpen, setFilterOpen] = useState(false);
   const page = Math.max(1, Number(params.get("page")) || 1),
     pageSize = 8;
   function change(key: string, value: string) {
+    if (key === "q") {
+      setQuery(value);
+      setParams(
+        (previous) => {
+          previous.delete("page");
+          return previous;
+        },
+        { replace: true },
+      );
+      return;
+    }
     setParams((p) => {
       if (value) p.set(key, value);
       else p.delete(key);
@@ -56,66 +95,40 @@ export function Library() {
   useEffect(() => {
     if (params.get("focus")) search.current?.focus();
   }, [params]);
+  const requestParams = new URLSearchParams(params);
+  if (query) requestParams.set("q", query);
   const { data, error } = useArchiveQuery(
-    "library:" + params.toString(),
-    (signal) => archive.list(params, signal),
+    "library:" + requestParams.toString(),
+    (signal) => archive.list(requestParams, signal),
   );
   const items = data?.items || [];
   const total = data?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pageSize)),
     current = page,
     visible = items.filter((item) => !hiddenItems.includes(item.id));
+  function toggle(id: string) {
+    if (bulkBusy) return;
+    setSelected((previous) =>
+      previous.includes(id)
+        ? previous.filter((value) => value !== id)
+        : [...previous, id],
+    );
+  }
   const active = !!(query || kind || source || tag || status || date);
   const filterFields = (
     <>
-      <label className="grid gap-2 text-xs">
-        Source
-        {!archive.preview ? (
-          <input
-            className={input}
-            aria-label="Source"
-            value={source}
-            onChange={(e) => change("source", e.target.value)}
-            placeholder="example.com"
-          />
-        ) : (
-          <select
-            aria-label="Source"
-            className={input}
-            value={source}
-            onChange={(e) => change("source", e.target.value)}
-          >
-            <option value="">All sources</option>
-            {[...new Set(items.map((i) => i.source))].sort().map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        )}
-      </label>
-      <label className="grid gap-2 text-xs">
-        Tags
-        {!archive.preview ? (
-          <input
-            className={input}
-            aria-label="Tags"
-            value={tag}
-            onChange={(e) => change("tag", e.target.value)}
-            placeholder="Tag"
-          />
-        ) : (
-          <select
-            aria-label="Tags"
-            className={input}
-            value={tag}
-            onChange={(e) => change("tag", e.target.value)}
-          >
-            <option value="">All tags</option>
-            {[...new Set(items.flatMap((i) => i.tags))].sort().map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        )}
-      </label>
+      <FilterAutocomplete
+        field="source"
+        label="Source"
+        value={source}
+        onChange={(value) => change("source", value)}
+      />
+      <FilterAutocomplete
+        field="tag"
+        label="Tags"
+        value={tag}
+        onChange={(value) => change("tag", value)}
+      />
       <label className="grid gap-2 text-xs">
         Saved since
         <input
@@ -246,7 +259,10 @@ export function Library() {
         {active && (
           <button
             className="min-h-11 px-2 text-xs text-[var(--muted)] underline"
-            onClick={() => setParams({})}
+            onClick={() => {
+              setQuery("");
+              setParams({});
+            }}
           >
             Clear all
           </button>
@@ -257,32 +273,38 @@ export function Library() {
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px]">
         <section aria-label="Saved items" className="min-w-0">
-          <BulkActions
-            items={visible}
-            selected={selected}
-            setSelected={setSelected}
-            busy={bulkBusy}
-            setBusy={setBulkBusy}
-          />
+          <span id="row-shortcuts" className="sr-only">
+            Space selects or deselects. Enter opens the reader.
+          </span>
           {visible.map((i) => (
             <article
               key={i.id}
-              className="group border-b border-[var(--line)] px-1 py-5 transition-colors hover:bg-[var(--paper)] sm:px-3 motion-reduce:transition-none"
+              tabIndex={0}
+              aria-label={`${i.title}${selected.includes(i.id) ? ", selected" : ""}`}
+              aria-describedby="row-shortcuts"
+              data-selected={selected.includes(i.id)}
+              onClick={(event) => {
+                if (
+                  !(event.target as HTMLElement).closest("a") &&
+                  event.detail < 2
+                )
+                  toggle(i.id);
+              }}
+              onDoubleClick={(event) => {
+                if (!(event.target as HTMLElement).closest("a"))
+                  navigate(`/items/${i.id}`);
+              }}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === " ") {
+                  event.preventDefault();
+                  toggle(i.id);
+                }
+                if (event.key === "Enter") navigate(`/items/${i.id}`);
+              }}
+              className={`group cursor-pointer border-b border-[var(--line)] px-1 py-5 transition-colors sm:px-3 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${selected.includes(i.id) ? "bg-[var(--accent-soft)] ring-1 ring-inset ring-[var(--accent)]" : "hover:bg-[var(--paper)]"}`}
             >
               <div className="mb-2 flex items-center gap-3 text-[10px] tracking-wider">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${i.title}`}
-                  disabled={bulkBusy}
-                  checked={selected.includes(i.id)}
-                  onChange={(event) =>
-                    setSelected((previous) =>
-                      event.target.checked
-                        ? [...previous, i.id]
-                        : previous.filter((id) => id !== i.id),
-                    )
-                  }
-                />
                 <span className="font-medium text-[var(--accent-ink)]">
                   {i.kind.toUpperCase()}
                 </span>
@@ -337,7 +359,14 @@ export function Library() {
                   ? "Try a different phrase or broaden your filters. Your saved items are still in your library."
                   : "Save a link or upload a PDF. You can decide how to organize it later."}
               </p>
-              <Button onClick={() => (active ? setParams({}) : openSave())}>
+              <Button
+                onClick={() => {
+                  if (active) {
+                    setQuery("");
+                    setParams({});
+                  } else openSave();
+                }}
+              >
                 {active ? "Clear search and filters" : "Save your first link"}
               </Button>
             </div>
@@ -402,9 +431,22 @@ export function Library() {
             </nav>
           )}
         </section>
-        <aside className="hidden lg:block">
+        <aside
+          aria-label="Library actions"
+          className={`${selected.length ? "" : "hidden"} lg:block`}
+        >
           <div className="sticky top-24">
-            <SaveForm sidebar />
+            {selected.length ? (
+              <BulkActions
+                items={visible}
+                selected={selected}
+                setSelected={setSelected}
+                busy={bulkBusy}
+                setBusy={setBulkBusy}
+              />
+            ) : (
+              <SaveForm sidebar />
+            )}
           </div>
         </aside>
       </div>
