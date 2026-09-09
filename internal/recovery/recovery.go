@@ -21,6 +21,9 @@ import (
 
 var ErrBusy = errors.New("Another capture browser is open. Close it before starting this one")
 var ErrInput = errors.New("Invalid browser action")
+var ErrNeedsInput = errors.New("browser recovery needs input")
+var ErrTimeout = errors.New("browser recovery needs more time")
+var ErrUnavailable = errors.New("browser recovery closed without a saved capture")
 
 type Browser interface {
 	Frame(context.Context) (acquisition.BrowserFrame, error)
@@ -157,6 +160,48 @@ func (m *Manager) begin(raw string) (*active, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.startLocked(raw, false)
+}
+
+// Recover joins the session for this source and waits for a saved Capture.
+// The caller's deadline only stops waiting; human takeover retains its browser.
+func (m *Manager) Recover(ctx context.Context, raw string) (capture.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return capture.Result{}, err
+	}
+	a, err := m.begin(raw)
+	if err != nil {
+		return capture.Result{}, err
+	}
+	deadline := time.NewTimer(100 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		m.mu.Lock()
+		saved, status := a.result, a.state.Status
+		m.mu.Unlock()
+		if len(saved.HTML) > 0 {
+			return saved, nil
+		}
+		if status == "needs_input" {
+			return capture.Result{}, ErrNeedsInput
+		}
+		select {
+		case <-ctx.Done():
+			return capture.Result{}, ctx.Err()
+		case <-deadline.C:
+			return capture.Result{}, ErrTimeout
+		case <-a.done:
+			m.mu.Lock()
+			saved = a.result
+			m.mu.Unlock()
+			if len(saved.HTML) > 0 {
+				return saved, nil
+			}
+			return capture.Result{}, ErrUnavailable
+		case <-tick.C:
+		}
+	}
 }
 
 func validAction(a Action) bool {
@@ -400,34 +445,14 @@ func (c Capturer) Capture(ctx context.Context, raw string) (capture.Result, erro
 	if !needs || ctx.Err() != nil {
 		return result, err
 	}
-	a, e := c.Browser.begin(raw)
-	if e != nil {
-		return result, err
+	saved, recoveryErr := c.Browser.Recover(ctx, raw)
+	if recoveryErr == nil {
+		return saved, nil
 	}
-	timer := time.NewTimer(100 * time.Second)
-	defer timer.Stop()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return result, ctx.Err()
-		case <-timer.C:
-			return result, err
-		case <-a.done:
-			c.Browser.mu.Lock()
-			saved := a.result
-			c.Browser.mu.Unlock()
-			if len(saved.HTML) > 0 {
-				return saved, nil
-			}
-			return result, err
-		case <-ticker.C:
-			if c.Browser.State(raw).Status == "needs_input" {
-				return result, err
-			}
-		}
+	if ctx.Err() != nil {
+		return result, ctx.Err()
 	}
+	return result, err
 }
 
 // Automatic capture must stay on the requested document. Human Save page
