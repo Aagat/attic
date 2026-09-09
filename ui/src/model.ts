@@ -12,7 +12,7 @@ export type CaptureStatus =
 export type Delivery =
   | "Not requested"
   | "Preparing document"
-  | "Email accepted"
+  | "Email Sent"
   | "Preparation failed"
   | "Delivery failed"
   | "Outcome uncertain";
@@ -75,7 +75,7 @@ const examples: Partial<Item>[] = [
     excerpt:
       "Email delivery gives us an especially useful example: relay acceptance does not confirm delivery to a downstream device…",
     tags: ["reliability", "distributed systems"],
-    delivery: "Email accepted",
+    delivery: "Email Sent",
   },
   {
     title:
@@ -242,7 +242,7 @@ export function validItems(value: unknown): value is Item[] {
         [
           "Not requested",
           "Preparing document",
-          "Email accepted",
+          "Email Sent",
           "Delivery failed",
           "Outcome uncertain",
         ].includes(x.delivery) &&

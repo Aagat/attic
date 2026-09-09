@@ -69,7 +69,7 @@ test("bookmark, edit, reload, deduplicate and remove", async ({ page }) => {
     page.getByRole("link", { name: "My durable reference", exact: true }),
   ).toHaveCount(0);
 });
-test("recapture retains earlier copies and resending accepted email asks first", async ({
+test("recapture retains earlier copies and sent email can be resent", async ({
   page,
 }) => {
   await page.goto("/items/sample-1");
@@ -79,12 +79,15 @@ test("recapture retains earlier copies and resending accepted email asks first",
   ).toBeDisabled();
   await expect(page.getByRole("button", { name: /18 Aug 2026/ })).toBeVisible();
   await page.goto("/items/sample-3");
-  await page
-    .getByRole("button", { name: "Send to Kindle", exact: true })
-    .click();
+  await expect(page.getByText("Email Sent", { exact: true })).toBeVisible();
+  await expect(page.getByText(/The email relay accepted/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Resend to Kindle" }).click();
+  await expect(
+    page.getByText("Preparing document", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Send this document again?" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 test("settings import merges duplicates; export is a real download", async ({
   page,

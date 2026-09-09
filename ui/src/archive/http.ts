@@ -41,8 +41,8 @@ const captures: Record<string, Item["capture"]> = {
   capturing: "Preserving",
 };
 const deliveries: Record<string, Item["delivery"]> = {
-  accepted: "Email accepted",
-  sent: "Email accepted",
+  accepted: "Email Sent",
+  sent: "Email Sent",
   failed: "Delivery failed",
   uncertain: "Outcome uncertain",
   unconfirmed: "Outcome uncertain",

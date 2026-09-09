@@ -269,8 +269,7 @@ function ReaderItem({ item }: { item: Item }) {
   const selected = item.versions[version];
   const safe = safeUrl(item.url);
   function requestSend() {
-    if (["Email accepted", "Outcome uncertain"].includes(item.delivery))
-      setResend(true);
+    if (item.delivery === "Outcome uncertain") setResend(true);
     else send(item.id);
   }
   function download() {
@@ -866,11 +865,10 @@ function ReaderItem({ item }: { item: Item }) {
               <SectionLabel>Kindle delivery</SectionLabel>
               <div className="mt-3 rounded border border-[var(--line)] bg-[var(--paper)] p-4">
                 <p className="font-medium">{item.delivery}</p>
-                <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
-                  {item.delivery === "Preparation failed"
-                    ? "Document preparation failed. Your saved copy is safe; you can try again."
-                    : item.delivery === "Email accepted"
-                      ? "The email relay accepted this document. This does not confirm arrival on your Kindle."
+                {item.delivery !== "Email Sent" && (
+                  <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
+                    {item.delivery === "Preparation failed"
+                      ? "Document preparation failed. Your saved copy is safe; you can try again."
                       : item.delivery === "Outcome uncertain"
                         ? "The email acknowledgement was interrupted. Resending may create a duplicate."
                         : item.delivery === "Delivery failed"
@@ -878,7 +876,13 @@ function ReaderItem({ item }: { item: Item }) {
                           : item.delivery === "Preparing document"
                             ? "Your item is saved. Document preparation and delivery are separate steps."
                             : "Send this item when you want to read it on your Kindle."}
-                </p>
+                  </p>
+                )}
+                {item.delivery === "Email Sent" && (
+                  <Button className="mt-3" onClick={requestSend}>
+                    Resend to Kindle
+                  </Button>
+                )}
                 {[
                   "Preparation failed",
                   "Delivery failed",
