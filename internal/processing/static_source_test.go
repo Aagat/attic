@@ -47,7 +47,7 @@ func TestStaticSourceRequiresOfflineRenderingAndApproval(t *testing.T) {
 	approver := &rejectStatic{t: t, err: rejection}
 	p := &Processor{savedRenderer: renderer, approver: approver, formatter: noStaticPDF{t}}
 	source := capture.Source{URL: "https://xcancel.com/sample/status/12345", Static: &capture.Result{FinalURL: "https://xcancel.com/sample/status/12345", HTML: []byte("<article><p>Preserved main post.</p></article>"), Status: "partial"}}
-	_, err := p.processAttempt(context.Background(), domain.Job{SubmittedURL: "https://x.com/sample/status/12345"}, application.ProcessorContext{SetStage: func(domain.Stage) error { return nil }}, source)
+	_, err := p.processAttempt(context.Background(), domain.Job{SubmittedURL: "https://x.com/sample/status/12345"}, application.ProcessorContext{SetStage: func(domain.Stage) error { return nil }}, source, "")
 	if !renderer.called || !approver.called || !errors.Is(err, rejection) {
 		t.Fatalf("rendered=%v approved=%v err=%v", renderer.called, approver.called, err)
 	}

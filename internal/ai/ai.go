@@ -28,7 +28,7 @@ const (
 	// omitted in Config.
 	DefaultReasoningEffort = "medium"
 	// DefaultPromptVersion identifies the application-owned instruction.
-	DefaultPromptVersion = "attic-v2-images"
+	DefaultPromptVersion = "attic-v3-translation"
 
 	defaultTimeout         = 90 * time.Second
 	defaultMaxResponseSize = 2 << 20 // 2 MiB
@@ -61,8 +61,10 @@ type Config struct {
 // model. CandidateHTML is expected to have been sanitized by the caller; AI
 // output remains untrusted and must be sanitized again by the owning module.
 type AnalyzeRequest struct {
-	RetrievedURL string
-	SourceURL    string
+	// TargetLanguage is a trusted output preference, separate from page metadata.
+	TargetLanguage string
+	RetrievedURL   string
+	SourceURL      string
 
 	CandidateText string
 	CandidateHTML string
@@ -527,8 +529,12 @@ func (c *Client) buildRequestBody(request AnalyzeRequest, previousOutput, follow
 		{Type: "image_url", ImageURL: &imageURL{URL: imageDataURL}},
 	}
 
+	instruction := c.systemInstruction
+	if request.TargetLanguage != "" {
+		instruction += "\n" + translationInstruction(request.TargetLanguage)
+	}
 	messages := []chatMessage{
-		{Role: "system", Content: c.systemInstruction},
+		{Role: "system", Content: instruction},
 		{Role: "user", Content: parts},
 	}
 	if followup != "" {
@@ -589,6 +595,9 @@ func boundedRepairOutput(value string) string {
 }
 
 func validateAnalyzeRequest(request AnalyzeRequest) error {
+	if !ValidTargetLanguage(request.TargetLanguage) {
+		return &Error{Code: CodeInvalidInput, Message: "unsupported target language"}
+	}
 	if strings.TrimSpace(request.SourceURL) == "" {
 		return &Error{Code: CodeInvalidInput, Message: "source URL is required"}
 	}
@@ -849,6 +858,12 @@ func parseApproved(content string, request AnalyzeRequest) (Approved, bool, erro
 		return fallback
 	}
 
+	if request.TargetLanguage != "" {
+		language, present := stringField(fields, "language")
+		if decision != "replace_candidate" || !present || language != request.TargetLanguage {
+			return Approved{}, true, &logicalMalformed{}
+		}
+	}
 	switch decision {
 	case "accept_candidate":
 		if strings.TrimSpace(request.CandidateHTML) == "" {

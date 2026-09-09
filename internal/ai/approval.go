@@ -21,6 +21,7 @@ type Analyzer interface {
 // ApprovalInput is the complete, bounded handoff from deterministic
 // extraction. ScreenshotDataURL is required even when Candidate is empty.
 type ApprovalInput struct {
+	TargetLanguage    string
 	RetrievedURL      string
 	SourceURL         string
 	CandidateText     string
@@ -57,7 +58,8 @@ func (a *ArticleApprover) Approve(ctx context.Context, jobID domain.JobID, input
 		return application.ApprovedArticle{}, application.NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI pipeline is not configured", false)
 	}
 	request := AnalyzeRequest{
-		SourceURL: input.SourceURL, RetrievedURL: input.RetrievedURL, CandidateText: input.CandidateText, CandidateHTML: input.CandidateHTML,
+		TargetLanguage: input.TargetLanguage,
+		SourceURL:      input.SourceURL, RetrievedURL: input.RetrievedURL, CandidateText: input.CandidateText, CandidateHTML: input.CandidateHTML,
 		Title: input.Title, Author: input.Author, SiteName: input.SiteName,
 		PublicationDate: input.PublicationDate, Description: input.Description, Language: input.Language,
 		ScreenshotDataURL: input.ScreenshotDataURL,
@@ -101,6 +103,9 @@ func (a *ArticleApprover) Approve(ctx context.Context, jobID domain.JobID, input
 	}
 	if len(attemptIDs) == 0 {
 		return application.ApprovedArticle{}, application.NewProcessingError(string(domain.FailureAIInvalidResponse), "The AI attempt is not recorded", false)
+	}
+	if input.TargetLanguage != "" && (!ValidTargetLanguage(input.TargetLanguage) || result.Decision != "replace_candidate" || result.Language != input.TargetLanguage) {
+		return application.ApprovedArticle{}, mapProcessingError(invalidResponseError())
 	}
 	plainText := input.CandidateText
 	extractionMethod := strings.TrimSpace(input.ExtractionMethod)

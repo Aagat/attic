@@ -56,7 +56,16 @@ func WithBrowserRecovery(browser BrowserRecovery) func(*Processor) {
 	return func(p *Processor) { p.browserRecovery = browser }
 }
 
+type OutputLanguages interface {
+	OutputLanguage(context.Context, domain.JobID) (string, error)
+}
+
+func WithOutputLanguages(source OutputLanguages) func(*Processor) {
+	return func(p *Processor) { p.outputLanguages = source }
+}
+
 type Processor struct {
+	outputLanguages OutputLanguages
 	browserRecovery BrowserRecovery
 	saved           SavedPages
 	savedRenderer   SavedRenderer
@@ -82,6 +91,17 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 	if p == nil || p.renderer == nil || p.approver == nil || p.formatter == nil || pc.SetStage == nil || pc.ApproveArticle == nil {
 		return application.ProcessResult{}, processingError(domain.FailureInternalError, false)
 	}
+	targetLanguage := ""
+	if p.outputLanguages != nil {
+		var err error
+		targetLanguage, err = p.outputLanguages.OutputLanguage(ctx, job.ID)
+		if err != nil {
+			return application.ProcessResult{}, processingError(domain.FailureStorageFailed, true)
+		}
+		if !ai.ValidTargetLanguage(targetLanguage) {
+			return application.ProcessResult{}, processingError(domain.FailureAIInvalidResponse, false)
+		}
+	}
 	if p.saved != nil && p.savedRenderer != nil {
 		saved, found, err := p.saved.SavedPage(ctx, job.ID)
 		if err != nil {
@@ -95,7 +115,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 			if page.Title == "" {
 				page.Title = saved.Title
 			}
-			result, savedErr := p.processPage(ctx, job, pc, page, saved.FinalURL, true)
+			result, savedErr := p.processPage(ctx, job, pc, page, saved.FinalURL, true, targetLanguage)
 			if savedErr == nil || !recoverable(savedErr) || ctx.Err() != nil {
 				return result, savedErr
 			}
@@ -125,7 +145,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 			}
 		}
 		attempt++
-		result, err := p.processAttempt(recoveryCtx, job, pc, source)
+		result, err := p.processAttempt(recoveryCtx, job, pc, source, targetLanguage)
 		if err == nil {
 			return result, nil
 		}
@@ -151,7 +171,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 		if err := pc.SetStage(domain.StageFetching); err != nil {
 			return application.ProcessResult{}, err
 		}
-		result, err := p.processAttempt(recoveryCtx, job, pc, *fallback)
+		result, err := p.processAttempt(recoveryCtx, job, pc, *fallback, targetLanguage)
 		if err == nil || !recoverable(err) {
 			return result, err
 		}
@@ -164,7 +184,7 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 			return application.ProcessResult{}, err
 		}
 		if page, err := p.browserRecovery.Recover(recoveryCtx, job.SubmittedURL); err == nil {
-			return p.processPage(recoveryCtx, job, pc, page, job.SubmittedURL, true)
+			return p.processPage(recoveryCtx, job, pc, page, job.SubmittedURL, true, targetLanguage)
 		}
 	}
 	// Let the existing durable retry budget retry temporary archive outages too.
@@ -199,7 +219,7 @@ func (r sourceRenderer) Snapshot(ctx context.Context, raw string) (acquisition.R
 	return r.Render(ctx, raw)
 }
 
-func (p *Processor) processAttempt(ctx context.Context, job domain.Job, pc application.ProcessorContext, source capture.Source) (application.ProcessResult, error) {
+func (p *Processor) processAttempt(ctx context.Context, job domain.Job, pc application.ProcessorContext, source capture.Source, targetLanguage string) (application.ProcessResult, error) {
 	if source.Err != nil {
 		return application.ProcessResult{}, mapRenderError(ctx, source.Err)
 	}
@@ -217,10 +237,10 @@ func (p *Processor) processAttempt(ctx context.Context, job domain.Job, pc appli
 			page.Title = source.Static.Title
 		}
 	}
-	return p.processPage(ctx, job, pc, page, source.URL, source.URL != job.SubmittedURL)
+	return p.processPage(ctx, job, pc, page, source.URL, source.URL != job.SubmittedURL, targetLanguage)
 }
 
-func (p *Processor) processPage(ctx context.Context, job domain.Job, pc application.ProcessorContext, page acquisition.RenderedPage, requestedURL string, archived bool) (application.ProcessResult, error) {
+func (p *Processor) processPage(ctx context.Context, job domain.Job, pc application.ProcessorContext, page acquisition.RenderedPage, requestedURL string, archived bool, targetLanguage string) (application.ProcessResult, error) {
 	if len(page.Screenshot) == 0 {
 		return application.ProcessResult{}, processingError(domain.FailureFetchFailed, true)
 	}
@@ -253,7 +273,8 @@ func (p *Processor) processPage(ctx context.Context, job domain.Job, pc applicat
 		return application.ProcessResult{}, err
 	}
 	approved, err := p.approver.Approve(ctx, job.ID, ai.ApprovalInput{
-		SourceURL: job.SubmittedURL, RetrievedURL: sourceURL, CandidateText: candidate.PlainText, CandidateHTML: candidate.SemanticHTML,
+		TargetLanguage: targetLanguage,
+		SourceURL:      job.SubmittedURL, RetrievedURL: sourceURL, CandidateText: candidate.PlainText, CandidateHTML: candidate.SemanticHTML,
 		Title: candidate.Title, Author: candidate.Author, SiteName: candidate.SiteName,
 		PublicationDate: candidate.PublicationDate, Description: candidate.Description, Language: candidate.Language,
 		ExtractionMethod:  candidate.ExtractionMethod,

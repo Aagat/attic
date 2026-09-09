@@ -117,8 +117,14 @@ func (c *Client) responsesBody(body []byte) ([]byte, error) {
 		return nil, invalidResponseError()
 	}
 	input := []any{}
+	var instructions []string
 	for _, m := range chat.Messages {
 		if m.Role == "system" {
+			var instruction string
+			if json.Unmarshal(m.Content, &instruction) != nil {
+				return nil, invalidResponseError()
+			}
+			instructions = append(instructions, instruction)
 			continue
 		}
 		parts := []any{}
@@ -145,7 +151,7 @@ func (c *Client) responsesBody(body []byte) ([]byte, error) {
 		}
 		input = append(input, map[string]any{"role": m.Role, "content": parts})
 	}
-	request := map[string]any{"model": c.model, "instructions": c.systemInstruction, "input": input, "store": false, "stream": true}
+	request := map[string]any{"model": c.model, "instructions": strings.Join(instructions, "\n"), "input": input, "store": false, "stream": true}
 	if !c.omitReasoningEffort {
 		request["reasoning"] = map[string]string{"effort": c.reasoningEffort}
 	}

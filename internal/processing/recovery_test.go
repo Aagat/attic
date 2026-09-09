@@ -29,6 +29,9 @@ func TestBrowserRecoveryStillRequiresArticleApproval(t *testing.T) {
 		return acquisition.RenderedPage{FinalURL: raw, Status: 200, Screenshot: []byte("viewport"), DOM: []byte("<article><h1>Recovered article</h1><p>" + strings.Repeat("A recovered article about preserving useful public documents. ", 20) + "</p></article>")}, nil
 	})
 	approver := approverFunc(func(_ context.Context, _ domain.JobID, in ai.ApprovalInput, approve func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		if in.TargetLanguage != "es" {
+			t.Fatalf("target language lost: %q", in.TargetLanguage)
+		}
 		approved = true
 		return approve(application.ArticleDraft{Classification: "article", Decision: "accept_candidate", Title: "Recovered article", SemanticHTML: in.CandidateHTML, PlainText: in.CandidateText, ExtractionMethod: "deterministic", AIConfidence: 1, AICompleteness: 1, AIAttemptID: "recovered-approval"})
 	})
@@ -37,7 +40,7 @@ func TestBrowserRecoveryStillRequiresArticleApproval(t *testing.T) {
 			t.Fatal("recovery bypassed approval")
 		}
 		return formatter.Result{PDF: []byte("%PDF-recovery\nstartxref\n%%EOF")}, nil
-	}), processing.WithBrowserRecovery(recovery))
+	}), processing.WithBrowserRecovery(recovery), processing.WithOutputLanguages(outputLanguageFunc(func(context.Context, domain.JobID) (string, error) { return "es", nil })))
 	if err != nil {
 		t.Fatal(err)
 	}

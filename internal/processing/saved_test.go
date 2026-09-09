@@ -40,6 +40,9 @@ func TestSavedCapturePreparesPDFWithoutRevisitingOriginal(t *testing.T) {
 		return acquisition.RenderedPage{DOM: html, FinalURL: url, Screenshot: []byte("screenshot")}, nil
 	})
 	approver := approverFunc(func(_ context.Context, _ domain.JobID, in ai.ApprovalInput, approve func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		if in.TargetLanguage != "es" {
+			t.Fatalf("target language lost: %q", in.TargetLanguage)
+		}
 		if !strings.Contains(in.CandidateText, "useful content") || in.ScreenshotDataURL == "" {
 			t.Fatal("saved text and screenshot must reach AI approval")
 		}
@@ -47,7 +50,7 @@ func TestSavedCapturePreparesPDFWithoutRevisitingOriginal(t *testing.T) {
 	})
 	processor, err := processing.New(renderer, approver, formatterFunc(func(context.Context, formatter.Article) (formatter.Result, error) {
 		return formatter.Result{PDF: []byte("%PDF-saved\nstartxref\n%%EOF")}, nil
-	}), processing.WithSavedPages(source, offline))
+	}), processing.WithSavedPages(source, offline), processing.WithOutputLanguages(outputLanguageFunc(func(context.Context, domain.JobID) (string, error) { return "es", nil })))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -232,3 +232,28 @@ func TestArticleApproverRejectsReplacementWhoseOnlyTextIsUnsafe(t *testing.T) {
 		t.Fatalf("successful provider attempt was not recorded: %#v", recorder.attempts)
 	}
 }
+
+func TestTranslationApprovalRecordsAttemptsAndUsesTranslatedText(t *testing.T) {
+	recorder := &attemptRecorder{}
+	analyzer := analyzerFunc(func(_ context.Context, request ai.AnalyzeRequest) (ai.Approved, []ai.Attempt, error) {
+		if request.TargetLanguage != "es" {
+			t.Fatalf("target lost: %q", request.TargetLanguage)
+		}
+		return ai.Approved{Classification: "article", Decision: "replace_candidate", Title: "Título", Language: "es", ContentHTML: "<article><p>Texto traducido.</p><pre><code>print(42)</code></pre></article>"}, []ai.Attempt{{Status: ai.AttemptSucceeded}}, nil
+	})
+	approver, err := ai.NewArticleApprover(analyzer, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	_, err = approver.Approve(context.Background(), "job", ai.ApprovalInput{TargetLanguage: "es", CandidateText: "Original English text", Language: "en"}, func(draft application.ArticleDraft) (application.ApprovedArticle, error) {
+		called = true
+		if len(recorder.attempts) != 1 || draft.AIAttemptID != "durable-attempt-1" || draft.Language != "es" || draft.PlainText != "Texto traducido. print(42)" || !strings.Contains(draft.SemanticHTML, "print(42)") {
+			t.Fatalf("translated draft=%+v attempts=%+v", draft, recorder.attempts)
+		}
+		return application.ApprovedArticle{}, nil
+	})
+	if err != nil || !called {
+		t.Fatalf("approval failed: %v", err)
+	}
+}
