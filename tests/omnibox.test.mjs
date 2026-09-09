@@ -34,6 +34,16 @@ test('suggestions come from authenticated Attic search with escaped titles',asyn
  await app.enter(app.results.at(-1)[0].content);
  assert.equal(app.calls.at(-1).update.url,'http://attic.example:18080/items/saved%2F1');
 });
+test('a nonempty query stays pending until search results arrive',async()=>{
+ const app=extension({response:async()=>({ok:true,json:async()=>({items:[{id:'match',title:'Match'}]})})});
+ app.change('books');
+ assert.equal(app.results.length,0,'an empty callback would prematurely complete Chromium suggestions');
+ await app.search();
+ assert.equal(app.results.length,1);
+ assert.equal(app.results[0][0].description,'Match');
+ app.change('');
+ assert.deepEqual(app.results.at(-1),[]);
+});
 test('typing is debounced and stale responses cannot replace new results',async()=>{
  let resolveFirst;
  const app=extension({response:async url=>url.includes('q=old')?await new Promise(resolve=>resolveFirst=resolve):({ok:true,json:async()=>({items:[{id:'new',title:'New'}]})})});
@@ -51,7 +61,7 @@ test('cancellation and disconnect suppress in-flight suggestions',async()=>{
   const app=extension({response:async()=>await new Promise(resolve=>finish=resolve)});
   app.change('query');const pending=app.search();await new Promise(resolve=>setImmediate(resolve));stop(app);
   finish({ok:true,json:async()=>({items:[{id:'stale',title:'Stale'}]})});await pending;
-  assert.deepEqual(app.results.at(-1),[]);
+  assert.deepEqual(app.results,[]);
  }
 });
 test('Enter preserves requested tab disposition and treats arbitrary URLs as queries',async()=>{

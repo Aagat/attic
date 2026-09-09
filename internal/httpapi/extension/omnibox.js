@@ -33,8 +33,8 @@
     const current = generation;
     const query = text.trim().slice(0, 1000);
     defaultSuggestion(query ? 'Search Attic for <match>' + escape(query) + '</match>' : 'Search Attic');
-    suggest([]);
-    if (!query) return;
+    // An empty callback completes Chromium's request before async results arrive.
+    if (!query) { suggest([]); return; }
     timer = setTimeout(async () => {
       const request = new AbortController();
       controller = request;
