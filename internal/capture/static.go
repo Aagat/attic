@@ -21,6 +21,11 @@ import (
 // ReplayCSP must also be sent as a response header. The embedded policy protects
 // exported snapshots; sandbox additionally isolates snapshots served by Attic.
 const ReplayCSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; sandbox"
+
+// ReadingReplayCSP lets the parent measure inert reading content. Scripts, forms,
+// external resources, and top-level navigation remain blocked.
+const ReadingReplayCSP = ReplayCSP + " allow-same-origin"
+
 const maxArchiveBytes = 64 << 20
 
 var cssURL = regexp.MustCompile(`(?i)url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)`)

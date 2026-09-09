@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useContentFrameHeight } from "../contentFrame";
 import editorStyles from "./reading-editor.css?url";
 import { Button, Modal, input } from "./primitives";
 import { useArchive } from "../state";
@@ -52,6 +53,7 @@ export function ReadingEditor({
 }) {
   const { archive } = useArchive();
   const frame = useRef<HTMLIFrameElement>(null);
+  const resizeFrame = useContentFrameHeight();
   const selected = useRef<Element | null>(null);
   const hovered = useRef<Element | null>(null);
   const [ancestors, setAncestors] = useState<Element[]>([]);
@@ -133,6 +135,7 @@ export function ReadingEditor({
   function bind() {
     const doc = frame.current?.contentDocument;
     if (!doc) return;
+    resizeFrame(frame.current!);
     doc.addEventListener("pointermove", (event) => {
       const element = (event.target as Element).closest(selectable);
       if (!element || element === doc.body) {
@@ -259,7 +262,7 @@ export function ReadingEditor({
               sandbox="allow-same-origin"
               srcDoc={source}
               onLoad={bind}
-              className={`h-[45dvh] w-full rounded border border-[var(--line)] bg-white ${busy ? "pointer-events-none" : ""}`}
+              className={`min-h-64 w-full rounded border border-[var(--line)] bg-white ${busy ? "pointer-events-none" : ""}`}
             />
             {editable && (
               <div className="space-y-2">

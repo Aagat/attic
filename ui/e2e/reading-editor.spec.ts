@@ -18,6 +18,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
   });
   let html =
     '<p>Keep <strong>bold words</strong></p><p>Newsletter signup</p><pre><code>print("hello")</code></pre><table><tr><td>Cell</td></tr></table><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Diagram">';
+  html += `<p>${"Long preview paragraph. ".repeat(300)}</p>`;
   let item = {
     id: "saved",
     kind: "bookmark",
@@ -71,6 +72,27 @@ test("reading edits preserve structure, undo removals, and save without email", 
     "sandbox",
     "allow-same-origin",
   );
+  const frameHeight = () =>
+    page
+      .locator('iframe[title="Reading editor"]')
+      .evaluate((frame) => frame.clientHeight);
+  await expect.poll(frameHeight).toBeGreaterThan(1000);
+  const fullHeight = await frameHeight();
+  await editor.locator("p").last().click();
+  await page
+    .getByRole("button", { name: "Hide selected", exact: true })
+    .click();
+  await expect.poll(frameHeight).toBeLessThan(fullHeight - 500);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(frameHeight).toBeGreaterThan(1000);
+  await expect
+    .poll(() =>
+      page.locator('iframe[title="Reading editor"]').evaluate((frame) => {
+        const document = (frame as HTMLIFrameElement).contentDocument!;
+        return document.documentElement.scrollHeight <= frame.clientHeight;
+      }),
+    )
+    .toBe(true);
   await editor.locator("strong").hover();
   await expect(editor.locator("strong")).toHaveAttribute(
     "data-attic-hover",
@@ -135,6 +157,13 @@ test("reading edits preserve structure, undo removals, and save without email", 
   expect(html).toContain("<td>Cell</td>");
   expect(html).toContain('alt="Diagram"');
   expect(writes).toEqual(["/api/v1/items/saved/editor"]);
+  await expect
+    .poll(() =>
+      page
+        .locator('iframe[title="Saved reading version"]')
+        .evaluate((frame) => frame.clientHeight),
+    )
+    .toBeGreaterThan(1000);
   await expect(
     page
       .frameLocator('iframe[title="Saved reading version"]')

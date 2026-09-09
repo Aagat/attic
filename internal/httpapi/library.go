@@ -325,7 +325,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 				return true
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
+			w.Header().Set("Content-Security-Policy", capture.ReadingReplayCSP)
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("Referrer-Policy", "no-referrer")
 			if r.Method == "GET" {
@@ -380,7 +380,7 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			return true
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", capture.ReplayCSP)
+		w.Header().Set("Content-Security-Policy", capture.ReadingReplayCSP)
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")

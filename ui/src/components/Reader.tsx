@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
+import { useContentFrameHeight } from "../contentFrame";
 import { ReadingEditor } from "./ReadingEditor";
 import { BrowserRecovery } from "./BrowserRecovery";
 import { dateLabel, safeUrl, type Item } from "../model";
@@ -35,6 +36,7 @@ function SavedCapture({
   reading: boolean;
 }) {
   const { archive } = useArchive();
+  const resizeFrame = useContentFrameHeight();
   const { data: url, error } = useArchiveQuery(
     `capture:${item.id}:${item.versions[index]?.id}:${reading}`,
     (signal) => archive.captureURL(item, index, reading, signal),
@@ -49,7 +51,10 @@ function SavedCapture({
     <iframe
       title={reading ? "Saved reading version" : "Saved original layout"}
       src={url}
-      sandbox=""
+      sandbox={reading ? "allow-same-origin" : ""}
+      onLoad={(event) => {
+        if (reading) resizeFrame(event.currentTarget);
+      }}
       className="w-full min-h-[80dvh] border-0"
     />
   ) : (
@@ -71,6 +76,7 @@ const languages = [
   ["zh", "Chinese"],
 ];
 function ApprovedReading({ item }: { item: Item }) {
+  const resizeFrame = useContentFrameHeight();
   const { archive } = useArchive();
   const { data: url, error } = useArchiveQuery(
     `reading:${item.id}:${item.jobId}`,
@@ -86,7 +92,8 @@ function ApprovedReading({ item }: { item: Item }) {
     <iframe
       title="Saved reading version"
       src={url}
-      sandbox=""
+      sandbox="allow-same-origin"
+      onLoad={(event) => resizeFrame(event.currentTarget)}
       className="w-full min-h-[80dvh] border-0"
     />
   ) : (
