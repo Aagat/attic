@@ -65,6 +65,24 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 			status = result.Status
 		}
 		attempts = append(attempts, Attempt{endpoint, status})
+		// X usernames are case-insensitive, but the mirror can require the canonical
+		// spelling (or a renamed account). The API response supplies that permalink.
+		if err == nil {
+			canonical := xMirrorURL(result.FinalURL)
+			if canonical != "" && canonical != xMirrorURL(original) {
+				recovered, mirrorErr := c.xMirror(ctx, original, canonical)
+				mirrorStatus := "failed"
+				if mirrorErr == nil {
+					mirrorStatus = recovered.Status
+				}
+				attempts = append(attempts, Attempt{canonical, mirrorStatus})
+				if mirrorErr == nil {
+					recovered.Attempts = attempts
+					return recovered, nil
+				}
+			}
+		}
+
 	}
 	sources := []string{original}
 	for i := 0; i < len(sources); i++ {

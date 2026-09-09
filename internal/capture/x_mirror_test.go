@@ -100,3 +100,29 @@ func TestDirectMirrorPostUsesTargetedCapture(t *testing.T) {
 		t.Fatal("mirror accepted as an X API post")
 	}
 }
+
+func TestMirrorRetriesCanonicalUsernameFromX(t *testing.T) {
+	c := New(&fakeRenderer{}, nil)
+	c.fetchJSON = func(context.Context, string) (acquisition.Page, error) {
+		p := embedFixture("The opening…")
+		p.HTML = []byte(strings.ReplaceAll(string(p.HTML), "sample", "Sample"))
+		return p, nil
+	}
+	var calls []string
+	c.fetchMirror = func(_ context.Context, raw string) (acquisition.Page, error) {
+		calls = append(calls, raw)
+		if raw == "https://xcancel.com/sample/status/12345" {
+			return acquisition.Page{}, errors.New("noncanonical account not found")
+		}
+		if raw != "https://xcancel.com/Sample/status/12345" {
+			t.Fatalf("unexpected mirror %s", raw)
+		}
+		p := mirrorFixture()
+		p.FinalURL = raw
+		return p, nil
+	}
+	result, err := c.Capture(context.Background(), testXURL)
+	if err != nil || len(calls) != 2 || !strings.Contains(result.PlainText, "The final sentence.") || result.OriginalURL != testXURL || len(result.Attempts) != 3 {
+		t.Fatalf("canonical recovery failed: %v attempts=%v", err, result.Attempts)
+	}
+}

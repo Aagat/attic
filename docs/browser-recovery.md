@@ -8,7 +8,9 @@ context remains explicitly partial. Direct XCancel status links use this same
 parser. Mirror requests have a 10-second timeout, 2 MiB size limit and at most two
 redirects, through the existing public-address network policy.
 
-If the mirror is unavailable, Attic tries X's public oEmbed endpoint and ordinary
+If the mirror is unavailable, Attic tries X's public oEmbed endpoint and retries
+the mirror when that response supplies a different canonical username spelling.
+It then continues with ordinary
 browser/archive recovery. Short embeds no longer stop the search for a fuller
 copy. Chromium automatically clicks the requested post's Show more control, at
 most three times; a remaining expansion control marks the snapshot as truncated.
