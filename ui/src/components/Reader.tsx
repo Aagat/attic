@@ -123,7 +123,15 @@ export function Reader() {
   );
 }
 function ReaderItem({ item }: { item: Item }) {
-  const { archive, refresh, notify, send, recapture, generate } = useArchive();
+  const {
+    archive,
+    refresh,
+    notify,
+    send,
+    recapture,
+    generate,
+    remove: removeItems,
+  } = useArchive();
   const navigate = useNavigate();
   const [format, setFormat] = useState(item.kind === "PDF" ? "pdf" : "reading");
   const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
@@ -1028,25 +1036,19 @@ function ReaderItem({ item }: { item: Item }) {
         open={remove}
         onOpenChange={setRemove}
         title="Remove this item?"
-        description="This permanently removes the item and its saved copies from Attic. Browser bookmarks are not changed."
+        description="You can undo removal for 10 seconds. Browser bookmarks are not changed."
       >
         <p className="font-display text-xl">{item.title}</p>
         <div className="mt-6 flex justify-end gap-3">
           <Button onClick={() => setRemove(false)}>Keep item</Button>
           <Button
             className="bg-[var(--danger)]! text-[var(--paper)]"
-            onClick={async () => {
-              try {
-                await archive.remove(item.id);
-                refresh();
-                navigate("/");
-                notify("Item removed.");
-              } catch {
-                notify("Could not remove the local file. Please try again.");
-              }
+            onClick={() => {
+              removeItems([item.id]);
+              navigate("/");
             }}
           >
-            Remove permanently
+            Remove item
           </Button>
         </div>
       </Modal>

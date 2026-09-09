@@ -62,7 +62,7 @@ test("bookmark, edit, reload, deduplicate and remove", async ({ page }) => {
     .click();
   await page
     .getByRole("dialog", { name: "Remove this item?" })
-    .getByRole("button", { name: "Remove permanently" })
+    .getByRole("button", { name: "Remove item" })
     .click();
   await expect(page).toHaveURL("/");
   await expect(

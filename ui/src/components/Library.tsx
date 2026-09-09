@@ -13,11 +13,12 @@ import {
   Plus,
 } from "lucide-react";
 import { Badge, Button, input } from "./primitives";
+import { BulkActions } from "./BulkActions";
 import { SaveForm } from "./SaveForm";
 import { dateLabel } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
 export function Library() {
-  const { archive, openSave } = useArchive();
+  const { archive, openSave, hiddenItems } = useArchive();
   const [params, setParams] = useSearchParams();
   const search = useRef<HTMLInputElement>(null);
   const query = params.get("q") || "",
@@ -26,6 +27,11 @@ export function Library() {
     tag = params.get("tag") || "",
     status = params.get("status") || "",
     date = params.get("date") || "";
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => {
+    setSelected([]);
+  }, [params.toString()]);
   const [filterOpen, setFilterOpen] = useState(false);
   const page = Math.max(1, Number(params.get("page")) || 1),
     pageSize = 8;
@@ -58,7 +64,7 @@ export function Library() {
   const total = data?.total || 0;
   const pages = Math.max(1, Math.ceil(total / pageSize)),
     current = page,
-    visible = items;
+    visible = items.filter((item) => !hiddenItems.includes(item.id));
   const active = !!(query || kind || source || tag || status || date);
   const filterFields = (
     <>
@@ -251,12 +257,32 @@ export function Library() {
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px]">
         <section aria-label="Saved items" className="min-w-0">
+          <BulkActions
+            items={visible}
+            selected={selected}
+            setSelected={setSelected}
+            busy={bulkBusy}
+            setBusy={setBulkBusy}
+          />
           {visible.map((i) => (
             <article
               key={i.id}
               className="group border-b border-[var(--line)] px-1 py-5 transition-colors hover:bg-[var(--paper)] sm:px-3 motion-reduce:transition-none"
             >
               <div className="mb-2 flex items-center gap-3 text-[10px] tracking-wider">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${i.title}`}
+                  disabled={bulkBusy}
+                  checked={selected.includes(i.id)}
+                  onChange={(event) =>
+                    setSelected((previous) =>
+                      event.target.checked
+                        ? [...previous, i.id]
+                        : previous.filter((id) => id !== i.id),
+                    )
+                  }
+                />
                 <span className="font-medium text-[var(--accent-ink)]">
                   {i.kind.toUpperCase()}
                 </span>

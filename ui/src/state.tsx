@@ -19,6 +19,8 @@ export interface ArchiveState {
   openUpload: () => void;
   send: (id: string) => void;
   recapture: (id: string) => void;
+  remove: (ids: string[]) => void;
+  hiddenItems: string[];
   generate: (id: string) => void;
 }
 export const ArchiveContext = createContext<ArchiveState>(null!);

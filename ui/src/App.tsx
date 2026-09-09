@@ -1,3 +1,4 @@
+import { useRemoval } from "./removal";
 import { randomId } from "./id";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -48,6 +49,7 @@ export function App() {
   }
   useEffect(() => () => clearTimeout(timer.current), []);
   const refresh = () => setRevision((r) => r + 1);
+  const removal = useRemoval(archive, refresh, notify);
   async function login(key: string) {
     await archive.session(key);
     setAuthenticated(true);
@@ -205,6 +207,8 @@ export function App() {
         },
         send,
         recapture,
+        remove: removal.remove,
+        hiddenItems: removal.hidden,
         generate: (id: string) => {
           void action(id, "generate");
         },
@@ -388,6 +392,17 @@ export function App() {
             aria-live="polite"
             className="fixed bottom-24 left-1/2 z-[60] w-[calc(100%-32px)] max-w-lg -translate-x-1/2 md:bottom-6"
           >
+            {!!removal.pending.length && (
+              <div className="mb-2 flex items-center justify-between gap-3 rounded bg-[var(--ink)] p-4 text-sm text-[var(--paper)] shadow-lg">
+                <span>{removal.pending.length} item(s) removed</span>
+                <button
+                  className="min-h-11 px-3 underline"
+                  onClick={removal.undo}
+                >
+                  Undo
+                </button>
+              </div>
+            )}
             {message && (
               <div className="flex items-start gap-3 rounded border border-[var(--line)] bg-[var(--ink)] p-4 text-sm leading-5 text-[var(--paper)] shadow-lg">
                 <Check className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" />
