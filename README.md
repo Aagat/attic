@@ -31,6 +31,16 @@ The item details expose captures and missing resources, annotations, suggested t
 and separate capture/index/PDF/delivery status. A failed optional classification can
 be retried. A successful capture remains available if a later capture fails.
 
+Use the pencil beside the reader title to rename a saved item; browser bookmark
+sync preserves that edit. In the reader sidebar, choose a language and **Translate**
+to prepare a separate reading edition and PDF. English is the default; Spanish,
+French, German, Italian, Portuguese, Dutch, Japanese, Korean and Chinese are also
+available. **Original** switches back, and **Original layout** always opens the
+preserved capture. Translation uses the configured AI provider, passes normal
+article approval and PDF checks, and does not request email. **Send to Kindle**
+uses the selected edition. Uploaded PDFs retain their original bytes and cannot
+be translated through this article workflow.
+
 **Export archive** downloads a portable ZIP of saved records, capture versions, PDFs,
 approved reading content and browser deletion records. **Restore archive** merges it
 without overwriting newer local edits, recapturing pages or sending email, and schedules

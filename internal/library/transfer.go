@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"attic/internal/ai"
 	"attic/internal/domain"
 )
 
@@ -28,6 +29,7 @@ type archiveManifest struct {
 	Tombstones []archiveTombstone `json:"tombstones"`
 }
 type archiveItem struct {
+	Editions    []archiveEdition `json:"reading_editions,omitempty"`
 	Content     json.RawMessage  `json:"approved_content,omitempty"`
 	Item        Item             `json:"item"`
 	Text        string           `json:"text"`
@@ -36,6 +38,13 @@ type archiveItem struct {
 	Captures    []archiveCapture `json:"captures"`
 	PDF         *domain.Artifact `json:"pdf,omitempty"`
 }
+type archiveEdition struct {
+	JobID    string          `json:"job_id"`
+	Language string          `json:"language"`
+	Content  json.RawMessage `json:"approved_content,omitempty"`
+	PDF      domain.Artifact `json:"pdf"`
+}
+
 type archiveCapture struct {
 	Capture  Capture         `json:"capture"`
 	Artifact domain.Artifact `json:"artifact"`
@@ -114,23 +123,30 @@ func (l *Library) Export(ctx context.Context, out io.Writer) error {
 		if err != nil {
 			return safe(err)
 		}
-		if item.Item.JobID != "" {
+		rows, err = tx.QueryContext(ctx, `SELECT j.id,COALESCE(e.language,''),to_jsonb(c),a.storage_relative_path,a.safe_filename,a.media_type,a.byte_size,a.checksum_sha256,a.created_at
+ FROM jobs j LEFT JOIN reading_editions e ON e.job_id=j.id LEFT JOIN content_documents c ON c.job_id=j.id
+ JOIN LATERAL (SELECT * FROM artifacts WHERE job_id=j.id AND availability='available' ORDER BY created_at DESC LIMIT 1) a ON true
+ WHERE (e.item_id=$1 OR j.id=$2) ORDER BY COALESCE(e.language,''),j.created_at,j.id`, item.Item.ID, item.Item.JobID)
+		if err != nil {
+			return safe(err)
+		}
+		for rows.Next() {
+			var edition archiveEdition
 			var content []byte
-			contentErr := tx.QueryRowContext(ctx, `SELECT to_jsonb(c) FROM content_documents c WHERE job_id=$1`, item.Item.JobID).Scan(&content)
-			if contentErr != nil && !errors.Is(contentErr, sql.ErrNoRows) {
-				return safe(contentErr)
-			}
-			item.Content = json.RawMessage(content)
-			var a domain.Artifact
-			err := tx.QueryRowContext(ctx, `SELECT storage_relative_path,safe_filename,media_type,byte_size,checksum_sha256,created_at FROM artifacts WHERE job_id=$1 AND availability='available' ORDER BY created_at DESC LIMIT 1`, item.Item.JobID).Scan(&a.Key, &a.Filename, &a.MediaType, &a.ByteSize, &a.Checksum, &a.CreatedAt)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			a := &edition.PDF
+			if err := rows.Scan(&edition.JobID, &edition.Language, &content, &a.Key, &a.Filename, &a.MediaType, &a.ByteSize, &a.Checksum, &a.CreatedAt); err != nil {
+				rows.Close()
 				return safe(err)
 			}
-			if err == nil {
-				a.Available = true
-				item.PDF = &a
-				artifacts[a.Checksum] = a
-			}
+			edition.Content = json.RawMessage(content)
+			a.Available = true
+			item.Editions = append(item.Editions, edition)
+			artifacts[a.Checksum] = *a
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return safe(err)
 		}
 	}
 	rows, err = tx.QueryContext(ctx, `SELECT client_id,node_id,item_id,url,title,folder,saved_at FROM bookmark_sources ORDER BY client_id,node_id`)
@@ -316,6 +332,25 @@ func readArchive(input io.ReaderAt, size int64) (archiveManifest, map[string]*zi
 				return manifest, nil, err
 			}
 		}
+		editionIDs := map[string]bool{}
+		for _, edition := range item.Editions {
+			if edition.JobID == "" || len(edition.JobID) > 200 || editionIDs[edition.JobID] || !ai.ValidTargetLanguage(edition.Language) || edition.PDF.MediaType != "application/pdf" {
+				return manifest, nil, ErrInvalid
+			}
+			editionIDs[edition.JobID] = true
+			if err := validateTransferArtifact(edition.PDF, files); err != nil {
+				return manifest, nil, err
+			}
+			if edition.Language != "" {
+				var content struct {
+					Language string `json:"detected_language"`
+					HTML     string `json:"semantic_html"`
+				}
+				if json.Unmarshal(edition.Content, &content) != nil || content.Language != edition.Language || strings.TrimSpace(content.HTML) == "" {
+					return manifest, nil, ErrInvalid
+				}
+			}
+		}
 		if item.PDF != nil {
 			if err := validateTransferArtifact(*item.PDF, files); err != nil {
 				return manifest, nil, err
@@ -438,24 +473,30 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 			return "", safe(err)
 		}
 	}
-	if entry.PDF != nil {
-		var hasPDF, active bool
-		if jobID != "" {
-			err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM artifacts WHERE job_id=$1 AND availability='available'),EXISTS(SELECT 1 FROM jobs WHERE id=$1 AND status IN ('queued','processing','delivering'))`, jobID).Scan(&hasPDF, &active)
-			if err != nil {
-				return "", safe(err)
-			}
+	editions := entry.Editions
+	if len(editions) == 0 && entry.PDF != nil {
+		editions = []archiveEdition{{JobID: entry.Item.JobID, Content: entry.Content, PDF: *entry.PDF}}
+	}
+	selectedJob := ""
+	for _, edition := range editions {
+		// Stable restore identities make interrupted or repeated imports idempotent.
+		identity := sha256.Sum256([]byte(id + "/" + edition.JobID))
+		restoredID := "restore-" + hex.EncodeToString(identity[:16])
+		var editionJob string
+		err := tx.QueryRowContext(ctx, `SELECT e.job_id FROM reading_editions e WHERE e.item_id=$1 AND e.job_id IN ($2,$3) ORDER BY e.job_id LIMIT 1`, id, edition.JobID, restoredID).Scan(&editionJob)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", safe(err)
 		}
-		if !hasPDF && !active {
-			filename := entry.PDF.Filename
+		if errors.Is(err, sql.ErrNoRows) {
+			filename := edition.PDF.Filename
 			if filename == "" {
 				filename = "document.pdf"
 			}
-			a, err := put(*entry.PDF, filename, "application/pdf")
+			a, err := put(edition.PDF, filename, "application/pdf")
 			if err != nil {
 				return "", err
 			}
-			jobID = opaque()
+			editionJob = restoredID
 			var submittedURL *string
 			source := "upload"
 			if item.URL != "" {
@@ -466,28 +507,39 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 			if profile == "" {
 				profile = "kindle-scribe"
 			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,source_kind,submitted_url,title_hint,display_title,output_profile,status,correlation_id,created_at,updated_at,completed_at,delivery_pending) VALUES($1,$2,$3,$4,$4,$5,'ready',$1,$6,$6,$6,false)`, jobID, source, submittedURL, item.Title, profile, a.CreatedAt)
+			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,source_kind,submitted_url,title_hint,display_title,output_profile,status,correlation_id,created_at,updated_at,completed_at,delivery_pending) VALUES($1,$2,$3,$4,$4,$5,'ready',$1,$6,$6,$6,false)`, editionJob, source, submittedURL, item.Title, profile, a.CreatedAt)
 			if err != nil {
 				return "", safe(err)
 			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO artifacts(id,job_id,profile,storage_relative_path,safe_filename,media_type,byte_size,checksum_sha256,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, opaque(), jobID, profile, a.Key, a.Filename, a.MediaType, a.ByteSize, a.Checksum, a.CreatedAt)
+			_, err = tx.ExecContext(ctx, `INSERT INTO artifacts(id,job_id,profile,storage_relative_path,safe_filename,media_type,byte_size,checksum_sha256,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, opaque(), editionJob, profile, a.Key, a.Filename, a.MediaType, a.ByteSize, a.Checksum, a.CreatedAt)
 			if err != nil {
 				return "", safe(err)
 			}
-			_, err = tx.ExecContext(ctx, `UPDATE saved_items SET job_id=$2 WHERE id=$1`, id, jobID)
+			_, err = tx.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES($1,$2,$3)`, editionJob, id, edition.Language)
 			if err != nil {
 				return "", safe(err)
+			}
+			if len(edition.Content) > 0 {
+				_, err = tx.ExecContext(ctx, `INSERT INTO content_documents(id,job_id,title,author,site_name,publication_date,description,source_url,semantic_html,plain_text,extraction_method,ai_confidence,ai_completeness,detected_language,created_at,updated_at)
+ SELECT $1,$2,c.title,c.author,c.site_name,c.publication_date,c.description,c.source_url,c.semantic_html,c.plain_text,c.extraction_method,c.ai_confidence,c.ai_completeness,c.detected_language,c.created_at,c.updated_at
+ FROM jsonb_populate_record(NULL::content_documents,$3::jsonb) c`, opaque(), editionJob, string(edition.Content))
+				if err != nil {
+					return "", safe(err)
+				}
 			}
 		}
+		if selectedJob == "" || edition.JobID == item.JobID {
+			selectedJob = editionJob
+		}
 	}
-	if jobID != "" && len(entry.Content) > 0 {
-		_, err = tx.ExecContext(ctx, `INSERT INTO content_documents(id,job_id,title,author,site_name,publication_date,description,source_url,semantic_html,plain_text,extraction_method,ai_confidence,ai_completeness,detected_language,created_at,updated_at)
- SELECT $1,$2,c.title,c.author,c.site_name,c.publication_date,c.description,c.source_url,c.semantic_html,c.plain_text,c.extraction_method,c.ai_confidence,c.ai_completeness,c.detected_language,c.created_at,c.updated_at
- FROM jsonb_populate_record(NULL::content_documents,$3::jsonb) c ON CONFLICT(job_id) DO NOTHING`, opaque(), jobID, string(entry.Content))
+	// A restore may add editions, but cannot change a current local selection.
+	if jobID == "" && selectedJob != "" {
+		_, err = tx.ExecContext(ctx, `UPDATE saved_items SET job_id=$2 WHERE id=$1`, id, selectedJob)
 		if err != nil {
 			return "", safe(err)
 		}
 	}
+
 	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET indexed_version=0,index_error=false,version=version+1 WHERE id=$1`, id)
 	if err != nil {
 		return "", safe(err)

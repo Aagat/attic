@@ -42,6 +42,21 @@ func archiveFixture(t *testing.T) ([]byte, archiveManifest) {
 		{Item: Item{ID: "saved-upload", Kind: "pdf", Title: "Uploaded PDF", SavedAt: now, UpdatedAt: now, CaptureStatus: "not_applicable", EnrichmentStatus: "complete"}, Text: "original PDF searchable phrase", PDF: &pdf},
 	}, Sources: []archiveSource{{ClientID: "browser", NodeID: "42", ItemID: &id, URL: "https://example.com/story?edition=2", Title: "Browser title", Folder: "Reading/Research", SavedAt: &now}}, Tombstones: []archiveTombstone{{URLHash: urlHash("https://example.com/deleted"), DeletedAt: now}}}
 	manifest.Items[0].Content, _ = json.Marshal(map[string]any{"title": "Approved title", "author": "Original author", "site_name": "Original publisher", "publication_date": now, "description": "Source description", "source_url": "https://example.com/story?edition=2", "semantic_html": "<article><h1>Approved title</h1><p>Approved prose.</p></article>", "plain_text": "Approved prose.", "extraction_method": "ai-approved", "ai_confidence": 0.9, "ai_completeness": 0.95, "detected_language": "en", "created_at": now, "updated_at": now})
+	translated := artifact("%PDF-1.4\ntranslated reading edition\n%%EOF", "translated.pdf", "application/pdf")
+	var translatedContent map[string]any
+	if err := json.Unmarshal(manifest.Items[0].Content, &translatedContent); err != nil {
+		t.Fatal(err)
+	}
+	translatedContent["title"] = "Título traducido"
+	translatedContent["semantic_html"] = "<article><p>Prosa traducida.</p></article>"
+	translatedContent["plain_text"] = "Prosa traducida."
+	translatedContent["detected_language"] = "es"
+	translatedJSON, _ := json.Marshal(translatedContent)
+	manifest.Items[0].Item.JobID = "translated-edition"
+	manifest.Items[0].Editions = []archiveEdition{
+		{JobID: "original-edition", Content: manifest.Items[0].Content, PDF: pdf},
+		{JobID: "translated-edition", Language: "es", Content: translatedJSON, PDF: translated},
+	}
 	var out bytes.Buffer
 	writer := zip.NewWriter(&out)
 	f, _ := writer.Create("manifest.json")
@@ -139,7 +154,7 @@ func TestExportRestoreIntegration(t *testing.T) {
 	zipWriter := zip.NewWriter(&corrupted)
 	for _, f := range zipReader.File {
 		body, _ := readEntry(f)
-		if f.Name == "files/"+manifest.Items[0].PDF.Checksum {
+		if f.Name == "files/"+manifest.Items[0].Editions[1].PDF.Checksum {
 			body[0] ^= 1
 		}
 		dest, _ := zipWriter.Create(f.Name)
@@ -165,6 +180,10 @@ func TestExportRestoreIntegration(t *testing.T) {
 	})
 	if count, err := source.Restore(ctx, bytes.NewReader(data), int64(len(data))); err != nil || count != 2 {
 		t.Fatalf("initial restore count=%d err=%v", count, err)
+	}
+	// Email delivery must not hide an already durable reading PDF from backups.
+	if _, err := source.db.ExecContext(ctx, `UPDATE jobs SET status='delivering',delivery_pending=true,completed_at=NULL,lease_token='transfer-test',lease_expires_at=now()+interval '1 minute' WHERE id=(SELECT job_id FROM saved_items WHERE id='saved-bookmark')`); err != nil {
+		t.Fatal(err)
 	}
 	var backup bytes.Buffer
 	if err := source.Export(ctx, &backup); err != nil {
@@ -196,7 +215,7 @@ func TestExportRestoreIntegration(t *testing.T) {
 	if err := destination.db.QueryRow(`SELECT title,author,semantic_html,extraction_method FROM content_documents WHERE job_id=$1`, detail.JobID).Scan(&title, &author, &semantic, &extraction); err != nil {
 		t.Fatal(err)
 	}
-	if title != "Approved title" || author != "Original author" || extraction != "ai-approved" || !strings.Contains(semantic, "Approved prose.") {
+	if title != "Título traducido" || author != "Original author" || extraction != "ai-approved" || !strings.Contains(semantic, "Prosa traducida.") {
 		t.Fatalf("approved content not preserved: %s %s %s %s", title, author, semantic, extraction)
 	}
 	var pending, jobs, captures, sources int
@@ -205,12 +224,29 @@ func TestExportRestoreIntegration(t *testing.T) {
 	}
 	destination.db.QueryRow(`SELECT count(*) FROM saved_captures`).Scan(&captures)
 	destination.db.QueryRow(`SELECT count(*) FROM bookmark_sources`).Scan(&sources)
-	if pending != 0 || jobs != 2 || captures != 2 || sources != 1 {
+	if pending != 0 || jobs != 3 || captures != 2 || sources != 1 {
 		t.Fatalf("side effects pending=%d jobs=%d captures=%d sources=%d", pending, jobs, captures, sources)
 	}
 	_, _, err = destination.Save(ctx, SaveRequest{URL: "https://example.com/deleted", Source: &Source{ClientID: "browser", NodeID: "deleted"}}, "")
 	if !errors.Is(err, ErrDeleted) {
 		t.Fatalf("tombstone not restored: %v", err)
+	}
+	var originalJob, translatedJob string
+	if err := destination.db.QueryRow(`SELECT job_id FROM reading_editions WHERE item_id='saved-bookmark' AND language=''`).Scan(&originalJob); err != nil {
+		t.Fatal(err)
+	}
+	if err := destination.db.QueryRow(`SELECT job_id FROM reading_editions WHERE item_id='saved-bookmark' AND language='es'`).Scan(&translatedJob); err != nil {
+		t.Fatal(err)
+	}
+	var originalText string
+	if err := destination.db.QueryRow(`SELECT plain_text FROM content_documents WHERE job_id=$1`, originalJob).Scan(&originalText); err != nil || originalText != "Approved prose." {
+		t.Fatalf("original edition lost: %q %v", originalText, err)
+	}
+	if translatedJob != detail.JobID {
+		t.Fatal("selected translated edition was not restored")
+	}
+	if _, err := destination.db.Exec(`UPDATE saved_items SET job_id=$1 WHERE id='saved-bookmark'`, originalJob); err != nil {
+		t.Fatal(err)
 	}
 	if err := destination.Edit(ctx, "saved-bookmark", SaveRequest{Title: "Newer local edit", Notes: "new notes"}); err != nil {
 		t.Fatal(err)
@@ -219,7 +255,44 @@ func TestExportRestoreIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail, err = destination.Get(ctx, "saved-bookmark")
-	if err != nil || detail.Title != "Newer local edit" || detail.Notes != "new notes" {
+	if err != nil || detail.Title != "Newer local edit" || detail.Notes != "new notes" || detail.JobID != originalJob {
 		t.Fatalf("restore overwrote edits: %+v err=%v", detail, err)
+	}
+}
+
+func TestArchiveValidatesReadingEditions(t *testing.T) {
+	data, _ := archiveFixture(t)
+	for _, change := range []struct {
+		name   string
+		mutate func(*archiveEdition)
+	}{
+		{"unsupported language", func(e *archiveEdition) { e.Language = "xx" }},
+		{"wrong content language", func(e *archiveEdition) { e.Language = "fr" }},
+		{"missing content", func(e *archiveEdition) { e.Content = nil }},
+		{"not PDF", func(e *archiveEdition) { e.PDF.MediaType = "text/html" }},
+		{"missing artifact", func(e *archiveEdition) { e.PDF.Checksum = strings.Repeat("0", 64) }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			manifest, files, err := readArchive(bytes.NewReader(data), int64(len(data)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			change.mutate(&manifest.Items[0].Editions[1])
+			var out bytes.Buffer
+			writer := zip.NewWriter(&out)
+			entry, _ := writer.Create("manifest.json")
+			json.NewEncoder(entry).Encode(manifest)
+			for name, file := range files {
+				if name != "manifest.json" {
+					body, _ := readEntry(file)
+					entry, _ := writer.Create(name)
+					entry.Write(body)
+				}
+			}
+			writer.Close()
+			if _, _, err := readArchive(bytes.NewReader(out.Bytes()), int64(out.Len())); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("invalid edition accepted: %v", err)
+			}
+		})
 	}
 }

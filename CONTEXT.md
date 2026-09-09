@@ -39,6 +39,9 @@ An existing saved copy of an article that may supply content when the original s
 **Approved article**:
 Article content accepted as sufficiently complete and suitable for document preparation.
 
+**Reading edition**:
+An original-language or translated version of an article, with its own approved reading content and PDF. Editions belong to the same saved item and leave its original captures intact.
+
 **PDF artifact**:
 The prepared reading document associated with a job that passed document quality checks.
 
