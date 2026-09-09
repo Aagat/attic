@@ -220,6 +220,10 @@ func convert(page acquisition.RenderedPage) (Result, error) {
 	if len(r.missing) > 0 || page.Diagnostics.BlockedRequests > 0 {
 		result.Status = "partial"
 	}
+	if page.Truncated {
+		result.Status = "partial"
+		result.MissingResources = append(result.MissingResources, "Post text is truncated; expansion is still required")
+	}
 	if blocked(page, result.PlainText) {
 		result.Status = "blocked"
 	}

@@ -47,7 +47,7 @@ func xEmbedURL(original string) string {
 
 // xEmbed preserves the static fallback supplied by X, never the live widget.
 // Even an apparently short post cannot prove that media or thread context is complete.
-func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Result, bool, error) {
+func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	fetch := c.fetchJSON
@@ -56,10 +56,10 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 	}
 	page, err := fetch(ctx, endpoint)
 	if err != nil {
-		return Result{}, false, err
+		return Result{}, err
 	}
 	if len(page.HTML) > maxEmbedBytes {
-		return Result{}, false, acquisition.ErrResponseTooLarge
+		return Result{}, acquisition.ErrResponseTooLarge
 	}
 	var embed struct {
 		URL    string `json:"url"`
@@ -68,14 +68,14 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 		Type   string `json:"type"`
 	}
 	if err := json.Unmarshal(page.HTML, &embed); err != nil {
-		return Result{}, false, err
+		return Result{}, err
 	}
 	if embed.Type != "rich" || xPostID(embed.URL) != xPostID(original) {
-		return Result{}, false, errors.New("X embed does not match requested post")
+		return Result{}, errors.New("X embed does not match requested post")
 	}
 	doc, err := html.Parse(strings.NewReader(embed.HTML))
 	if err != nil {
-		return Result{}, false, err
+		return Result{}, err
 	}
 	var quote *html.Node
 	var find func(*html.Node)
@@ -93,7 +93,7 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 	}
 	find(doc)
 	if quote == nil {
-		return Result{}, false, errors.New("X embed has no post")
+		return Result{}, errors.New("X embed has no post")
 	}
 	var prose strings.Builder
 	var matchingLink bool
@@ -119,11 +119,11 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 	}
 	walk(quote, false)
 	if !matchingLink || strings.TrimSpace(prose.String()) == "" {
-		return Result{}, false, errors.New("X embed has no matching post text")
+		return Result{}, errors.New("X embed has no matching post text")
 	}
 	var body bytes.Buffer
 	if err := html.Render(&body, quote); err != nil {
-		return Result{}, false, err
+		return Result{}, err
 	}
 	title := "Post on X"
 	if author := strings.TrimSpace(embed.Author); author != "" {
@@ -132,7 +132,7 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 	dom := "<!doctype html><html><head><title>" + stdhtml.EscapeString(title) + "</title></head><body><article>" + body.String() + "</article></body></html>"
 	result, err := convert(acquisition.RenderedPage{DOM: []byte(dom), Title: title, FinalURL: embed.URL, Status: 200})
 	if err != nil {
-		return Result{}, false, err
+		return Result{}, err
 	}
 	result.OriginalURL = original
 	result.Status = "partial"
@@ -141,5 +141,5 @@ func (c *Capturer) xEmbed(ctx context.Context, original, endpoint string) (Resul
 	if truncated {
 		result.MissingResources = append(result.MissingResources, "X embed text may be truncated; full post is missing")
 	}
-	return result, truncated, nil
+	return result, nil
 }

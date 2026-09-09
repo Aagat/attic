@@ -27,9 +27,10 @@ type Attempt struct {
 	Status string `json:"status"`
 }
 type Capturer struct {
-	renderer  SnapshotRenderer
-	archives  ArchiveSources
-	fetchJSON func(context.Context, string) (acquisition.Page, error)
+	renderer    SnapshotRenderer
+	archives    ArchiveSources
+	fetchJSON   func(context.Context, string) (acquisition.Page, error)
+	fetchMirror func(context.Context, string) (acquisition.Page, error)
 }
 
 func New(renderer SnapshotRenderer, archives ArchiveSources) *Capturer {
@@ -44,18 +45,26 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 	best := Result{OriginalURL: original, Status: "blocked"}
 	var attempts []Attempt
 	var lastErr error
+	if endpoint := xMirrorURL(original); endpoint != "" {
+		result, err := c.xMirror(ctx, original, endpoint)
+		status := "failed"
+		if err == nil {
+			status = result.Status
+		}
+		attempts = append(attempts, Attempt{endpoint, status})
+		if err == nil {
+			result.Attempts = attempts
+			return result, nil
+		}
+	}
 	if endpoint := xEmbedURL(original); endpoint != "" {
-		result, truncated, err := c.xEmbed(ctx, original, endpoint)
+		result, err := c.xEmbed(ctx, original, endpoint)
 		status := "failed"
 		if err == nil {
 			best = result
 			status = result.Status
 		}
 		attempts = append(attempts, Attempt{endpoint, status})
-		if err == nil && !truncated {
-			best.Attempts = attempts
-			return best, nil
-		}
 	}
 	sources := []string{original}
 	for i := 0; i < len(sources); i++ {

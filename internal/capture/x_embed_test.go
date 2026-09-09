@@ -22,6 +22,7 @@ func embedFixture(text string) acquisition.Page {
 func TestXEmbedShortPostIsSanitizedAndHonest(t *testing.T) {
 	renderer := &fakeRenderer{}
 	c := New(renderer, nil)
+	c.fetchMirror = unavailableMirror
 	calls := 0
 	c.fetchJSON = func(ctx context.Context, raw string) (acquisition.Page, error) {
 		calls++
@@ -39,7 +40,7 @@ func TestXEmbedShortPostIsSanitizedAndHonest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 1 || len(renderer.calls) != 0 || result.Status != "partial" || !strings.Contains(result.PlainText, "A short public note.") || result.Title != "Post by Example Author" || result.OriginalURL != testXURL {
+	if calls != 1 || len(renderer.calls) != 1 || result.Status != "partial" || !strings.Contains(result.PlainText, "A short public note.") || result.Title != "Post by Example Author" || result.OriginalURL != testXURL {
 		t.Fatalf("%+v calls=%v", result, renderer.calls)
 	}
 	if strings.Contains(string(result.HTML), "evil()") || strings.Contains(string(result.HTML), "<script") {
@@ -58,6 +59,7 @@ func TestXEmbedTruncationStillAttemptsBrowserAndArchives(t *testing.T) {
 				renderer.pages[archive] = acquisition.RenderedPage{FinalURL: archive, Status: 200, DOM: []byte("<p>Full post recovered from archive.</p>")}
 			}
 			c := New(renderer, fakeArchives{archive})
+			c.fetchMirror = unavailableMirror
 			c.fetchJSON = func(context.Context, string) (acquisition.Page, error) {
 				return embedFixture("This post continues…"), nil
 			}
@@ -65,7 +67,7 @@ func TestXEmbedTruncationStillAttemptsBrowserAndArchives(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(renderer.calls) != 2 || len(result.Attempts) != 3 {
+			if len(renderer.calls) != 2 || len(result.Attempts) != 4 {
 				t.Fatalf("attempts %+v", result.Attempts)
 			}
 			if recover {
@@ -91,6 +93,7 @@ func TestXEmbedFailuresFallThrough(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			renderer := &fakeRenderer{pages: map[string]acquisition.RenderedPage{testXURL: {FinalURL: testXURL, Status: 200, DOM: []byte("<p>Browser recovered the post.</p>")}}}
 			c := New(renderer, nil)
+			c.fetchMirror = unavailableMirror
 			c.fetchJSON = func(context.Context, string) (acquisition.Page, error) {
 				if name == "unavailable" {
 					return page, errors.New("rate limited")
@@ -117,6 +120,7 @@ func TestXURLRecognition(t *testing.T) {
 	}
 	renderer := &fakeRenderer{pages: map[string]acquisition.RenderedPage{"https://example.com": {FinalURL: "https://example.com", Status: 200, DOM: []byte("<p>Ordinary page</p>")}}}
 	c := New(renderer, nil)
+	c.fetchMirror = unavailableMirror
 	c.fetchJSON = func(context.Context, string) (acquisition.Page, error) {
 		t.Fatal("non-X URL queried embed")
 		return acquisition.Page{}, nil
