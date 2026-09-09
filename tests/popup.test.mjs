@@ -5,8 +5,8 @@ try {
   const page = await browser.newPage({viewport: {width: 340, height: 200}});
   await page.addInitScript(() => {
     window.chrome = {
-      tabs: {query: () => new Promise(resolve => window.loadTab = resolve)},
-      runtime: {sendMessage: () => new Promise(resolve => window.finishSave = resolve)},
+      tabs: {query: () => new Promise(resolve => window.loadTab = resolve), create: async tab => { window.openedTab = tab; }},
+      runtime: {sendMessage: message => message.type === 'lookup' ? Promise.resolve({ok: true, ...window.lookupResult}) : new Promise(resolve => { window.saveMessage = message; window.finishSave = resolve; })},
     };
   });
   await page.goto(new URL('../internal/httpapi/extension/popup.html', import.meta.url).href);
@@ -24,5 +24,20 @@ try {
   await page.waitForFunction(() => !document.getElementById('kindle').disabled);
   assert.deepEqual(await positions(), initial, 'status messages must not shift actions');
   assert.equal(await page.evaluate(() => document.documentElement.scrollHeight), height);
+  await page.reload();
+  await page.evaluate(() => {
+    window.lookupResult = {item: {id: 'saved', capture_status: 'partial', delivery_status: 'sent'}, readerURL: 'https://attic.example/items/saved'};
+    window.loadTab([{id: 1, title: 'Saved article', url: 'https://example.com'}]);
+  });
+  await page.getByRole('button', {name: 'Open in Attic'}).click();
+  assert.equal(await page.evaluate(() => window.openedTab.url), 'https://attic.example/items/saved');
+  assert.match(await page.locator('#status').innerText(), /Already in Attic · Preserved · Email Sent/);
+  assert.deepEqual(await positions(), initial, 'saved-item actions must not shift the popup');
+  await page.getByRole('button', {name: 'Resend to Kindle'}).click();
+  assert.equal(await page.evaluate(() => window.saveMessage.itemID), 'saved');
+  assert.equal(await page.evaluate(() => window.saveMessage.action), 'kindle');
+  await page.evaluate(() => window.finishSave({ok: true, message: 'Kindle delivery queued.'}));
+  await page.waitForFunction(() => !document.getElementById('bookmark').disabled);
+  assert.deepEqual(await positions(), initial);
   console.log('Popup stays stable during resizing, title loading, saving, and long errors');
 } finally { await browser.close(); }

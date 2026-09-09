@@ -180,3 +180,38 @@ test('a helper finishing after disconnect removes its orphaned snapshot without 
  assert.equal(result.ok,true);assert.equal(blobs.size,0);assert.equal(app.calls.length,0);
  assert.deepEqual(app.state.pendingSaves,{});
 });
+
+test('current-page lookup uses authorized exact URL search without creating a save', async () => {
+ const item={id:'existing',capture_status:'complete',delivery_status:'sent'};
+ const app=extension({response:async()=>({ok:true,status:200,json:async()=>({items:[item]})})});
+ const result=await app.send({type:'lookup',url:'https://example.com/article?x=1#part'});
+ assert.deepEqual(result.item,item);
+ assert.equal(result.readerURL,'https://attic.example/items/existing');
+ const call=app.calls[0];
+ assert.equal(new URL(call.url).searchParams.get('url'),'https://example.com/article?x=1#part');
+ assert.equal(call.init.method,'GET');assert.equal(call.init.body,undefined);
+ assert.equal(call.init.headers.Authorization,'Bearer private-key');
+ assert.equal(call.init.headers['Idempotency-Key'],undefined);
+ assert.equal(app.state.pendingSaves,undefined);
+});
+test('lookup handles no match, unauthorized requests and non-web pages',async()=>{
+ const app=extension({response:async()=>({ok:true,status:200,json:async()=>({items:[]})})});
+ assert.equal((await app.send({type:'lookup',url:'https://example.com'})).item,undefined);
+ assert.equal((await app.send({type:'lookup',url:'chrome://settings'})).ok,false);
+ assert.equal(app.calls.length,1);
+ const rejected=extension({response:async()=>({ok:false,status:401})});
+ assert.equal((await rejected.send({type:'lookup',url:'https://example.com'})).error,'Access key rejected.');
+});
+test('existing item Kindle delivery skips capture and preserves delivery identity across restart',async()=>{
+ const first=extension({response:async()=>{throw new Error('Offline');}});
+ const result=await first.send({type:'save',itemID:'saved-item',url:'https://example.com',tabID:7,action:'kindle',requestID:'resend-1'});
+ assert.equal(result.queued,true);
+ assert.equal(first.calls.length,1);
+ assert.equal(first.calls[0].url,'https://attic.example/api/v1/items/saved-item/send');
+ assert.equal(first.state.pendingSaves['resend-1'].capturing,undefined);
+ const resumed=extension({state:first.state});await resumed.send({type:'reconcile'});
+ assert.equal(resumed.calls.length,1);
+ assert.equal(resumed.calls[0].url,'https://attic.example/api/v1/items/saved-item/send');
+ assert.equal(resumed.calls[0].init.headers['Idempotency-Key'],'resend-1');
+ assert.deepEqual(resumed.state.pendingSaves,{});
+});

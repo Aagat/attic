@@ -28,9 +28,14 @@ async function request(config, path, body, requestID) {
   if (!await chrome.permissions.contains({origins: [endpoint.protocol + '//' + endpoint.hostname + '/*']})) {
     throw new Error('Server access not permitted.');
   }
+  const headers = {Authorization: 'Bearer ' + config.key};
+  if (body !== undefined) {
+    headers['Idempotency-Key'] = requestID || crypto.randomUUID();
+    if (!(body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  }
   const response = await fetch(config.server + path, {
-    method: 'POST', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000),
-    headers: {Authorization: 'Bearer ' + config.key, ...(body instanceof FormData ? {} : {'Content-Type': 'application/json'}), 'Idempotency-Key': requestID || crypto.randomUUID()},
+    method: body === undefined ? 'GET' : 'POST', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000),
+    headers,
     body: body instanceof FormData ? body : JSON.stringify(body),
   });
   if (response.status === 401) throw new Error('Access key rejected.');
@@ -42,12 +47,25 @@ async function request(config, path, body, requestID) {
   return response.json();
 }
 
+async function lookupItem(rawURL) {
+  const url = webURL(rawURL);
+  const config = await chrome.storage.local.get(['server', 'key']);
+  const result = await request(config, '/api/v1/items?' + new URLSearchParams({url}));
+  if (!Array.isArray(result.items)) throw new Error('Lookup unavailable.');
+  const item = result.items[0];
+  return {item, readerURL: item ? config.server + '/items/' + encodeURIComponent(item.id) : undefined};
+}
+
 async function enqueueSave(message) {
   const config = await chrome.storage.local.get(['server', 'key', 'pendingSaves']);
   if (!config.server || !config.key) throw new Error('Not connected to Attic.');
   const id = message.requestID || crypto.randomUUID();
   const item = {url: webURL(message.url), title: message.title || '', action: message.action === 'kindle' ? 'kindle' : 'bookmark'};
-  if (Number.isInteger(message.tabID)) item.capturing = Date.now();
+  if (message.itemID) {
+    if (typeof message.itemID !== 'string' || message.itemID.length > 200 || item.action !== 'kindle') throw new Error('Invalid saved item.');
+    item.itemID = message.itemID;
+    item.existing = true;
+  } else if (Number.isInteger(message.tabID)) item.capturing = Date.now();
   await updateSaves(pending => { pending[id] = item; });
   if (item.capturing) {
     try {
@@ -58,7 +76,7 @@ async function enqueueSave(message) {
   }
   await reconcile();
   const state = await chrome.storage.local.get(['pendingSaves', 'syncStatus']);
-  return {queued: Boolean(state.pendingSaves?.[id]), message: state.pendingSaves?.[id] ? 'Queued in this browser.' : 'Saved in Attic.'};
+  return {queued: Boolean(state.pendingSaves?.[id]), message: state.pendingSaves?.[id] ? 'Queued in this browser.' : item.action === 'kindle' ? 'Kindle delivery queued.' : 'Saved in Attic.'};
 }
 
 // One owner serializes durable queues, bookmark scans, and network retries.
@@ -102,7 +120,9 @@ async function syncOnce() {
   for (const [id, item] of Object.entries(config.pendingSaves || {})) {
     if (item.capturing && Date.now() - item.capturing < 120000) continue;
     const snapshot = await snapshots.get(id);
-    if (snapshot) {
+    if (item.existing) {
+      await request(config, '/api/v1/items/' + encodeURIComponent(item.itemID) + '/send', {}, id);
+    } else if (snapshot) {
       if (!item.itemID) {
         const saved = await request(config, '/api/v1/items', {url: item.url, title: item.title, action: 'bookmark'}, id + ':bookmark');
         if (!saved.id) throw new Error('Attic did not return the saved item.');
@@ -164,7 +184,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (!exists) { await snapshots.remove(message.requestID); return; }
     if (message.error) await chrome.storage.local.set({captureStatus: message.error + ''});
     reconcile();
-  })() : message.type === 'save' ? enqueueSave(message) : message.type === 'reconcile' ? reconcile() : undefined;
+  })() : message.type === 'lookup' ? lookupItem(message.url) : message.type === 'save' ? enqueueSave(message) : message.type === 'reconcile' ? reconcile() : undefined;
   if (!operation) return;
   operation.then(result => reply({ok: true, ...result}), error => reply({ok: false, error: error.message}));
   return true;
