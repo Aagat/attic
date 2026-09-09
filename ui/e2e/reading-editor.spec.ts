@@ -58,6 +58,31 @@ test("reading edits preserve structure, undo removals, and save without email", 
     "sandbox",
     "allow-same-origin",
   );
+  await editor.locator("strong").hover();
+  await expect(editor.locator("strong")).toHaveAttribute(
+    "data-attic-hover",
+    "",
+  );
+  await expect(editor.locator("[data-attic-overlay]")).toContainText(
+    "Bold text",
+  );
+  await page
+    .getByRole("button", { name: "Select element", exact: true })
+    .click();
+  await editor.getByText("bold words").click();
+  await expect(editor.locator("[data-attic-selected]")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Select element", exact: true })
+    .click();
+  await editor.getByText("bold words").click();
+  await page
+    .getByRole("navigation", { name: "Selected element path" })
+    .getByRole("button", { name: "Paragraph", exact: true })
+    .click();
+  await expect(editor.locator("p").first()).toHaveAttribute(
+    "data-attic-selected",
+    "",
+  );
   await editor.getByText("bold words").click();
   await page
     .getByRole("button", { name: "Select parent", exact: true })
@@ -91,7 +116,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
   await page.getByRole("button", { name: "Save and generate PDF" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(html).not.toContain("Newsletter signup");
-  expect(html).not.toContain("data-attic-selected");
+  expect(html).not.toContain("data-attic-");
   expect(html).toContain("<strong>clean words</strong>");
   expect(html).toContain('<pre><code>print("hello")</code></pre>');
   expect(html).toContain("<td>Cell</td>");
