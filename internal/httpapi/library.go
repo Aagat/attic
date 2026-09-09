@@ -91,7 +91,15 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			total := 0
 			totalEstimated := false
 			snippets := map[string]string{}
-			if q.Get("kind") != "" || q.Get("q") != "" || q.Get("tag") != "" || q.Get("domain") != "" || q.Get("from") != "" || q.Get("to") != "" || q.Get("capture_status") != "" {
+			if q.Has("url") {
+				var err error
+				items, err = s.library.Lookup(r.Context(), q.Get("url"))
+				if err != nil {
+					fail(err)
+					return true
+				}
+				total = len(items)
+			} else if q.Get("kind") != "" || q.Get("q") != "" || q.Get("tag") != "" || q.Get("domain") != "" || q.Get("from") != "" || q.Get("to") != "" || q.Get("capture_status") != "" {
 				if s.search == nil {
 					fail(search.ErrUnavailable)
 					return true

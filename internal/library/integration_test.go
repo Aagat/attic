@@ -743,3 +743,23 @@ func TestLibraryIntegrationGenerateReusesPDF(t *testing.T) {
 		t.Fatal("generation sent existing PDF")
 	}
 }
+
+func TestLookupUsesSavedURLIdentity(t *testing.T) {
+	l := integrationLibrary(t, "")
+	ctx := context.Background()
+	item, _, err := l.Save(ctx, SaveRequest{URL: "https://example.com/read?edition=one#intro", Title: "Saved"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := l.Lookup(ctx, "https://EXAMPLE.com/read?edition=one#different")
+	if err != nil || len(found) != 1 || found[0].ID != item.ID {
+		t.Fatalf("lookup: %+v %v", found, err)
+	}
+	found, err = l.Lookup(ctx, "https://example.com/read?edition=two")
+	if err != nil || len(found) != 0 {
+		t.Fatalf("different query matched: %+v %v", found, err)
+	}
+	if _, err = l.Lookup(ctx, "javascript:alert(1)"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid URL: %v", err)
+	}
+}

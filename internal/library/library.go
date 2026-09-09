@@ -280,6 +280,23 @@ func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
 	}
 	return d, safe(rows.Err())
 }
+
+// Lookup uses the same normalized URL identity as saving, independent of indexing.
+func (l *Library) Lookup(ctx context.Context, raw string) ([]Item, error) {
+	url, err := normalize(raw)
+	if err != nil {
+		return nil, err
+	}
+	item, err := scanItem(l.db.QueryRowContext(ctx, itemSelect+`WHERE i.url=$1`, url))
+	if errors.Is(err, ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+		return []Item{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return []Item{item}, nil
+}
+
 func (l *Library) List(ctx context.Context, limit, offset int) ([]Item, int, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
