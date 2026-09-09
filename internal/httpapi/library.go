@@ -56,6 +56,19 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		return true
 	}
 	tail := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/items"), "/")
+	if tail == "suggestions" {
+		if r.Method != "GET" {
+			methodNotAllowed(w, "GET", correlation)
+			return true
+		}
+		values, err := s.library.Suggestions(r.Context(), r.URL.Query().Get("field"), r.URL.Query().Get("q"))
+		if err != nil {
+			fail(err)
+			return true
+		}
+		respond(200, map[string]any{"suggestions": values})
+		return true
+	}
 	if tail == "status" {
 		if r.Method != "GET" {
 			methodNotAllowed(w, "GET", correlation)

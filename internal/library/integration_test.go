@@ -763,3 +763,28 @@ func TestLookupUsesSavedURLIdentity(t *testing.T) {
 		t.Fatalf("invalid URL: %v", err)
 	}
 }
+
+func TestFilterSuggestionsUseCanonicalItems(t *testing.T) {
+	l := integrationLibrary(t, "")
+	ctx := context.Background()
+	for _, raw := range []string{"https://example.com:8443/one", "https://example.com/two", "https://other.example/read"} {
+		if _, _, err := l.Save(ctx, SaveRequest{URL: raw, Tags: []string{"Design", "100%", "reading"}}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sources, err := l.Suggestions(ctx, "source", "EXAMPLE.COM")
+	if err != nil || len(sources) != 1 || sources[0] != "example.com" {
+		t.Fatalf("sources: %v %v", sources, err)
+	}
+	tags, err := l.Suggestions(ctx, "tag", "des")
+	if err != nil || len(tags) != 1 || tags[0] != "Design" {
+		t.Fatalf("tags: %v %v", tags, err)
+	}
+	tags, err = l.Suggestions(ctx, "tag", "%")
+	if err != nil || len(tags) != 1 || tags[0] != "100%" {
+		t.Fatalf("literal matching: %v %v", tags, err)
+	}
+	if _, err = l.Suggestions(ctx, "invalid", ""); !errors.Is(err, ErrInvalid) {
+		t.Fatal(err)
+	}
+}
