@@ -319,8 +319,15 @@ func clearPage(text string) bool {
 	if len(lower) == 0 {
 		return false
 	}
-	for _, marker := range []string{"verify you are human", "verify that you are human", "captcha", "just a moment", "sign in to x", "log in to x", "something went wrong", "enable javascript", "access denied", "too many requests", "subscribe to continue", "show more"} {
-		if strings.Contains(lower, marker) {
+	// Short interstitials are different from articles discussing challenges or
+	// ordinary navigation labels at the foot of a long page.
+	if len(lower) < 2000 {
+		for _, marker := range []string{"verify you are human", "verify that you are human", "just a moment", "sign in to x", "log in to x", "something went wrong", "enable javascript and cookies", "access denied", "too many requests", "subscribe to continue", "complete the captcha", "solve the captcha"} {
+			if strings.Contains(lower, marker) {
+				return false
+			}
+		}
+		if len(lower) < 600 && (strings.Contains(lower, "captcha") || strings.Contains(lower, "show more")) {
 			return false
 		}
 	}

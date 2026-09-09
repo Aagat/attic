@@ -159,3 +159,11 @@ func TestCapturePublicPageIntegration(t *testing.T) {
 		t.Fatalf("capture status=%s, text=%s", result.Status, result.PlainText)
 	}
 }
+
+func TestXErrorShellIsBlocked(t *testing.T) {
+	for _, body := range []string{"Something went wrong. Try reloading.", "Something went wrong, but don’t fret — let’s give it another shot.", "Sign in to X", "Too many requests"} {
+		if !blocked(acquisition.RenderedPage{Title: "X", Status: 200}, body) {
+			t.Errorf("X error shell accepted: %s", body)
+		}
+	}
+}

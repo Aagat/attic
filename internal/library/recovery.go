@@ -32,7 +32,7 @@ func (l *Library) SaveRecoveredPage(ctx context.Context, raw string, result capt
 // than that capture, and the old job remains stored unchanged.
 func (l *Library) ResumeRecovered(ctx context.Context) error {
 	rows, err := l.db.QueryContext(ctx, `SELECT i.id,j.id,COALESCE(j.delivery_destination,'') FROM saved_items i JOIN jobs j ON j.id=i.job_id
- WHERE j.status='failed' AND EXISTS(SELECT 1 FROM saved_captures c WHERE c.item_id=i.id AND c.status IN ('complete','partial') AND c.text_content<>'' AND c.created_at>j.created_at) LIMIT 10`)
+ WHERE j.status='failed' AND NOT EXISTS(SELECT 1 FROM item_actions a WHERE a.key='recovery:'||j.id) AND EXISTS(SELECT 1 FROM saved_captures c WHERE c.item_id=i.id AND c.status IN ('complete','partial') AND c.text_content<>'' AND c.created_at>j.created_at) LIMIT 10`)
 	if err != nil {
 		return safe(err)
 	}

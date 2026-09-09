@@ -28,6 +28,8 @@ const RecoveryWidth, RecoveryHeight = 1024, 768
 type BrowserSession struct {
 	responseMu      sync.Mutex
 	statuses        map[string]int
+	frameStatuses   map[cdp.FrameID]int
+	mainFrame       cdp.FrameID
 	ctx             context.Context
 	cancel          context.CancelFunc
 	allocatorCancel context.CancelFunc
@@ -69,11 +71,17 @@ func OpenBrowserSession(parent context.Context, executable, profiles, raw string
 	defer initCancel()
 	initTimer := time.AfterFunc(45*time.Second, cancel)
 	defer initTimer.Stop()
-	s := &BrowserSession{ctx: ctx, cancel: cancel, allocatorCancel: ac, proxy: proxy, statuses: make(map[string]int)}
+	s := &BrowserSession{ctx: ctx, cancel: cancel, allocatorCancel: ac, proxy: proxy, statuses: make(map[string]int), frameStatuses: make(map[cdp.FrameID]int)}
 	chromedp.ListenTarget(ctx, func(event any) {
 		if e, ok := event.(*network.EventResponseReceived); ok && e.Type == network.ResourceTypeDocument {
 			s.responseMu.Lock()
 			s.statuses[e.Response.URL] = int(e.Response.Status)
+			s.frameStatuses[e.FrameID] = int(e.Response.Status)
+			s.responseMu.Unlock()
+		}
+		if e, ok := event.(*page.EventFrameNavigated); ok && e.Frame.ParentID == "" {
+			s.responseMu.Lock()
+			s.mainFrame = e.Frame.ID
 			s.responseMu.Unlock()
 		}
 		if e, ok := event.(*fetch.EventRequestPaused); ok {
@@ -184,7 +192,11 @@ func (s *BrowserSession) Snapshot(ctx context.Context) (RenderedPage, error) {
 	}
 	result.MHTML = []byte(snapshot)
 	s.responseMu.Lock()
-	result.Status = s.statuses[result.FinalURL]
+	u.Fragment = ""
+	result.Status = s.statuses[u.String()]
+	if result.Status == 0 {
+		result.Status = s.frameStatuses[s.mainFrame]
+	}
 	s.responseMu.Unlock()
 	if result.Status == 0 {
 		result.Status = 200

@@ -110,6 +110,13 @@ func blocked(page acquisition.RenderedPage, text string) bool {
 			return true
 		}
 	}
+	if len(strings.Fields(body)) < 100 {
+		for _, marker := range []string{"something went wrong. try reloading", "something went wrong, but don’t fret", "something went wrong, but don't fret", "sign in to x", "log in to x", "too many requests"} {
+			if strings.Contains(body, marker) {
+				return true
+			}
+		}
+	}
 	// Challenge instructions in a short page are meaningful; an article discussing
 	// CAPTCHAs or quoting these phrases should remain readable.
 	if len(strings.Fields(body)) < 300 {
