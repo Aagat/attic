@@ -1,10 +1,21 @@
 # Browser recovery
 
 Mobile shares, extension URL saves and imported bookmarks enter the same server
-capture pipeline. Existing public APIs and archive discovery run first. X status
-links use the public oEmbed endpoint; its result is explicitly partial because
-full text, media and thread context are not guaranteed. Truncated embeds retain
-that text while attempting further recovery.
+capture pipeline. X/Twitter status links first try the allowlisted XCancel mirror.
+The main post's own permalink must match the requested post ID. Its full text,
+author and date are preserved separately from replies; unverified media/thread
+context remains explicitly partial. Direct XCancel status links use this same
+parser. Mirror requests have a 10-second timeout, 2 MiB size limit and at most two
+redirects, through the existing public-address network policy.
+
+If the mirror is unavailable, Attic tries X's public oEmbed endpoint and ordinary
+browser/archive recovery. Short embeds no longer stop the search for a fuller
+copy. Chromium automatically clicks the requested post's Show more control, at
+most three times; a remaining expansion control marks the snapshot as truncated.
+The control must belong to the post identified by its timestamp permalink, so
+replies and quoted posts are not expanded accidentally. Unavailable mirrors,
+truncated embeds and failed expansion do not replace the saved URL or earlier
+versions. No mirror account, publisher cookies, or additional API key is needed.
 
 If ordinary capture is blocked or an embed is truncated, Attic opens headed
 Chromium on a private virtual display. The configured AI can inspect the viewport
