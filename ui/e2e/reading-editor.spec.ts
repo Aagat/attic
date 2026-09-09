@@ -1,8 +1,21 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 test("reading edits preserve structure, undo removals, and save without email", async ({
   page,
 }) => {
+  const frontend = readFileSync(
+    new URL("../../internal/httpapi/frontend.go", import.meta.url),
+    "utf8",
+  );
+  const csp = frontend.match(/Set\("Content-Security-Policy", "([^"]+)"/)![1];
+  await page.route("**/items/saved", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: { ...response.headers(), "content-security-policy": csp },
+    });
+  });
   let html =
     '<p>Keep <strong>bold words</strong></p><p>Newsletter signup</p><pre><code>print("hello")</code></pre><table><tr><td>Cell</td></tr></table><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Diagram">';
   let item = {
@@ -63,18 +76,18 @@ test("reading edits preserve structure, undo removals, and save without email", 
     "data-attic-hover",
     "",
   );
+  await expect(editor.locator("strong")).toHaveCSS("outline-width", "2px");
+  await expect(editor.locator("strong")).toHaveCSS("outline-style", "dashed");
+  await expect(editor.locator("[data-attic-overlay]")).toHaveCSS(
+    "position",
+    "fixed",
+  );
   await expect(editor.locator("[data-attic-overlay]")).toContainText(
     "Bold text",
   );
-  await page
-    .getByRole("button", { name: "Select element", exact: true })
-    .click();
   await editor.getByText("bold words").click();
-  await expect(editor.locator("[data-attic-selected]")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Select element", exact: true })
-    .click();
-  await editor.getByText("bold words").click();
+  await expect(editor.locator("strong")).toHaveCSS("outline-style", "solid");
+  await expect(editor.locator("strong")).toHaveCSS("outline-width", "2px");
   await page
     .getByRole("navigation", { name: "Selected element path" })
     .getByRole("button", { name: "Paragraph", exact: true })

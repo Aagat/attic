@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import editorStyles from "./reading-editor.css?url";
 import { Button, Modal, input } from "./primitives";
 import { useArchive } from "../state";
 
@@ -38,7 +39,7 @@ const labels: Record<string, string> = {
 const label = (element: Element) =>
   labels[element.tagName.toLowerCase()] || element.tagName.toLowerCase();
 const shell = (html: string) =>
-  `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';"><style>body{margin:24px;font:18px/1.65 Georgia,serif;color:#24221f;overflow-wrap:anywhere}img,table{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:8px}pre{white-space:pre-wrap;font-size:14px}a{color:inherit}[data-attic-hover]:not([data-attic-selected]){outline:2px dashed #3974ad;outline-offset:3px;background:#3974ad14}[data-attic-picker] *{cursor:crosshair!important}[data-attic-overlay]{position:fixed;z-index:2147483647;pointer-events:none;background:#233c32;color:white;border-radius:4px;padding:4px 8px;font:12px/1.5 system-ui;max-width:calc(100vw - 16px);box-sizing:border-box}[data-attic-selected]{outline:2px solid #a56332;outline-offset:3px;background:#a5633214}p,h1,h2,h3,li,img,table,pre{cursor:pointer}</style></head><body>${html}</body></html>`;
+  `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'self'; style-src-attr 'unsafe-inline';"><link rel="stylesheet" href="${new URL(editorStyles, window.location.href).href}"></head><body>${html}</body></html>`;
 
 export function ReadingEditor({
   itemID,
@@ -53,8 +54,6 @@ export function ReadingEditor({
   const frame = useRef<HTMLIFrameElement>(null);
   const selected = useRef<Element | null>(null);
   const hovered = useRef<Element | null>(null);
-  const pickerEnabled = useRef(true);
-  const [picking, setPicking] = useState(true);
   const [ancestors, setAncestors] = useState<Element[]>([]);
   function clearHover() {
     hovered.current?.removeAttribute("data-attic-hover");
@@ -62,15 +61,6 @@ export function ReadingEditor({
     frame.current?.contentDocument
       ?.querySelector("[data-attic-overlay]")
       ?.remove();
-  }
-  function setPicker(enabled: boolean) {
-    pickerEnabled.current = enabled;
-    setPicking(enabled);
-    frame.current?.contentDocument?.body.toggleAttribute(
-      "data-attic-picker",
-      enabled,
-    );
-    if (!enabled) clearHover();
   }
   const [source, setSource] = useState("");
   const [revision, setRevision] = useState("");
@@ -143,9 +133,7 @@ export function ReadingEditor({
   function bind() {
     const doc = frame.current?.contentDocument;
     if (!doc) return;
-    doc.body.toggleAttribute("data-attic-picker", pickerEnabled.current);
     doc.addEventListener("pointermove", (event) => {
-      if (!pickerEnabled.current) return;
       const element = (event.target as Element).closest(selectable);
       if (!element || element === doc.body) {
         clearHover();
@@ -172,13 +160,13 @@ export function ReadingEditor({
     doc.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        setPicker(false);
+        clearHover();
+        clearSelection();
       }
     });
     doc.addEventListener("click", (event) => {
       event.preventDefault();
-      if (pickerEnabled.current)
-        select((event.target as Element).closest(selectable));
+      select((event.target as Element).closest(selectable));
     });
     doc.addEventListener("submit", (event) => event.preventDefault());
   }
@@ -201,13 +189,6 @@ export function ReadingEditor({
         {source && (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                aria-pressed={picking}
-                disabled={busy}
-                onClick={() => setPicker(!picking)}
-              >
-                Select element
-              </Button>
               <Button
                 disabled={!selection || busy}
                 onClick={() => {
