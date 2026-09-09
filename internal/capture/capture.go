@@ -27,12 +27,13 @@ type Attempt struct {
 	Status string `json:"status"`
 }
 type Capturer struct {
-	renderer SnapshotRenderer
-	archives ArchiveSources
+	renderer  SnapshotRenderer
+	archives  ArchiveSources
+	fetchJSON func(context.Context, string) (acquisition.Page, error)
 }
 
 func New(renderer SnapshotRenderer, archives ArchiveSources) *Capturer {
-	return &Capturer{renderer, archives}
+	return &Capturer{renderer: renderer, archives: archives}
 }
 
 // Capture returns the best usable snapshot, including a blocked/partial result when
@@ -43,6 +44,19 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 	best := Result{OriginalURL: original, Status: "blocked"}
 	var attempts []Attempt
 	var lastErr error
+	if endpoint := xEmbedURL(original); endpoint != "" {
+		result, truncated, err := c.xEmbed(ctx, original, endpoint)
+		status := "failed"
+		if err == nil {
+			best = result
+			status = result.Status
+		}
+		attempts = append(attempts, Attempt{endpoint, status})
+		if err == nil && !truncated {
+			best.Attempts = attempts
+			return best, nil
+		}
+	}
 	sources := []string{original}
 	for i := 0; i < len(sources); i++ {
 		if ctx.Err() != nil {
@@ -56,7 +70,7 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 			if err == nil {
 				result.OriginalURL = original
 				status = result.Status
-				if len(best.HTML) == 0 || (best.Status == "blocked" && result.Status != "blocked") {
+				if len(best.HTML) == 0 || result.Status != "blocked" {
 					best = result
 				}
 			}
@@ -65,7 +79,7 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 			lastErr = err
 		}
 		attempts = append(attempts, Attempt{sources[i], status})
-		if best.Status != "blocked" && len(best.HTML) > 0 {
+		if status != "failed" && status != "blocked" && len(best.HTML) > 0 {
 			best.Attempts = attempts
 			return best, nil
 		}
