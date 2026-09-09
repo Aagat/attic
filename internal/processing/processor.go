@@ -64,7 +64,16 @@ func WithOutputLanguages(source OutputLanguages) func(*Processor) {
 	return func(p *Processor) { p.outputLanguages = source }
 }
 
+type ReadingEdits interface {
+	ReadingEdit(context.Context, domain.JobID) (application.ArticleDraft, bool, error)
+}
+
+func WithReadingEdits(source ReadingEdits) func(*Processor) {
+	return func(p *Processor) { p.readingEdits = source }
+}
+
 type Processor struct {
+	readingEdits    ReadingEdits
 	outputLanguages OutputLanguages
 	browserRecovery BrowserRecovery
 	saved           SavedPages
@@ -90,6 +99,19 @@ func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatt
 func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.ProcessorContext) (application.ProcessResult, error) {
 	if p == nil || p.renderer == nil || p.approver == nil || p.formatter == nil || pc.SetStage == nil || pc.ApproveArticle == nil {
 		return application.ProcessResult{}, processingError(domain.FailureInternalError, false)
+	}
+	if p.readingEdits != nil {
+		draft, found, err := p.readingEdits.ReadingEdit(ctx, job.ID)
+		if err != nil {
+			return application.ProcessResult{}, processingError(domain.FailureStorageFailed, true)
+		}
+		if found {
+			approved, err := application.ApproveReadingEdit(draft)
+			if err != nil {
+				return application.ProcessResult{}, err
+			}
+			return p.formatArticle(ctx, job, pc, approved, job.SubmittedURL)
+		}
 	}
 	targetLanguage := ""
 	if p.outputLanguages != nil {
@@ -283,6 +305,10 @@ func (p *Processor) processPage(ctx context.Context, job domain.Job, pc applicat
 	if err != nil {
 		return application.ProcessResult{}, err
 	}
+	return p.formatArticle(ctx, job, pc, approved, canonicalURL)
+}
+
+func (p *Processor) formatArticle(ctx context.Context, job domain.Job, pc application.ProcessorContext, approved application.ApprovedArticle, canonicalURL string) (application.ProcessResult, error) {
 	draft, ok := approved.Snapshot()
 	if !ok {
 		return application.ProcessResult{}, processingError(domain.FailureAIInvalidResponse, false)

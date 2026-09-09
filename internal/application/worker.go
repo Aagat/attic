@@ -124,7 +124,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return true, w.handleProcessingError(ctx, lease, processErr, now)
 	}
 	if !result.Article.valid {
-		return true, w.handleProcessingError(ctx, lease, NewProcessingError(string(domain.FailureAIInvalidResponse), "The processor did not return AI-approved content", false), now)
+		return true, w.handleProcessingError(ctx, lease, NewProcessingError(string(domain.FailureAIInvalidResponse), "The processor did not return approved content", false), now)
 	}
 	if len(result.PDF) == 0 {
 		return true, w.handleProcessingError(ctx, lease, NewProcessingError(string(domain.FailureFormatFailed), "The processor did not return a PDF", false), now)

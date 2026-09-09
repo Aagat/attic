@@ -27,6 +27,8 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 	fail := func(err error) {
 		code, status, message := "library_unavailable", 503, "Saved library is unavailable"
 		switch {
+		case errors.Is(err, library.ErrEditConflict):
+			code, status, message = "reading_changed", 409, err.Error()
 		case errors.Is(err, library.ErrInvalid), errors.Is(err, search.ErrInvalid):
 			code, status, message = "invalid_input", 400, "Check the submitted URL, file or fields"
 		case errors.Is(err, library.ErrNotFound):
@@ -337,6 +339,37 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Method == "GET" {
 			io.Copy(w, body)
+		}
+		return true
+	}
+	if len(parts) == 2 && parts[1] == "editor" {
+		switch r.Method {
+		case "GET":
+			editor, err := s.library.Editor(r.Context(), id)
+			if err != nil {
+				fail(err)
+			} else {
+				respond(200, editor)
+			}
+		case "PUT":
+			var request library.ReadingEditor
+			r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
+			if json.NewDecoder(r.Body).Decode(&request) != nil {
+				fail(library.ErrInvalid)
+				return true
+			}
+			if err := s.library.SaveReading(r.Context(), id, request.HTML, request.Revision); err != nil {
+				fail(err)
+				return true
+			}
+			detail, err := s.library.Get(r.Context(), id)
+			if err != nil {
+				fail(err)
+			} else {
+				respond(200, detail)
+			}
+		default:
+			methodNotAllowed(w, "GET, PUT", correlation)
 		}
 		return true
 	}

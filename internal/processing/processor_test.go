@@ -3,6 +3,9 @@ package processing_test
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -198,5 +201,83 @@ func TestQualityFailureNeverPublishesAnArtifact(t *testing.T) {
 	}
 	if detail.Status != domain.StatusFailed || detail.HasArtifact || detail.Failure == nil || detail.Failure.Category != "pdf_quality_failed" {
 		t.Fatalf("unsafe quality outcome: %+v", detail)
+	}
+}
+
+type editedSource struct{ draft application.ArticleDraft }
+
+func (s editedSource) ReadingEdit(context.Context, domain.JobID) (application.ArticleDraft, bool, error) {
+	return s.draft, true, nil
+}
+
+func TestOwnerEditsGoDirectlyToPDFWithoutReextraction(t *testing.T) {
+	draft := application.ArticleDraft{Title: "Edited", Author: "Original author", Language: "es", SemanticHTML: `<p>Owner text</p><pre><code>if (x &lt; y) return;</code></pre><table><tr><td>Kept cell</td></tr></table>`}
+	renderer := rendererFunc(func(context.Context, string) (acquisition.RenderedPage, error) {
+		t.Fatal("edited content fetched again")
+		return acquisition.RenderedPage{}, nil
+	})
+	approver := approverFunc(func(context.Context, domain.JobID, ai.ApprovalInput, func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		t.Fatal("owner edits sent to AI")
+		return application.ApprovedArticle{}, nil
+	})
+	formatted := false
+	pdf := formatterFunc(func(_ context.Context, article formatter.Article) (formatter.Result, error) {
+		formatted = true
+		if article.Author != draft.Author || !strings.Contains(article.SemanticHTML, "Owner text") || !strings.Contains(article.SemanticHTML, "<table>") || !strings.Contains(article.SemanticHTML, "<pre>") {
+			t.Fatalf("format input: %+v", article)
+		}
+		return formatter.Result{PDF: []byte("%PDF-edited")}, nil
+	})
+	p, err := processing.New(renderer, approver, pdf, processing.WithReadingEdits(editedSource{draft}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.Process(context.Background(), domain.Job{ID: "edited-job", SubmittedURL: "https://example.com", Profile: "kindle-scribe"}, application.ProcessorContext{
+		ApproveArticle: func(application.ArticleDraft) (application.ApprovedArticle, error) {
+			t.Fatal("AI callback called")
+			return application.ApprovedArticle{}, nil
+		},
+		SetStage: func(domain.Stage) error { return nil },
+	})
+	if err != nil || !formatted || len(result.PDF) == 0 {
+		t.Fatalf("process: %+v %v", result, err)
+	}
+	saved, ok := result.Article.Snapshot()
+	if !ok || saved.ExtractionMethod != "owner_edit" || saved.AIAttemptID != "" {
+		t.Fatalf("provenance: %+v", saved)
+	}
+}
+
+func TestOwnerEditsRealPDF(t *testing.T) {
+	if os.Getenv("ATTIC_TEST_REAL_PDF") != "1" {
+		t.Skip("requires Pandoc, XeLaTeX and Poppler")
+	}
+	draft := application.ArticleDraft{Title: "A cleaner reading copy", Author: "Attic test", SemanticHTML: `<article><p>Edited introduction. This copy keeps the useful article and removes the newsletter signup.</p><h2>Implementation</h2><pre><code>if (saved) {
+  render(document);
+}</code></pre><table><tr><th>Feature</th><th>Result</th></tr><tr><td>Reading edits</td><td>Preserved</td></tr></table><p>The final paragraph remains present in the generated document.</p></article>`}
+	forbidden := errors.New("edited sources must not be fetched or rewritten")
+	p, err := processing.New(rendererFunc(func(context.Context, string) (acquisition.RenderedPage, error) {
+		return acquisition.RenderedPage{}, forbidden
+	}), approverFunc(func(context.Context, domain.JobID, ai.ApprovalInput, func(application.ArticleDraft) (application.ApprovedArticle, error)) (application.ApprovedArticle, error) {
+		return application.ApprovedArticle{}, forbidden
+	}), formatter.Checked{Renderer: formatter.PDF{}}, processing.WithReadingEdits(editedSource{draft}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.Process(context.Background(), domain.Job{ID: "real-edit", SubmittedURL: "https://example.com/article", Profile: "kindle-scribe"}, application.ProcessorContext{ApproveArticle: application.ApproveReadingEdit, SetStage: func(domain.Stage) error { return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := os.Getenv("ATTIC_TEST_PDF_OUTPUT")
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	path := filepath.Join(dir, "edited.pdf")
+	if err := os.WriteFile(path, result.PDF, 0644); err != nil {
+		t.Fatal(err)
+	}
+	text, err := exec.Command("pdftotext", path, "-").Output()
+	if err != nil || !strings.Contains(string(text), "Edited introduction") || !strings.Contains(string(text), "Preserved") || !strings.Contains(string(text), "render(document)") {
+		t.Fatalf("PDF text: %s %v", text, err)
 	}
 }

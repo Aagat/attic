@@ -28,7 +28,18 @@ func (l *Library) OutputLanguage(ctx context.Context, jobID domain.JobID) (strin
 // Reading returns only application-approved content for the selected edition.
 func (l *Library) Reading(ctx context.Context, id string) ([]byte, error) {
 	var title, body, raw, language string
-	err := l.db.QueryRowContext(ctx, `SELECT c.title,c.semantic_html,COALESCE(NULLIF(c.source_url,''),i.url),COALESCE(c.detected_language,'') FROM saved_items i JOIN content_documents c ON c.job_id=i.job_id WHERE i.id=$1`, id).Scan(&title, &body, &raw, &language)
+	var jobID string
+	if err := l.db.QueryRowContext(ctx, `SELECT COALESCE(job_id,'') FROM saved_items WHERE id=$1`, id).Scan(&jobID); err != nil {
+		return nil, safe(err)
+	}
+	draft, found, err := l.ReadingEdit(ctx, domain.JobID(jobID))
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		return capture.ReadingDocument(draft.Title, draft.SemanticHTML)
+	}
+	err = l.db.QueryRowContext(ctx, `SELECT c.title,c.semantic_html,COALESCE(NULLIF(c.source_url,''),i.url),COALESCE(c.detected_language,'') FROM saved_items i JOIN content_documents c ON c.job_id=i.job_id WHERE i.id=$1`, id).Scan(&title, &body, &raw, &language)
 	if err != nil {
 		return nil, safe(err)
 	}

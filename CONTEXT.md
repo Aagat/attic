@@ -41,6 +41,10 @@ Article content accepted as sufficiently complete and suitable for document prep
 **Reading edition**:
 An original-language or translated version of an article, with its own approved reading content and PDF. Editions belong to the same saved item and leave its original captures intact.
 
+**Reading edit**:
+An owner-reviewed change to a reading edition. Edits preserve earlier captures and
+PDFs, and queue a new PDF from the exact sanitized content without AI rewriting.
+
 **PDF artifact**:
 The prepared reading document associated with a job that passed document quality checks.
 

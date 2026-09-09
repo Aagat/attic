@@ -260,7 +260,7 @@ func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
 		return Detail{}, err
 	}
 	d := Detail{Item: i, Captures: []Capture{}}
-	if err := l.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT language FROM reading_editions WHERE job_id=$1),''), EXISTS(SELECT 1 FROM content_documents WHERE job_id=$1)`, i.JobID).Scan(&d.OutputLanguage, &d.ReadingAvailable); err != nil {
+	if err := l.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT language FROM reading_editions WHERE job_id=$1),''), (EXISTS(SELECT 1 FROM content_documents WHERE job_id=$1) OR EXISTS(SELECT 1 FROM reading_edits WHERE job_id=$1))`, i.JobID).Scan(&d.OutputLanguage, &d.ReadingAvailable); err != nil {
 		return d, safe(err)
 	}
 	rows, err := l.db.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at,source FROM saved_captures WHERE item_id=$1 ORDER BY created_at DESC`, id)
@@ -446,10 +446,14 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 			if kind != "bookmark" {
 				return ErrInvalid
 			}
+			previousJobID := jobID
 			jobID = opaque()
 			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,submitted_url,title_hint,output_profile,correlation_id,delivery_destination) VALUES($1,$2,$3,$4,$1,NULLIF($5,''))`, jobID, raw, title, l.profile, destination)
 			if err == nil {
 				_, err = tx.ExecContext(ctx, `INSERT INTO reading_editions(job_id,item_id,language) VALUES($1,$2,$3)`, jobID, id, language)
+			}
+			if err == nil {
+				_, err = tx.ExecContext(ctx, `INSERT INTO reading_edits(job_id,draft) SELECT $1,draft FROM reading_edits WHERE job_id=$2`, jobID, previousJobID)
 			}
 		} else if destination != "" {
 			// A Kindle request may join PDF generation already in progress.

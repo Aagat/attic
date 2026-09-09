@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"attic/internal/acquisition"
+	"attic/internal/sanitize"
 	"golang.org/x/net/html"
 )
 
@@ -115,3 +116,12 @@ func ReadingView(savedHTML []byte, sourceURL string) ([]byte, error) {
 }
 
 const readingCSS = `:root{color-scheme:light}body{margin:0;background:#fff;color:#181818;font:1.125rem/1.65 Georgia,"Times New Roman",serif}main{max-width:72ch;margin:auto;padding:2rem 1.25rem 4rem}h1,h2,h3{line-height:1.2}h1{font-size:2rem}a{color:inherit;text-decoration:underline}.source{font:0.9rem/1.5 system-ui,sans-serif;color:#555}img,svg{max-width:100%;height:auto}figure{margin:1.5rem 0}figcaption{font-size:0.9rem}pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f3f3f3;border:1px solid #ddd;tab-size:4}code,kbd,samp{font:0.85em/1.5 ui-monospace,monospace}table{display:block;max-width:100%;overflow:auto;border-collapse:collapse;font-size:0.95rem}td,th{padding:.4rem .6rem;border:1px solid #bbb;text-align:left}blockquote{margin-left:0;padding-left:1rem;border-left:3px solid #aaa}@media(max-width:600px){main{padding:1rem}h1{font-size:1.6rem}}`
+
+// ReadingDocument displays reviewed semantic content without extracting it again.
+func ReadingDocument(title, semantic string) ([]byte, error) {
+	body, err := sanitize.SanitizeHTML(semantic)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="` + stdhtml.EscapeString(ReplayCSP) + `"><meta name="viewport" content="width=device-width,initial-scale=1"><title>` + stdhtml.EscapeString(title) + `</title><style>` + readingCSS + `</style></head><body><main>` + body + `</main></body></html>`), nil
+}

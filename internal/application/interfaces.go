@@ -256,7 +256,7 @@ type ArtifactStore interface {
 
 // Processor is the internal pipeline seam.  A production implementation will
 // render, extract, invoke AI, validate, format, and return a complete artifact.
-// The application constructs ApprovedArticle only through ApproveArticle.
+// The application constructs ApprovedArticle through AI approval or explicit owner review.
 type Processor interface {
 	Process(context.Context, domain.Job, ProcessorContext) (ProcessResult, error)
 }
@@ -306,7 +306,7 @@ type ApprovedArticle struct {
 	valid bool
 }
 
-// Snapshot returns the immutable, AI-approved article data needed by trusted
+// Snapshot returns the immutable, approved article data needed by trusted
 // downstream adapters such as the PDF formatter. The zero value remains
 // unusable, so formatting cannot accidentally consume an unapproved draft.
 func (a ApprovedArticle) Snapshot() (ArticleDraft, bool) {
