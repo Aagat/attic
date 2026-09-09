@@ -1,4 +1,5 @@
 'use strict';
+importScripts('snapshots.js');
 
 const alarmName = 'attic-reconcile';
 let running;
@@ -29,11 +30,15 @@ async function request(config, path, body, requestID) {
   }
   const response = await fetch(config.server + path, {
     method: 'POST', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(20000),
-    headers: {Authorization: 'Bearer ' + config.key, 'Content-Type': 'application/json', 'Idempotency-Key': requestID || crypto.randomUUID()},
-    body: JSON.stringify(body),
+    headers: {Authorization: 'Bearer ' + config.key, ...(body instanceof FormData ? {} : {'Content-Type': 'application/json'}), 'Idempotency-Key': requestID || crypto.randomUUID()},
+    body: body instanceof FormData ? body : JSON.stringify(body),
   });
   if (response.status === 401) throw new Error('Access key rejected. Reconnect in extension settings.');
-  if (!response.ok) throw new Error('Attic returned HTTP ' + response.status + '. The save will retry.');
+  if (!response.ok) {
+    const error = new Error('Attic returned HTTP ' + response.status + '. The save will retry.');
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 
@@ -42,7 +47,15 @@ async function enqueueSave(message) {
   if (!config.server || !config.key) throw new Error('Connect to Attic in extension settings first.');
   const id = message.requestID || crypto.randomUUID();
   const item = {url: webURL(message.url), title: message.title || '', action: message.action === 'kindle' ? 'kindle' : 'bookmark'};
+  if (Number.isInteger(message.tabID)) item.capturing = Date.now();
   await updateSaves(pending => { pending[id] = item; });
+  if (item.capturing) {
+    try {
+      const params = new URLSearchParams({id, tab: message.tabID, url: item.url});
+      await chrome.tabs.create({url: chrome.runtime.getURL('capture.html') + '?' + params, active: false});
+      return {queued: true, message: 'Capturing this page; the save will continue if you close this popup.'};
+    } catch { await updateSaves(pending => { delete pending[id].capturing; }); }
+  }
   await reconcile();
   const state = await chrome.storage.local.get(['pendingSaves', 'syncStatus']);
   return {queued: Boolean(state.pendingSaves?.[id]), message: state.pendingSaves?.[id] ? 'Saved in this browser; Attic will retry when connected.' : 'Saved to Attic.'};
@@ -87,8 +100,34 @@ async function syncOnce() {
   }
   // Manual saves remain retryable even when bookmark ingestion is disabled.
   for (const [id, item] of Object.entries(config.pendingSaves || {})) {
-    await request(config, '/api/v1/items', item, id);
+    if (item.capturing && Date.now() - item.capturing < 120000) continue;
+    const snapshot = await snapshots.get(id);
+    if (snapshot) {
+      if (!item.itemID) {
+        const saved = await request(config, '/api/v1/items', {url: item.url, title: item.title, action: 'bookmark'}, id + ':bookmark');
+        if (!saved.id) throw new Error('Attic did not return the saved item.');
+        item.itemID = saved.id;
+        await updateSaves(pending => { pending[id] = item; });
+      }
+      if (!item.uploaded) {
+        const form = new FormData();
+        form.append('snapshot', snapshot, 'page.mhtml');
+        form.append('url', item.url); form.append('title', item.title);
+        try { await request(config, '/api/v1/items/' + item.itemID + '/capture', form, id + ':capture'); }
+        catch (error) {
+          if (![400, 413, 422].includes(error.status)) throw error;
+          // Unusable browser copies fall back to the saved URL's normal capture.
+          await chrome.storage.local.set({captureStatus: 'Browser copy unavailable; Attic will capture the saved link.'});
+        }
+        item.uploaded = true;
+        await updateSaves(pending => { pending[id] = item; });
+      }
+      if (item.action === 'kindle') await request(config, '/api/v1/items/' + item.itemID + '/send', {}, id);
+    } else {
+      await request(config, '/api/v1/items', {url: item.url, title: item.title, action: item.action}, id);
+    }
     await updateSaves(pending => { delete pending[id]; });
+    await snapshots.remove(id);
   }
   if (config.bookmarkSync) {
     const ids = Object.keys(pending);
@@ -119,7 +158,13 @@ chrome.runtime.onStartup.addListener(() => { chrome.alarms.create(alarmName, {pe
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === alarmName) reconcile(); });
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return;
-  const operation = message.type === 'save' ? enqueueSave(message) : message.type === 'reconcile' ? reconcile() : undefined;
+  const operation = message.type === 'captureFinished' ? (async () => {
+    let exists = false;
+    await updateSaves(pending => { if (pending[message.requestID]) { exists = true; delete pending[message.requestID].capturing; } });
+    if (!exists) { await snapshots.remove(message.requestID); return; }
+    if (message.error) await chrome.storage.local.set({captureStatus: message.error + ' Attic will capture the saved link.'});
+    reconcile();
+  })() : message.type === 'save' ? enqueueSave(message) : message.type === 'reconcile' ? reconcile() : undefined;
   if (!operation) return;
   operation.then(result => reply({ok: true, ...result}), error => reply({ok: false, error: error.message}));
   return true;
@@ -128,7 +173,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!['bookmark', 'kindle'].includes(info.menuItemId)) return;
   let text, title;
   try {
-    const result = await enqueueSave({url: info.linkUrl || info.pageUrl || tab?.url, title: info.linkUrl ? '' : tab?.title, action: info.menuItemId});
+    const result = await enqueueSave({tabID: info.linkUrl ? undefined : tab?.id, url: info.linkUrl || info.pageUrl || tab?.url, title: info.linkUrl ? '' : tab?.title, action: info.menuItemId});
     text = result.queued ? '…' : '✓'; title = result.message;
   } catch (error) { text = '!'; title = error.message; }
   if (tab?.id !== undefined) {

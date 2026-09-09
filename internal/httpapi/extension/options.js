@@ -55,7 +55,8 @@ $('setup').addEventListener('submit', async event => {
 });
 $('disconnect').addEventListener('click', async () => {
  try {
-  await chrome.storage.local.remove(['server', 'key', 'pendingSaves', 'pendingBookmarks', 'syncStatus']);
+  await chrome.storage.local.remove(['server', 'key', 'pendingSaves', 'pendingBookmarks', 'syncStatus', 'captureStatus']);
+  await snapshots.clear();
   await chrome.storage.local.set({bookmarkSync: false});
   $('bookmark-sync').checked = false;
   const permissions = await chrome.permissions.getAll();

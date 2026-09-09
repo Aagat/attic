@@ -4,14 +4,15 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {webcrypto} from 'node:crypto';
 const source = readFileSync(new URL('../internal/httpapi/extension/background.js', import.meta.url), 'utf8');
-function extension({state = {}, tree = [], response = async () => ({ok: true, status: 200, json: async () => ({errors: []})})} = {}) {
+function extension({state = {}, tree = [], blobs = new Map(), response = async () => ({ok: true, status: 200, json: async () => ({errors: []})})} = {}) {
   const calls = [], events = {};
   state = {server: 'https://attic.example', key: 'private-key', ...state};
   const event = name => ({addListener: fn => {events[name] = fn;}});
-  const context = vm.createContext({URL, AbortSignal, crypto: webcrypto, Date, fetch: async (url, init) => {
-    calls.push({url, init}); return response();
+  const context = vm.createContext({URL, URLSearchParams, FormData, Blob, importScripts: () => {}, snapshots: {get: async id => blobs.get(id), remove: async id => blobs.delete(id)}, AbortSignal, crypto: webcrypto, Date, fetch: async (url, init) => {
+    calls.push({url, init}); return response(url, init);
   }, chrome: {
-    runtime: {id: 'extension', onInstalled: event('install'), onStartup: event('startup'), onMessage: event('message')},
+    tabs: {create: async tab => {calls.push({tab});}},
+    runtime: {getURL: path => 'chrome-extension://extension/' + path, id: 'extension', onInstalled: event('install'), onStartup: event('startup'), onMessage: event('message')},
     storage: {local: {get: async keys => Object.fromEntries(keys.filter(k => k in state).map(k => [k, structuredClone(state[k])])),
       set: async values => Object.assign(state, structuredClone(values))}},
     permissions: {contains: async () => true, onAdded: event('permissionAdded')},
@@ -21,7 +22,7 @@ function extension({state = {}, tree = [], response = async () => ({ok: true, st
     action: {setBadgeText: async () => {}, setTitle: async () => {}},
   }});
   vm.runInContext(source, context);
-  return {state, calls, events, async send(message) {
+  return {state, calls, events, blobs, async send(message) {
     return new Promise(resolve => events.message(message, {id: 'extension'}, resolve));
   }};
 }
@@ -85,7 +86,7 @@ function options({granted=true, response={ok:true,json:async()=>({authenticated:
  const elements={}, calls=[], removed=[];let config={server:'https://old.example',key:'old-key'};
  for(const id of ['server','key','library','disconnect','status','setup','bookmark-sync','sync-status','sync-now'])elements[id]={value:'',hidden:true,handlers:{},addEventListener(event,fn){this.handlers[event]=fn;}};
  const button={disabled:false};
- const context=vm.createContext({URL,AbortSignal,Error,TypeError,document:{getElementById:id=>elements[id]},fetch:async(url,init)=>{calls.push({url,init});return response;},chrome:{runtime:{sendMessage:async()=>({ok:true})},storage:{onChanged:{addListener:()=>{}},local:{get:async()=>config,set:async v=>{Object.assign(config,v);},remove:async keys=>{for(const key of [keys].flat())delete config[key];}}},permissions:{request:async value=>{calls.push({permission:value});if(granted instanceof Error)throw granted;return granted;},getAll:async()=>({origins:['https://old.example/*','http://localhost/*']}),remove:async value=>removed.push(value)}}});
+ const context=vm.createContext({URL,AbortSignal,Error,TypeError,snapshots:{clear:async()=>{}},document:{getElementById:id=>elements[id]},fetch:async(url,init)=>{calls.push({url,init});return response;},chrome:{runtime:{sendMessage:async()=>({ok:true})},storage:{onChanged:{addListener:()=>{}},local:{get:async()=>config,set:async v=>{Object.assign(config,v);},remove:async keys=>{for(const key of [keys].flat())delete config[key];}}},permissions:{request:async value=>{calls.push({permission:value});if(granted instanceof Error)throw granted;return granted;},getAll:async()=>({origins:['https://old.example/*','http://localhost/*']}),remove:async value=>removed.push(value)}}});
  vm.runInContext(optionsSource,context);
  return {elements,calls,removed,button,get config(){return config;},async submit(server='http://localhost:18080',key='new-key'){await new Promise(r=>setImmediate(r));elements.server.value=server;elements.key.value=key;await elements.setup.handlers.submit({preventDefault(){},currentTarget:{querySelector:()=>button}});}};
 }
@@ -119,4 +120,63 @@ test('browser title edits and moves reconcile without resending unchanged bookma
  await app.send({type:'reconcile'});
  const item=JSON.parse(app.calls[1].init.body).bookmarks[0];assert.equal(item.title,'Edited');assert.equal(item.source.folder,'After');
  await app.send({type:'reconcile'});assert.equal(app.calls.length,2);
+});
+
+test('capture survives popup close and worker restart, uploads before Kindle, and retries delivery without recapturing', async () => {
+ const first = extension();
+ const saved = await first.send({type:'save',url:'https://example.com/',tabID:7,action:'kindle',requestID:'capture-1'});
+ assert.equal(saved.queued,true); assert.equal(first.calls[0].tab.active,false);
+ assert.match(first.calls[0].tab.url,/capture.html/); assert.equal(first.calls.length,1);
+ const blobs = new Map([['capture-1', new Blob(['MHTML'])]]);
+ const resumed = extension({state:first.state,blobs,response:async(url)=>{
+   if(url.endsWith('/send'))throw new Error('connection lost after acceptance');
+   return {ok:true,status:200,json:async()=>({id:'item-1'})};
+ }});
+ await resumed.send({type:'captureFinished',requestID:'capture-1'});
+ await new Promise(resolve => setImmediate(resolve));
+ assert.deepEqual(resumed.calls.map(call=>call.url.split('/api/v1')[1]),['/items','/items/item-1/capture','/items/item-1/send']);
+ assert.equal(JSON.parse(resumed.calls[0].init.body).action,'bookmark');
+ assert.equal(await resumed.calls[1].init.body.get('snapshot').text(),'MHTML');
+ assert.equal(resumed.calls[1].init.headers['Content-Type'],undefined);
+ assert.equal(resumed.state.pendingSaves['capture-1'].uploaded,true);
+ const final = extension({state:resumed.state,blobs}); await final.send({type:'reconcile'});
+ assert.equal(final.calls.length,1); assert.match(final.calls[0].url,/item-1\/send$/);
+ assert.equal(final.calls[0].init.headers['Idempotency-Key'],'capture-1');
+ assert.deepEqual(final.state.pendingSaves,{});assert.equal(blobs.size,0);
+});
+test('failed browser capture falls back to URL saving and does not strand delivery',async()=>{
+ const app=extension();await app.send({type:'save',url:'https://example.com/',tabID:2,action:'kindle',requestID:'fallback'});
+ await app.send({type:'captureFinished',requestID:'fallback',error:'Capture not supported.'});
+ await new Promise(resolve => setImmediate(resolve));
+ assert.equal(JSON.parse(app.calls[1].init.body).action,'kindle');
+ assert.match(app.state.captureStatus,/Capture not supported/);assert.deepEqual(app.state.pendingSaves,{});
+});
+test('transient capture upload errors cannot start Kindle delivery',async()=>{
+ const app=extension({state:{pendingSaves:{capture:{url:'https://example.com/',title:'',action:'kindle'}}},blobs:new Map([['capture',new Blob(['MHTML'])]]),response:async(url)=>({ok:!url.endsWith('/capture'),status:url.endsWith('/capture')?503:200,json:async()=>({id:'item'})})});
+ await app.send({type:'reconcile'});assert.equal(app.calls.length,2);assert.equal(app.state.pendingSaves.capture.uploaded,undefined);assert.equal(app.blobs.size,1);
+});
+const captureSource=readFileSync(new URL('../internal/httpapi/extension/capture.js',import.meta.url),'utf8');
+async function captureDocument({navigated=false,failure=false}={}) {
+ const calls=[];let reads=0;
+ const context=vm.createContext({URLSearchParams,setTimeout,clearTimeout,location:{search:'?id=request&tab=7&url=https%3A%2F%2Fexample.com%2F'},snapshots:{put:async(id,blob)=>calls.push({stored:id,size:blob.size})},chrome:{
+  tabs:{get:async()=>({url:++reads>1&&navigated?'https://different.example/':'https://example.com/'}),getCurrent:async()=>({id:8}),remove:async id=>calls.push({closed:id})},
+  pageCapture:{saveAsMHTML:(_,callback)=>callback(failure?undefined:new Blob(['MHTML']))},
+  runtime:{sendMessage:async message=>calls.push({message})},
+ }});
+ await vm.runInContext(captureSource,context);return calls;
+}
+test('capture document persists bytes before acknowledgement and closes its helper tab',async()=>{
+ const calls=await captureDocument();assert.equal(calls[0].stored,'request');assert.equal(calls[1].message.type,'captureFinished');assert.equal(calls[1].message.error,undefined);assert.equal(calls[2].closed,8);
+});
+test('navigation races and unavailable capture never upload misleading content and close the helper',async()=>{
+ for(const options of [{navigated:true},{failure:true}]){
+  const calls=await captureDocument(options);assert.equal(calls.length,2);assert.ok(calls[0].message.error);assert.equal(calls[1].closed,8);
+ }
+});
+test('a helper finishing after disconnect removes its orphaned snapshot without saving or sending',async()=>{
+ const blobs=new Map([['cancelled',new Blob(['private page'])]]);
+ const app=extension({state:{server:undefined,key:undefined,pendingSaves:{}},blobs});
+ const result=await app.send({type:'captureFinished',requestID:'cancelled'});
+ assert.equal(result.ok,true);assert.equal(blobs.size,0);assert.equal(app.calls.length,0);
+ assert.deepEqual(app.state.pendingSaves,{});
 });

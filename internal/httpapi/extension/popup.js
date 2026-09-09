@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
     $('bookmark').disabled = $('kindle').disabled = true;
     $('status').textContent = 'Saving…';
     try {
-      const result = await chrome.runtime.sendMessage({type: 'save', action, url: tab?.url, title: tab?.title, requestID: crypto.randomUUID()});
+      const result = await chrome.runtime.sendMessage({type: 'save', action, tabID: tab?.id, url: tab?.url, title: tab?.title, requestID: crypto.randomUUID()});
       if (!result.ok) throw new Error(result.error);
       $('status').textContent = result.message;
     } catch (error) {
