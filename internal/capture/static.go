@@ -81,6 +81,9 @@ func convert(page acquisition.RenderedPage) (Result, error) {
 			location := absolute(page.FinalURL, part.Header.Get("Content-Location"))
 			if kind == "text/html" && first {
 				root = body
+				if page.Title == "" {
+					page.Title = documentTitle(body)
+				}
 				first = false
 			}
 			r.assets[location] = resource{kind, body}
@@ -277,4 +280,24 @@ func (r *rewriter) stylesheet(css, base string, depth int) string {
 		return `url("` + r.asset(raw, base) + `")`
 	})
 	return strings.ReplaceAll(css, "<", `\3c `)
+}
+
+func documentTitle(body []byte) string {
+	doc, err := html.Parse(bytes.NewReader(body))
+	if err != nil {
+		return ""
+	}
+	var title string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "title" && n.FirstChild != nil {
+			title = strings.TrimSpace(n.FirstChild.Data)
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return title
 }

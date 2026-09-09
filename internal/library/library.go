@@ -62,6 +62,7 @@ type Item struct {
 	Version          int64     `json:"-"`
 }
 type Capture struct {
+	Source    string          `json:"source"`
 	ID        string          `json:"id"`
 	FinalURL  string          `json:"final_url"`
 	Title     string          `json:"title"`
@@ -257,7 +258,7 @@ func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
 		return Detail{}, err
 	}
 	d := Detail{Item: i, Captures: []Capture{}}
-	rows, err := l.db.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at FROM saved_captures WHERE item_id=$1 ORDER BY created_at DESC`, id)
+	rows, err := l.db.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at,source FROM saved_captures WHERE item_id=$1 ORDER BY created_at DESC`, id)
 	if err != nil {
 		return d, safe(err)
 	}
@@ -265,7 +266,7 @@ func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
 	for rows.Next() {
 		var c Capture
 		var artifact, missing []byte
-		if err := rows.Scan(&c.ID, &artifact, &c.FinalURL, &c.Title, &c.Text, &c.Status, &missing, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &artifact, &c.FinalURL, &c.Title, &c.Text, &c.Status, &missing, &c.CreatedAt, &c.Source); err != nil {
 			return d, safe(err)
 		}
 		json.Unmarshal(artifact, &c.Artifact)

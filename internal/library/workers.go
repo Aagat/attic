@@ -41,10 +41,34 @@ func (l *Library) CaptureOnce(ctx context.Context, c Capturer) (bool, error) {
 		_, err = l.db.ExecContext(ctx, `UPDATE saved_items SET capture_status=$3,capture_next=now()+interval '30 seconds',capture_token=NULL,capture_until=NULL,version=version+1 WHERE id=$1 AND capture_token=$2`, id, token, status)
 		return true, safe(err)
 	}
-	captureID := opaque()
+	return true, l.persistCapture(ctx, id, token, opaque(), "server", result)
+}
+
+// persistCapture serializes the item update with capture imports. Server results
+// must still own their lease; a browser import clears it atomically.
+func (l *Library) persistCapture(ctx context.Context, id, token, captureID, source string, result capture.Result) error {
+	tx, err := l.db.BeginTx(ctx, nil)
+	if err != nil {
+		return safe(err)
+	}
+	defer tx.Rollback()
+	var current sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT capture_token FROM saved_items WHERE id=$1 FOR UPDATE`, id).Scan(&current); err != nil {
+		return safe(err)
+	}
+	if source == "server" && current.String != token {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM saved_captures WHERE id=$1)`, captureID).Scan(&exists); err != nil {
+		return safe(err)
+	}
+	if exists {
+		return nil
+	}
 	artifact, err := l.files.Put(ctx, domain.JobID("capture-"+captureID), "snapshot.html", result.HTML, time.Now())
 	if err != nil {
-		return true, err
+		return err
 	}
 	artifact.MediaType = "text/html"
 	committed := false
@@ -53,35 +77,22 @@ func (l *Library) CaptureOnce(ctx context.Context, c Capturer) (bool, error) {
 			l.files.Delete(context.WithoutCancel(ctx), artifact)
 		}
 	}()
-	tx, err := l.db.BeginTx(ctx, nil)
+	_, err = tx.ExecContext(ctx, `INSERT INTO saved_captures(id,item_id,artifact,final_url,title,text_content,status,missing,source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, captureID, id, jsonValue(artifact), result.FinalURL, result.Title, result.PlainText, result.Status, jsonValue(result.MissingResources), source)
 	if err != nil {
-		return true, safe(err)
+		return safe(err)
 	}
-	defer tx.Rollback()
-	var current string
-	err = tx.QueryRowContext(ctx, `SELECT capture_token FROM saved_items WHERE id=$1 AND capture_token=$2 FOR UPDATE`, id, token).Scan(&current)
-	if errors.Is(err, sql.ErrNoRows) {
-		return true, nil
-	}
+	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET capture_status=$2,capture_token=NULL,capture_until=NULL,
+ title=CASE WHEN title_edited OR $3='' OR $2='blocked' THEN title ELSE $3 END,
+ text_content=CASE WHEN $2='blocked' AND text_content<>'' THEN text_content ELSE $4 END,
+ enrichment_status='pending',version=version+1,updated_at=now() WHERE id=$1`, id, result.Status, result.Title, result.PlainText)
 	if err != nil {
-		return true, safe(err)
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO saved_captures(id,item_id,artifact,final_url,title,text_content,status,missing) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, captureID, id, jsonValue(artifact), result.FinalURL, result.Title, result.PlainText, result.Status, jsonValue(result.MissingResources))
-	if err != nil {
-		return true, safe(err)
-	}
-	// A blocked recapture cannot destroy the text of an earlier useful capture.
-	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET capture_status=$3,capture_token=NULL,capture_until=NULL,
- title=CASE WHEN title_edited OR $4='' OR $3='blocked' THEN title ELSE $4 END,
- text_content=CASE WHEN $3='blocked' AND text_content<>'' THEN text_content ELSE $5 END,
- enrichment_status='pending',version=version+1,updated_at=now() WHERE id=$1 AND capture_token=$2`, id, token, result.Status, result.Title, result.PlainText)
-	if err != nil {
-		return true, safe(err)
+		return safe(err)
 	}
 	err = tx.Commit()
 	committed = err == nil
-	return true, safe(err)
+	return safe(err)
 }
+
 func (l *Library) RunCaptures(ctx context.Context, c Capturer) error {
 	return loop(ctx, func() error { _, err := l.CaptureOnce(ctx, c); return err })
 }

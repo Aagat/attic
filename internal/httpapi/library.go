@@ -33,6 +33,8 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			code, status, message = "not_found", 404, "Saved item was not found"
 		case errors.Is(err, library.ErrDeleted):
 			code, status, message = "removed", 409, err.Error()
+		case errors.Is(err, library.ErrBrowserCaptureBlocked):
+			code, status, message = "browser_capture_blocked", 422, err.Error()
 		case errors.Is(err, library.ErrSMTPDisabled):
 			code, status, message = "smtp_disabled", 409, err.Error()
 		case errors.Is(err, search.ErrUnavailable):
@@ -320,6 +322,25 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 	if len(parts) == 2 && r.Method == "POST" {
 		var err error
 		switch parts[1] {
+		case "capture":
+			r.Body = http.MaxBytesReader(w, r.Body, capture.MaxBrowserCaptureBytes+(1<<20))
+			if r.ParseMultipartForm(1<<20) != nil {
+				fail(library.ErrInvalid)
+				return true
+			}
+			defer r.MultipartForm.RemoveAll()
+			file, _, e := r.FormFile("snapshot")
+			if e != nil {
+				fail(library.ErrInvalid)
+				return true
+			}
+			defer file.Close()
+			data, e := io.ReadAll(io.LimitReader(file, capture.MaxBrowserCaptureBytes+1))
+			if e != nil {
+				fail(library.ErrInvalid)
+				return true
+			}
+			err = s.library.ImportBrowserCapture(r.Context(), id, r.FormValue("url"), r.FormValue("title"), data)
 		case "send":
 			err = s.library.Send(r.Context(), id, r.Header.Get("Idempotency-Key"))
 		case "enrich":

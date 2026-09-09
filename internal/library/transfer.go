@@ -91,14 +91,14 @@ func (l *Library) Export(ctx context.Context, out io.Writer) error {
 		if err := tx.QueryRowContext(ctx, `SELECT source_title,title_edited FROM saved_items WHERE id=$1`, item.Item.ID).Scan(&item.SourceTitle, &item.TitleEdited); err != nil {
 			return safe(err)
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at FROM saved_captures WHERE item_id=$1 ORDER BY created_at,id`, item.Item.ID)
+		rows, err := tx.QueryContext(ctx, `SELECT id,artifact,final_url,title,text_content,status,missing,created_at,source FROM saved_captures WHERE item_id=$1 ORDER BY created_at,id`, item.Item.ID)
 		if err != nil {
 			return safe(err)
 		}
 		for rows.Next() {
 			var c archiveCapture
 			var raw, missing []byte
-			if err := rows.Scan(&c.Capture.ID, &raw, &c.Capture.FinalURL, &c.Capture.Title, &c.Text, &c.Capture.Status, &missing, &c.Capture.CreatedAt); err != nil {
+			if err := rows.Scan(&c.Capture.ID, &raw, &c.Capture.FinalURL, &c.Capture.Title, &c.Text, &c.Capture.Status, &missing, &c.Capture.CreatedAt, &c.Capture.Source); err != nil {
 				rows.Close()
 				return safe(err)
 			}
@@ -433,7 +433,7 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 		if err != nil {
 			return "", err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO saved_captures(id,item_id,artifact,final_url,title,text_content,status,missing,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, c.Capture.ID, id, jsonValue(artifact), c.Capture.FinalURL, c.Capture.Title, c.Text, c.Capture.Status, jsonValue(c.Capture.Missing), c.Capture.CreatedAt)
+		_, err = tx.ExecContext(ctx, `INSERT INTO saved_captures(id,item_id,artifact,final_url,title,text_content,status,missing,created_at,source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, c.Capture.ID, id, jsonValue(artifact), c.Capture.FinalURL, c.Capture.Title, c.Text, c.Capture.Status, jsonValue(c.Capture.Missing), c.Capture.CreatedAt, captureSource(c.Capture.Source))
 		if err != nil {
 			return "", safe(err)
 		}
@@ -497,4 +497,11 @@ func (l *Library) restoreItem(ctx context.Context, entry archiveItem, files map[
 	}
 	committed = true
 	return id, nil
+}
+
+func captureSource(source string) string {
+	if source == "browser" {
+		return "browser"
+	}
+	return "server"
 }

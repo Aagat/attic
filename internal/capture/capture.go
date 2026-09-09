@@ -89,10 +89,20 @@ func blocked(page acquisition.RenderedPage, text string) bool {
 	if page.Status >= 400 {
 		return true
 	}
-	lower := strings.ToLower(page.Title + " " + text)
-	for _, marker := range []string{"just a moment...", "verify you are human", "access denied", "enable javascript and cookies to continue", "subscribe to continue reading", "subscribe to read the full", "sign in to continue reading"} {
-		if strings.Contains(lower, marker) {
+	title := strings.ToLower(strings.TrimSpace(page.Title))
+	body := strings.ToLower(text)
+	for _, marker := range []string{"just a moment", "access denied", "captcha", "security verification", "robot check"} {
+		if title == marker || title == marker+"..." || title == marker+" – archive.today" {
 			return true
+		}
+	}
+	// Challenge instructions in a short page are meaningful; an article discussing
+	// CAPTCHAs or quoting these phrases should remain readable.
+	if len(strings.Fields(body)) < 300 {
+		for _, marker := range []string{"verify you are human", "verify that you are human", "enable javascript and cookies to continue", "complete the captcha", "please solve the captcha", "why do i have to complete a captcha", "please complete the security check", "subscribe to continue reading", "subscribe to read the full", "sign in to continue reading"} {
+			if strings.Contains(body, marker) {
+				return true
+			}
 		}
 	}
 	return strings.TrimSpace(text) == ""
