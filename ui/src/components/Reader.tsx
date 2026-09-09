@@ -84,7 +84,7 @@ export function Reader() {
   );
 }
 function ReaderItem({ item }: { item: Item }) {
-  const { archive, refresh, notify, send, recapture } = useArchive();
+  const { archive, refresh, notify, send, recapture, generate } = useArchive();
   const navigate = useNavigate();
   const [format, setFormat] = useState(item.kind === "PDF" ? "pdf" : "reading");
   const hasPdf = archive.preview ? !!item.fileId : !!item.hasPdf;
@@ -274,12 +274,6 @@ function ReaderItem({ item }: { item: Item }) {
                 Original site
               </a>
             )
-          )}
-          {!isPdf && file && (
-            <Button onClick={download}>
-              <Download size={15} />
-              Download PDF
-            </Button>
           )}
           <Button
             onClick={() => {
@@ -584,6 +578,41 @@ function ReaderItem({ item }: { item: Item }) {
                 <PanelRightClose size={18} />
               </Button>
             </div>
+            {!isPdf && (
+              <section>
+                <SectionLabel>Reading PDF</SectionLabel>
+                <div className="mt-3">
+                  {hasPdf ? (
+                    <Button onClick={download} disabled={!file}>
+                      <Download size={15} />
+                      Download PDF
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => generate(item.id)}
+                      disabled={["queued", "processing"].includes(
+                        item.pdfStatus || "",
+                      )}
+                    >
+                      <RefreshCw size={15} />
+                      {["queued", "processing"].includes(item.pdfStatus || "")
+                        ? "Generating PDF…"
+                        : "Generate PDF"}
+                    </Button>
+                  )}
+                  {item.pdfStatus === "failed" && !hasPdf && (
+                    <p role="alert" className="mt-2 text-[var(--danger)]">
+                      PDF generation failed. You can try again.
+                    </p>
+                  )}
+                  {!hasPdf && (
+                    <p className="mt-2 text-[11px] text-[var(--muted)]">
+                      Prepare a reading document without sending email.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
             {!isPdf && (
               <section>
                 <SectionLabel>Capture context</SectionLabel>

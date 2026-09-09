@@ -49,3 +49,22 @@ test("capture filters use persisted server states", async () => {
     ).toBe(status);
   }
 });
+
+test("PDF preparation alone does not appear as Kindle delivery", async () => {
+  for (const status of ["queued", "processing", "failed", "ready"]) {
+    const archive = createHTTPArchive(
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: "saved",
+            kind: "bookmark",
+            pdf_status: status,
+            delivery_status: "not_requested",
+          }),
+        ),
+    );
+    const item = await archive.get("saved");
+    expect(item.pdfStatus).toBe(status);
+    expect(item.delivery).toBe("Not requested");
+  }
+});

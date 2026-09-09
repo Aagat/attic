@@ -236,7 +236,7 @@ func (l *Library) Save(ctx context.Context, r SaveRequest, key string) (Item, bo
 
 const itemSelect = `SELECT i.id,i.kind,COALESCE(i.url,''),i.title,i.notes,i.tags,i.folders,i.saved_at,i.updated_at,i.classification,i.suggested_tags,i.enrichment_status,i.capture_status,
  CASE WHEN i.indexed_version=i.version THEN 'indexed' WHEN i.index_error THEN 'retrying' ELSE 'pending' END,COALESCE(i.job_id,''),COALESCE(j.status,'not_requested'),
- CASE WHEN j.status='delivered' THEN 'accepted' WHEN j.status='delivery_failed' THEN 'failed' WHEN j.delivery_pending THEN 'pending' ELSE 'not_requested' END,
+ CASE WHEN j.status='delivered' THEN 'accepted' WHEN j.status='delivery_failed' THEN 'failed' WHEN j.delivery_pending OR (j.delivery_destination IS NOT NULL AND j.status IN ('queued','processing','failed')) THEN 'pending' ELSE 'not_requested' END,
  EXISTS(SELECT 1 FROM artifacts a WHERE a.job_id=i.job_id AND a.availability='available'),i.text_content,i.version FROM saved_items i LEFT JOIN jobs j ON j.id=i.job_id `
 
 type scanner interface{ Scan(...any) error }
@@ -331,6 +331,15 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 	if l.destination == "" {
 		return ErrSMTPDisabled
 	}
+	return l.prepare(ctx, id, key, l.destination)
+}
+
+// GeneratePDF prepares a reading document without requesting email delivery.
+func (l *Library) GeneratePDF(ctx context.Context, id, key string) error {
+	return l.prepare(ctx, id, key, "")
+}
+
+func (l *Library) prepare(ctx context.Context, id, key, destination string) error {
 	if key == "" {
 		key = opaque()
 	}
@@ -370,7 +379,10 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 		}
 	}
 	if hasPDF {
-		_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, l.destination)
+		if destination == "" {
+			return safe(tx.Commit())
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, destination)
 	} else {
 		var active bool
 		if jobID != "" {
@@ -380,8 +392,14 @@ func (l *Library) Send(ctx context.Context, id, key string) error {
 			}
 		}
 		if !active {
+			if kind != "bookmark" {
+				return ErrInvalid
+			}
 			jobID = opaque()
-			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,submitted_url,title_hint,output_profile,correlation_id,delivery_destination) VALUES($1,$2,$3,$4,$1,$5)`, jobID, raw, title, l.profile, l.destination)
+			_, err = tx.ExecContext(ctx, `INSERT INTO jobs(id,submitted_url,title_hint,output_profile,correlation_id,delivery_destination) VALUES($1,$2,$3,$4,$1,NULLIF($5,''))`, jobID, raw, title, l.profile, destination)
+		} else if destination != "" {
+			// A Kindle request may join PDF generation already in progress.
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET delivery_destination=$2 WHERE id=$1`, jobID, destination)
 		}
 	}
 	if err != nil {

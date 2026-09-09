@@ -393,6 +393,16 @@ test("article PDF tab appears only with a document and renders after switching v
   await expect(
     page.getByRole("tab", { name: "Reading version", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page
+      .locator("header")
+      .getByRole("button", { name: "Download PDF", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("complementary", { name: "Item information" })
+      .getByRole("button", { name: "Download PDF", exact: true }),
+  ).toBeEnabled();
   for (const view of ["Reading version", "Original layout"]) {
     await page.getByRole("tab", { name: "PDF", exact: true }).click();
     await expect
@@ -405,4 +415,33 @@ test("article PDF tab appears only with a document and renders after switching v
     await page.getByRole("tab", { name: view, exact: true }).click();
     await expect(page.locator("canvas")).toHaveCount(0);
   }
+});
+
+test("sidebar generates PDF without requesting Kindle delivery", async ({
+  page,
+}) => {
+  await page.goto("/items/sample-1");
+  const sidebar = page.getByRole("complementary", { name: "Item information" });
+  await expect(
+    page
+      .locator("header")
+      .getByRole("button", { name: "Download PDF", exact: true }),
+  ).toHaveCount(0);
+  await sidebar
+    .getByRole("button", { name: "Generate PDF", exact: true })
+    .click();
+  await expect(
+    sidebar.getByRole("button", { name: "Generating PDF…", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("PDF generation requested. No email will be sent.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send to Kindle", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    sidebar.getByText("Not requested", { exact: true }),
+  ).toBeVisible();
 });

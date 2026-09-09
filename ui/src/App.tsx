@@ -100,7 +100,7 @@ export function App() {
     );
     return item;
   }
-  async function action(id: string, name: "send" | "recapture") {
+  async function action(id: string, name: "send" | "recapture" | "generate") {
     const pendingKey = id + name;
     if (pendingActions.current.has(pendingKey)) return;
     pendingActions.current.add(pendingKey);
@@ -110,7 +110,9 @@ export function App() {
       notify(
         name === "send"
           ? "Kindle preparation requested."
-          : "Fresh capture requested. Previous copies remain available.",
+          : name === "generate"
+            ? "PDF generation requested. No email will be sent."
+            : "Fresh capture requested. Previous copies remain available.",
       );
     } catch (e) {
       notify((e as Error).message);
@@ -203,6 +205,9 @@ export function App() {
         },
         send,
         recapture,
+        generate: (id: string) => {
+          void action(id, "generate");
+        },
       }}
     >
       {!authenticated ? (

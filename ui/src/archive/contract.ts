@@ -22,7 +22,7 @@ export interface Archive {
   remove(id: string): Promise<void>;
   act(
     id: string,
-    action: "send" | "recapture" | "enrich",
+    action: "send" | "recapture" | "enrich" | "generate",
     key: string,
   ): Promise<void>;
   upload(file: File, kindle: boolean, key: string): Promise<Item>;

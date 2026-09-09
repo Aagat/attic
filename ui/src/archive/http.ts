@@ -69,9 +69,10 @@ function item(w: WireItem): Item {
         ? "Original PDF"
         : captures[w.capture_status] || "Capture status unavailable",
     delivery:
-      w.pdf_status === "failed"
+      w.pdf_status === "failed" && w.delivery_status !== "not_requested"
         ? "Preparation failed"
-        : ["queued", "processing"].includes(w.pdf_status)
+        : ["queued", "processing"].includes(w.pdf_status) &&
+            w.delivery_status !== "not_requested"
           ? "Preparing document"
           : deliveries[w.delivery_status] || "Not requested",
     folder: (w.folders || []).join(" / "),

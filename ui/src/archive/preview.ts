@@ -81,7 +81,9 @@ export function createPreviewArchive(): Archive {
               ...i,
               ...(action === "send"
                 ? { delivery: "Preparing document" as const }
-                : { capture: "Preserving" as const }),
+                : action === "generate"
+                  ? { pdfStatus: "queued" }
+                  : { capture: "Preserving" as const }),
             }
           : i,
       );

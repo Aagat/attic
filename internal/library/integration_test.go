@@ -683,3 +683,63 @@ func TestLibraryIntegrationStaleEnrichmentLeavesNewVersionPending(t *testing.T) 
 		t.Fatalf("current version did not complete on retry: %+v %v", detail.Item, err)
 	}
 }
+
+func TestLibraryIntegrationGeneratePDFWithoutEmail(t *testing.T) {
+	ctx := context.Background()
+	l := integrationLibrary(t, "")
+	item, _, err := l.Save(ctx, SaveRequest{URL: "https://example.com/generate"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"generate-once", "generate-once", "generate-again"} {
+		if err := l.GeneratePDF(ctx, item.ID, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs`); n != 1 {
+		t.Fatalf("generated %d jobs", n)
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs WHERE delivery_destination IS NOT NULL OR delivery_pending`); n != 0 {
+		t.Fatal("generation requested email")
+	}
+	generated, err := l.Get(ctx, item.ID)
+	if err != nil || generated.PDFStatus != "queued" || generated.DeliveryStatus != "not_requested" {
+		t.Fatalf("generation state: %+v %v", generated, err)
+	}
+	// Explicitly sending while the same PDF is being prepared joins that job.
+	l.destination = "reader@example.test"
+	if err := l.Send(ctx, item.ID, "send-once"); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.GeneratePDF(ctx, item.ID, "generate-after-send"); err != nil {
+		t.Fatal(err)
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs`); n != 1 {
+		t.Fatal("send duplicated active preparation")
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs WHERE delivery_destination='reader@example.test'`); n != 1 {
+		t.Fatal("explicit delivery request lost")
+	}
+	sent, err := l.Get(ctx, item.ID)
+	if err != nil || sent.DeliveryStatus != "pending" {
+		t.Fatalf("delivery state: %+v %v", sent, err)
+	}
+}
+
+func TestLibraryIntegrationGenerateReusesPDF(t *testing.T) {
+	ctx := context.Background()
+	l := integrationLibrary(t, "reader@example.test")
+	item, err := l.Upload(ctx, "existing.pdf", integrationPDF(), "bookmark", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.GeneratePDF(ctx, item.ID, "existing-pdf"); err != nil {
+		t.Fatal(err)
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs`); n != 1 {
+		t.Fatal("regenerated existing PDF")
+	}
+	if n := integrationCount(t, l, `SELECT count(*) FROM jobs WHERE delivery_destination IS NOT NULL OR delivery_pending`); n != 0 {
+		t.Fatal("generation sent existing PDF")
+	}
+}

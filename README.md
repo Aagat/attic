@@ -661,3 +661,8 @@ host bind mounts, external AI calls, or external email delivery. The temporary
 stack and its volumes are removed on exit; browser artifacts are copied to
 `ui/test-results/<project>/`. AI processing is unavailable in this
 fixture; the Go processing tests cover that boundary separately.
+
+In the article reader, **Generate PDF** in the sidebar prepares a reading document
+without sending email. It becomes **Download PDF** when the document is available;
+the **PDF** tab opens the built-in preview. **Send to Kindle** separately requests
+delivery and reuses an existing or already processing document.

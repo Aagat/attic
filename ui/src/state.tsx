@@ -19,6 +19,7 @@ export interface ArchiveState {
   openUpload: () => void;
   send: (id: string) => void;
   recapture: (id: string) => void;
+  generate: (id: string) => void;
 }
 export const ArchiveContext = createContext<ArchiveState>(null!);
 export const useArchive = () => useContext(ArchiveContext);

@@ -324,6 +324,8 @@ func (s *Server) serveLibrary(w http.ResponseWriter, r *http.Request, correlatio
 			err = s.library.Send(r.Context(), id, r.Header.Get("Idempotency-Key"))
 		case "enrich":
 			err = s.library.RetryEnrichment(r.Context(), id)
+		case "generate":
+			err = s.library.GeneratePDF(r.Context(), id, r.Header.Get("Idempotency-Key"))
 		case "recapture":
 			err = s.library.Recapture(r.Context(), id)
 		default:
