@@ -15,6 +15,7 @@ import (
 	"attic/internal/acquisition"
 	"attic/internal/ai"
 	"attic/internal/application"
+	"attic/internal/capture"
 	"attic/internal/domain"
 	"attic/internal/formatter"
 )
@@ -70,6 +71,7 @@ func New(renderer acquisition.Renderer, approver Approver, pdf formatter.Formatt
 		return nil, errors.New("renderer, AI approver, and formatter are required")
 	}
 	p := &Processor{renderer: renderer, approver: approver, formatter: pdf}
+	p.savedRenderer, _ = renderer.(SavedRenderer)
 	for _, option := range options {
 		option(p)
 	}
@@ -103,50 +105,55 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 			}
 		}
 	}
-	result, originalErr := p.processSource(ctx, job, pc, job.SubmittedURL, false)
-	if originalErr == nil || (p.archives == nil && p.browserRecovery == nil) || !recoverable(originalErr) || ctx.Err() != nil {
-		return result, originalErr
-	}
-	// Discovery and all source attempts share a total deadline; individual browser,
-	// AI and formatter limits remain in force as well.
+	// The same source policy serves preservation and PDF preparation; only
+	// acceptance differs. Every usable source still crosses mandatory approval.
 	recoveryCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
 	defer cancel()
-	slog.Info("article recovery started", "job_id", job.ID)
-	var sources []string
-	if p.archives != nil {
-		sources = p.archives.Candidates(recoveryCtx, job.SubmittedURL)
-	}
-	seen := map[string]bool{job.SubmittedURL: true}
+	var originalErr error
 	transientArchiveFailure := false
-	for i, source := range sources {
-		if i >= 3 || recoveryCtx.Err() != nil {
-			break
-		}
-		if seen[source] {
+	var fallback *capture.Source
+	attempt := 0
+	for source := range capture.New(sourceRenderer{p.renderer}, p.archives).Sources(recoveryCtx, job.SubmittedURL) {
+		if source.Fallback && source.Err == nil {
+			copy := source
+			fallback = &copy
 			continue
 		}
-		seen[source] = true
-		if err := pc.SetStage(domain.StageFetching); err != nil {
-			return application.ProcessResult{}, err
+		if attempt > 0 {
+			if err := pc.SetStage(domain.StageFetching); err != nil {
+				return application.ProcessResult{}, err
+			}
 		}
-		u, _ := url.Parse(source)
-		host := ""
-		if u != nil {
-			host = u.Hostname()
-		}
-		slog.Info("trying article archive", "job_id", job.ID, "provider", host, "source_attempt", i+1)
-		result, err := p.processSource(recoveryCtx, job, pc, source, true)
+		attempt++
+		result, err := p.processAttempt(recoveryCtx, job, pc, source)
 		if err == nil {
 			return result, nil
 		}
+		if source.URL == job.SubmittedURL || originalErr == nil {
+			originalErr = err
+		}
 		var failure *application.ProcessingError
-		blockedArchive := errors.As(err, &failure) && failure.Category == string(domain.FailureBlockedTarget)
-		if failure != nil {
+		blockedArchive := errors.As(err, &failure) && failure.Category == string(domain.FailureBlockedTarget) && source.URL != job.SubmittedURL
+		if failure != nil && source.URL != job.SubmittedURL {
 			transientArchiveFailure = transientArchiveFailure || failure.Retryable
-			slog.Info("archive attempt failed", "job_id", job.ID, "provider", host, "category", failure.Category)
+			u, _ := url.Parse(source.URL)
+			host := ""
+			if u != nil {
+				host = u.Hostname()
+			}
+			slog.Info("source attempt failed", "job_id", job.ID, "provider", host, "category", failure.Category)
 		}
 		if !recoverable(err) && !blockedArchive && recoveryCtx.Err() == nil {
 			return application.ProcessResult{}, err
+		}
+	}
+	if fallback != nil && recoveryCtx.Err() == nil {
+		if err := pc.SetStage(domain.StageFetching); err != nil {
+			return application.ProcessResult{}, err
+		}
+		result, err := p.processAttempt(recoveryCtx, job, pc, *fallback)
+		if err == nil || !recoverable(err) {
+			return result, err
 		}
 	}
 	if ctx.Err() != nil {
@@ -165,6 +172,9 @@ func (p *Processor) Process(ctx context.Context, job domain.Job, pc application.
 	if transientArchiveFailure && errors.As(originalErr, &originalFailure) {
 		return application.ProcessResult{}, application.NewProcessingError(originalFailure.Category, originalFailure.Error(), true)
 	}
+	if originalErr == nil {
+		originalErr = mapRenderError(recoveryCtx, recoveryCtx.Err())
+	}
 	return application.ProcessResult{}, originalErr
 }
 
@@ -182,13 +192,32 @@ func recoverable(err error) bool {
 	return false
 }
 
-func (p *Processor) processSource(ctx context.Context, job domain.Job, pc application.ProcessorContext, requestedURL string, archived bool) (application.ProcessResult, error) {
-	// ClaimNext durably enters fetching before invoking the processor.
-	page, err := p.renderer.Render(ctx, requestedURL)
-	if err != nil {
-		return application.ProcessResult{}, mapRenderError(ctx, err)
+// sourceRenderer keeps browser output intact for visual article approval.
+type sourceRenderer struct{ acquisition.Renderer }
+
+func (r sourceRenderer) Snapshot(ctx context.Context, raw string) (acquisition.RenderedPage, error) {
+	return r.Render(ctx, raw)
+}
+
+func (p *Processor) processAttempt(ctx context.Context, job domain.Job, pc application.ProcessorContext, source capture.Source) (application.ProcessResult, error) {
+	if source.Err != nil {
+		return application.ProcessResult{}, mapRenderError(ctx, source.Err)
 	}
-	return p.processPage(ctx, job, pc, page, requestedURL, archived)
+	page := source.Page
+	if source.Static != nil {
+		if p.savedRenderer == nil {
+			return application.ProcessResult{}, processingError(domain.FailureUnsupportedContent, false)
+		}
+		var err error
+		page, err = p.savedRenderer.RenderSaved(ctx, source.Static.FinalURL, source.Static.HTML)
+		if err != nil {
+			return application.ProcessResult{}, mapRenderError(ctx, err)
+		}
+		if page.Title == "" {
+			page.Title = source.Static.Title
+		}
+	}
+	return p.processPage(ctx, job, pc, page, source.URL, source.URL != job.SubmittedURL)
 }
 
 func (p *Processor) processPage(ctx context.Context, job domain.Job, pc application.ProcessorContext, page acquisition.RenderedPage, requestedURL string, archived bool) (application.ProcessResult, error) {

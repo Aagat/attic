@@ -45,77 +45,26 @@ func (c *Capturer) Capture(ctx context.Context, original string) (Result, error)
 	best := Result{OriginalURL: original, Status: "blocked"}
 	var attempts []Attempt
 	var lastErr error
-	if endpoint := xMirrorURL(original); endpoint != "" {
-		result, err := c.xMirror(ctx, original, endpoint)
+	for source := range c.Sources(ctx, original) {
+		result, err := source.Result()
 		status := "failed"
 		if err == nil {
 			status = result.Status
-		}
-		attempts = append(attempts, Attempt{endpoint, status})
-		if err == nil {
-			result.Attempts = attempts
-			return result, nil
-		}
-	}
-	if endpoint := xEmbedURL(original); endpoint != "" {
-		result, err := c.xEmbed(ctx, original, endpoint)
-		status := "failed"
-		if err == nil {
-			best = result
-			status = result.Status
-		}
-		attempts = append(attempts, Attempt{endpoint, status})
-		// X usernames are case-insensitive, but the mirror can require the canonical
-		// spelling (or a renamed account). The API response supplies that permalink.
-		if err == nil {
-			canonical := xMirrorURL(result.FinalURL)
-			if canonical != "" && canonical != xMirrorURL(original) {
-				recovered, mirrorErr := c.xMirror(ctx, original, canonical)
-				mirrorStatus := "failed"
-				if mirrorErr == nil {
-					mirrorStatus = recovered.Status
-				}
-				attempts = append(attempts, Attempt{canonical, mirrorStatus})
-				if mirrorErr == nil {
-					recovered.Attempts = attempts
-					return recovered, nil
-				}
+			if len(best.HTML) == 0 || result.Status != "blocked" {
+				best = result
 			}
-		}
-
-	}
-	sources := []string{original}
-	for i := 0; i < len(sources); i++ {
-		if ctx.Err() != nil {
-			return best, ctx.Err()
-		}
-		page, err := c.renderer.Snapshot(ctx, sources[i])
-		status := "failed"
-		if err == nil {
-			var result Result
-			result, err = convert(page)
-			if err == nil {
-				result.OriginalURL = original
-				status = result.Status
-				if len(best.HTML) == 0 || result.Status != "blocked" {
-					best = result
-				}
-			}
-		}
-		if err != nil {
+		} else {
 			lastErr = err
 		}
-		attempts = append(attempts, Attempt{sources[i], status})
-		if status != "failed" && status != "blocked" && len(best.HTML) > 0 {
+		attempts = append(attempts, Attempt{source.URL, status})
+		if err == nil && status != "blocked" && len(best.HTML) > 0 && !source.Fallback {
 			best.Attempts = attempts
 			return best, nil
 		}
-		if i == 0 && c.archives != nil {
-			sources = append(sources, c.archives.Candidates(ctx, original)...)
-			if len(sources) > 4 {
-				sources = sources[:4]
-			}
-		}
+	}
+	if ctx.Err() != nil {
+		best.Attempts = attempts
+		return best, ctx.Err()
 	}
 	best.Attempts = attempts
 	if len(best.HTML) > 0 {

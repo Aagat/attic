@@ -424,8 +424,13 @@ snapshot. No new snapshot is submitted. Discovery uses the
 [Wayback availability API](https://archive.org/help/wayback_api.php) and
 [Archive.today's documented newest-snapshot links](https://archive.ph/faq).
 
-Recovery runs automatically within the same job. There are at most three archive
-attempts with a shared eight-minute recovery deadline, in addition to existing
+Bookmark capture and PDF preparation share source ordering, lazy discovery and
+a limit of three distinct archive attempts. X links use validated mirror content
+when available; embed text remains a fallback after stronger sources are exhausted.
+PDF preparation renders static sources offline before mandatory article approval.
+
+Recovery runs automatically within the same job. Original and fallback source
+attempts share an eight-minute deadline, in addition to existing
 browser, AI and formatter limits. Every source must pass AI approval and PDF
 verification. The AI receives both the requested URL and retrieved URL, and must
 reject archive search pages, challenges and unrelated articles. Snapshot URLs
@@ -599,10 +604,17 @@ screenshot and a rendered DOM only after enforcing byte, node, request,
 redirect, transfer, navigation, and total-render limits. Cancellation tears
 down the process through the executable allocator and waits for cleanup.
 
+Fresh renders and persistent recovery sessions install the same browser policy.
+Recovery sessions count requests and redirects across their lifetime (2,048 requests
+and 20 redirects); offline saved-page rendering retains its zero-network policy.
+The recovery manager also owns completion waiting for capture and PDF callers;
+a caller deadline stops waiting without closing a browser awaiting human input.
+
 Chromium sends HTTP and HTTPS through a loopback policy proxy. The proxy
 resolves every hostname, rejects the entire answer set if any address is
 non-public, and connects to a validated IP rather than resolving again. CDP
-request interception separately rejects non-HTTP(S) requests; downloads and
+request interception separately counts requests inside HTTPS tunnels and rejects
+non-HTTP(S) requests; downloads and
 popups are denied, QUIC is disabled, and non-proxied WebRTC UDP is disabled.
 The static `Fetcher` uses the same resolve-validate-connect rule and has no
 public arbitrary-transport escape hatch.
