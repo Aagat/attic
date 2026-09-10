@@ -60,17 +60,6 @@ func internalError(cause error) *SafeError {
 	}
 }
 
-func safeError(err error) *SafeError {
-	if err == nil {
-		return nil
-	}
-	var safe *SafeError
-	if errors.As(err, &safe) && safe != nil {
-		return safe
-	}
-	return internalError(err)
-}
-
 // ProcessingError is used by a processor adapter to return a stable job
 // failure category without exposing provider or browser details.
 type ProcessingError struct {

@@ -53,16 +53,6 @@ func mapDBError(operation string, err error) error {
 	return &databaseFailure{operation: operation}
 }
 
-func mapLeaseOrDBError(operation string, err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return application.ErrLeaseLost
-	}
-	return mapDBError(operation, err)
-}
-
 func migrationFailure(version int64, name string, err error) error {
 	return &MigrationError{Version: version, Name: name, cause: err}
 }

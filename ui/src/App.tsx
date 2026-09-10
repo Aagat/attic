@@ -19,7 +19,7 @@ import {
   X,
   WifiOff,
 } from "lucide-react";
-import { Brand, Button, Modal, input } from "./components/primitives";
+import { Brand, Button, Modal } from "./components/primitives";
 import { Library } from "./components/Library";
 import { SaveForm } from "./components/SaveForm";
 import { Reader } from "./components/Reader";

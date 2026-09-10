@@ -57,13 +57,10 @@ the memory and PostgreSQL adapters enforce those rules while owning their lease
 and storage mechanics. A new failure category belongs in that domain policy,
 with a persistence check covering both adapters.
 
-`internal/httpapi/web/app.js` owns the reading library and authenticated requests.
-`article-reader.js` exposes `AtticReader.open(jobID)` and `close()`. The reader
-owns metadata, pending downloads, PDF rendering, sharing and cleanup. Its PDF
-renderer is private; callers do not manage render generations, files or workers.
-Closing a reader cancels its requests and clears its document links and resources.
-The browser integration test opens articles through the same visible controls as
-the owner and checks observable rendering, layout stability and cancellation.
+`ui/src` owns the React library, reader and settings. The `Archive` interface in
+`ui/src/archive/contract.ts` separates screens from HTTP transport and the local
+preview adapter. `internal/httpapi/frontend.go` serves the built application;
+`internal/httpapi/web` contains the browser connection guide.
 
 ## Email delivery
 
@@ -355,13 +352,11 @@ ChatGPT login. Paste an article URL to submit it, then follow its progress in
 the library. Search and status filters help find articles; failed work can be
 retried, and unwanted saved items can be explicitly removed. Search covers the entire indexed collection, including captured page and PDF text.
 
-**Read PDF** opens an authenticated PDF.js canvas preview with page navigation,
-page-number entry, zoom, author/source details, download,
-and a **Send to Kindle** handoff. Download the file and follow the Amazon upload
-link, or use native file sharing when the browser supports it (usually over
-HTTPS). Automatic email delivery is not connected. The interface works on
-phones and desktops. `/?url=<encoded-article-url>` can prefill the submission
-field without automatically submitting it.
+Open a saved item to read its preserved content. **Generate PDF** prepares a
+reading document; the **PDF** tab previews it with page navigation and zoom.
+**Download PDF** saves the original file, and **Send to Kindle** requests email
+delivery when SMTP is configured. Incoming shared links prefill the save form
+and require confirmation.
 
 The browser remembers your bearer token in local storage and automatically
 reestablishes its HttpOnly, SameSite session after restarts or session expiry.
@@ -375,29 +370,21 @@ closing the reader destroys its PDF worker and canvas. Download/share still use
 the original PDF. The preview is visual; use the downloaded PDF for text selection
 and the PDF viewer's other advanced features.
 
-PDF.js 6.3.289 (legacy browser build, Apache-2.0) and its worker/font/decoder
-assets are vendored under `internal/httpapi/web/pdfjs`, including license files.
-No CDN access or frontend build is needed. The browser CSP permits WebAssembly
+PDF.js and its worker are bundled from the `pdfjs-dist` dependency during the
+frontend build. No CDN is required. The browser CSP permits WebAssembly
 compilation for PDF image decoders; JavaScript string evaluation remains disabled.
-
-```sh
-ATTIC_WEB_INTEGRATION=1 go test ./internal/httpapi -run TestPDFPreviewBrowserIntegration -v
-# Optionally inspect an existing larger PDF with the same browser check:
-ATTIC_WEB_INTEGRATION=1 ATTIC_PREVIEW_TEST_PDF=/path/to/article.pdf \
-go test ./internal/httpapi -run TestPDFPreviewBrowserIntegration -v
-```
+The React browser tests cover PDF rendering, reloads and original-file downloads.
 
 ## Mobile PWA and sharing
 
-Open **Save from anywhere** in the library (`/connect.html`) for installation and
+Open the browser connection guide from **Settings** (`/connect.html`) for installation and
 connection instructions. Addresses on this page come from the current origin;
 there is no machine-specific hostname in the application or extension.
 
 On Android, open the server over HTTPS in Chrome and install Attic using
 **Add to Home screen → Install**. The installed PWA registers as a share target:
-**Share → Attic → Save article**. The shared URL can arrive in the URL, text, or
-title field; Attic extracts a web link and preserves it through sign-in. Incoming
-shares only prefill the form. They cannot create jobs until the user confirms
+**Share → Attic**. Shared URL and text parameters prefill the save form. They
+cannot create jobs until the user confirms
 through the authenticated API. Successful submission clears the share parameters
 from the address so reloading does not restore an already-saved link.
 
@@ -408,24 +395,13 @@ with the user's configured Attic access key, and checks for a returned job ID
 before confirming success. The user must create this shortcut in Shortcuts;
 there is no native app, developer-account requirement, or signed shortcut bundle.
 
-The PWA includes a manifest, icons, and a service worker. Only a public offline
-message is cached. If navigation fails, it explains that the article has not
-been saved and offers a reload; the shared link remains in the address. Job
-metadata, credentials and PDFs are not cached by the service worker. Offline
-queueing, background submission and offline PDF reading are not implemented.
-HTTPS (or localhost during development) is required for service workers and
-installation; a home-screen bookmark from a remote HTTP address is insufficient.
+The PWA caches its application shell, manifest and icons. Saved content requires
+a server connection; API responses, credentials and PDFs are not cached by the
+service worker. Offline queueing, background submission and offline PDF reading
+are not implemented. HTTPS (or localhost during development) is required for
+service workers and installation.
 
-Validation:
-
-```sh
-node tests/share.test.mjs
-ATTIC_WEB_INTEGRATION=1 go test ./internal/httpapi -run TestPWABrowserIntegration -v
-```
-
-The opt-in integration check requires `/usr/bin/chromium` and uses an isolated
-in-memory HTTP server, without external articles or AI calls. It exercises mobile
-layout, shared-link sign-in/submission, and service-worker offline navigation.
+The React browser suite covers the manifest, cached shell and offline reload.
 Physical Android installation/share-sheet registration and the user-created iOS
 Shortcut still need a device check.
 
@@ -686,7 +662,7 @@ for the local preview adapter. Query hooks cancel obsolete reads and refresh
 background processing states; mutations refresh visible data after acknowledgement.
 No mutation is retried automatically.
 
-Run the real-server E2E suite with `ui/e2e/run-remote.sh gov-remote`. It resolves the
+Run the real-server E2E suite with `ui/e2e/run-remote.sh <ssh-docker-context>`. It resolves the
 SSH endpoint from the Docker context and builds on that host, using isolated
 PostgreSQL, Meilisearch and Mailpit containers. It needs no production credentials,
 host bind mounts, external AI calls, or external email delivery. The temporary
@@ -698,3 +674,26 @@ In the article reader, **Generate PDF** in the sidebar prepares a reading docume
 without sending email. It becomes **Download PDF** when the document is available;
 the **PDF** tab opens the built-in preview. **Send to Kindle** separately requests
 delivery and reuses an existing or already processing document.
+
+## Development checks
+
+Use Go 1.23+ and the pnpm version pinned in `package.json`. After installing
+frontend dependencies, run:
+
+```sh
+go test ./...
+go vet ./...
+node --test tests/*.test.mjs
+pnpm build:embed
+pnpm build:preview
+pnpm test:ui
+```
+
+The Node browser checks also require Chromium at `/usr/bin/chromium`.
+Install Playwright browsers with `pnpm --filter @attic/ui exec playwright install`
+before the first UI test run. The preview tests use local sample data. For the
+production API and database integration, use the isolated E2E stack described
+above. Re-run `pnpm build:embed` before compiling a production Go binary.
+
+Keep `.env`, local data, binaries and generated frontend/test output out of Git;
+`.env.example` documents configuration without operator credentials.

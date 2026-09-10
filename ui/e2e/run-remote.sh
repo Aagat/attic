@@ -2,7 +2,7 @@
 # Build and execute against an isolated Docker daemon reached by SSH context.
 set -eu
 cd "$(dirname "$0")/../.."
-context=${1:-gov-remote}
+context=${1:?Usage: run-remote.sh <ssh-docker-context>}
 endpoint=$(docker context inspect "$context" --format '{{.Endpoints.docker.Host}}')
 case "$endpoint" in ssh://*) host=${endpoint#ssh://};; *) echo 'Choose an SSH remote Docker context.' >&2; exit 1;; esac
 remote_dir=$(ssh "$host" 'mktemp -d /tmp/attic-ui-e2e.XXXXXX')

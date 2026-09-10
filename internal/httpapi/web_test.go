@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,18 +55,11 @@ func TestWebSessionsProtectLibraryAndMutations(t *testing.T) {
 
 func TestSharingAssetsArePublicButCannotSubmitJobs(t *testing.T) {
 	server, _, _ := testServer(t)
-	for _, path := range []string{"/share.js", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png"} {
+	for _, path := range []string{"/connect.html", "/connect.js", "/app.css"} {
 		response := request(server, "GET", path, "", "")
 		if response.Code != 200 {
 			t.Fatalf("%s: %d", path, response.Code)
 		}
-	}
-	manifest := request(server, "GET", "/manifest.webmanifest", "", "")
-	var config struct {
-		Share struct{ Action, Method string } `json:"share_target"`
-	}
-	if err := json.Unmarshal(manifest.Body.Bytes(), &config); err != nil || (config.Share.Action != "/" && config.Share.Action != "/share") || config.Share.Method != "GET" {
-		t.Fatalf("invalid share manifest: %v", err)
 	}
 	// A shared URL only renders the public application shell. It never creates a job.
 	response := request(server, "GET", "/?text=Read+https%3A%2F%2Fexample.com%2Farticle", "", "")
@@ -94,7 +86,7 @@ func TestFrontendDeepLinksAndAssetMisses(t *testing.T) {
 			t.Fatalf("shell must revalidate: %s", path)
 		}
 	}
-	for _, path := range []string{"/assets/missing.js", "/items/a/captures/b"} {
+	for _, path := range []string{"/assets/missing.js", "/items/a/captures/b", "/app.js", "/article-reader.js", "/share.js", "/pdfjs/pdf.mjs", "/offline.html"} {
 		if r := request(server, "GET", path, "", ""); r.Code != 404 {
 			t.Fatalf("asset miss returned shell: %s = %d", path, r.Code)
 		}

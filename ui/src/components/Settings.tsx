@@ -10,7 +10,6 @@ import {
   Smartphone,
   Download,
   Send,
-  ExternalLink,
 } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Badge, Brand, Button, SectionLabel, input } from "./primitives";

@@ -68,17 +68,6 @@ func NewWorker(archive *Archive, options WorkerOptions) (*Worker, error) {
 
 var _ Runner = (*Worker)(nil)
 
-// SetProcessor exists for deterministic harnesses that construct the worker
-// before deciding which fake pipeline to run. Production callers should inject
-// the processor through WorkerOptions or ArchiveOptions before starting Run.
-func (w *Worker) SetProcessor(processor Processor) {
-	if processor == nil {
-		w.processor = unavailableProcessor{}
-		return
-	}
-	w.processor = processor
-}
-
 // RunOnce is useful for a deterministic harness and remains outside the
 // JobArchive interface.  It returns whether a job was claimed.
 func (w *Worker) RunOnce(ctx context.Context) (bool, error) {

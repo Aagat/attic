@@ -10,7 +10,6 @@ import {
   Archive,
   X,
   Circle,
-  Plus,
 } from "lucide-react";
 import { Badge, Button, input } from "./primitives";
 import { FilterAutocomplete } from "./FilterAutocomplete";

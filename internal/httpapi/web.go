@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 	"time"
 
@@ -25,28 +24,8 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 	if s.serveExtension(w, r) {
 		return true
 	}
-	requestPath := r.URL.Path
-	if strings.HasPrefix(requestPath, "/pdfjs/") && path.Clean(requestPath) == requestPath && !strings.HasSuffix(requestPath, "/") {
-		if _, err := webAssets.ReadFile("web" + requestPath); err == nil {
-			if r.Method != "GET" && r.Method != "HEAD" {
-				methodNotAllowed(w, "GET, HEAD", "")
-				return true
-			}
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			if strings.HasSuffix(requestPath, ".mjs") {
-				w.Header().Set("Content-Type", "text/javascript")
-			}
-			if strings.HasSuffix(requestPath, ".wasm") {
-				w.Header().Set("Content-Type", "application/wasm")
-			}
-			files, _ := fs.Sub(webAssets, "web")
-			http.FileServer(http.FS(files)).ServeHTTP(w, r)
-			return true
-		}
-	}
-	path := requestPath
-	switch path {
-	case "/", "/article-reader.js", "/share.js", "/app.js", "/app.css", "/connect.html", "/connect.js", "/manifest.webmanifest", "/sw.js", "/offline.html", "/icon-192.png", "/icon-512.png":
+	switch r.URL.Path {
+	case "/app.css", "/connect.html", "/connect.js":
 	default:
 		return false
 	}
@@ -58,9 +37,6 @@ func (s *Server) serveWeb(w http.ResponseWriter, r *http.Request) bool {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
-	if path == "/manifest.webmanifest" {
-		w.Header().Set("Content-Type", "application/manifest+json")
-	}
 	files, _ := fs.Sub(webAssets, "web")
 	http.FileServer(http.FS(files)).ServeHTTP(w, r)
 	return true

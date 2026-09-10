@@ -1,4 +1,7 @@
 /.env
+.env.*
+!.env.example
+/attic
 /data/
 *.test
 /coverage.out

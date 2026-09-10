@@ -45,7 +45,6 @@ type Fetcher struct {
 	maxBytes int64
 }
 
-func NewFetcher() *Fetcher                          { return newFetcher(FetchConfig{}, nil) }
 func NewFetcherWithConfig(cfg FetchConfig) *Fetcher { return newFetcher(cfg, nil) }
 
 // dialOverride is an in-package deterministic test seam. Public constructors
