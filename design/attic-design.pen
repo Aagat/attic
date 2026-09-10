@@ -4059,7 +4059,7 @@
               "name": "Connect Status Bar",
               "width": "fill_container",
               "height": 54,
-              "fill": "#171512",
+              "fill": "$accent-soft",
               "padding": [
                 18,
                 20,
@@ -4073,7 +4073,7 @@
                   "type": "text",
                   "id": "p0g8H1",
                   "name": "Connect Time",
-                  "fill": "#FFFFFF",
+                  "fill": "$ink",
                   "content": "9:41",
                   "fontFamily": "Inter",
                   "fontSize": 13,
@@ -4093,7 +4093,7 @@
                       "height": 16,
                       "icon": "signal",
                       "library": "lucide",
-                      "fill": "#FFFFFF"
+                      "fill": "$ink"
                     },
                     {
                       "type": "icon",
@@ -4103,7 +4103,7 @@
                       "height": 16,
                       "icon": "wifi",
                       "library": "lucide",
-                      "fill": "#FFFFFF"
+                      "fill": "$ink"
                     },
                     {
                       "type": "icon",
@@ -4113,7 +4113,7 @@
                       "height": 16,
                       "icon": "battery-full",
                       "library": "lucide",
-                      "fill": "#FFFFFF"
+                      "fill": "$ink"
                     }
                   ]
                 }
@@ -4125,7 +4125,7 @@
               "name": "Mobile Connect Introduction",
               "width": "fill_container",
               "height": 260,
-              "fill": "#171512",
+              "fill": "$accent-soft",
               "layout": "vertical",
               "gap": 18,
               "padding": [
@@ -4157,7 +4157,7 @@
                       "type": "text",
                       "id": "ntf7O",
                       "name": "Mobile Connect Brand Name",
-                      "fill": "#FFFFFF",
+                      "fill": "$ink",
                       "content": "attic",
                       "fontFamily": "Newsreader",
                       "fontSize": 27,
@@ -4177,7 +4177,7 @@
                       "type": "text",
                       "id": "WCghk",
                       "name": "Mobile Connect Headline",
-                      "fill": "#FFFFFF",
+                      "fill": "$ink",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "Save links and PDFs",
@@ -4190,7 +4190,7 @@
                       "type": "text",
                       "id": "pDTpQ",
                       "name": "Mobile Connect Description",
-                      "fill": "#C9C4BC",
+                      "fill": "$muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "Keep searchable copies and send an item to Kindle when you want to read it there.",
@@ -4998,7 +4998,7 @@
           "name": "Welcome Panel",
           "width": 520,
           "height": "fill_container",
-          "fill": "$ink",
+          "fill": "$accent-soft",
           "layout": "vertical",
           "gap": 214,
           "padding": [
@@ -5027,7 +5027,7 @@
                   "type": "text",
                   "id": "I8rqDm",
                   "name": "Brand Name",
-                  "fill": "$paper",
+                  "fill": "$ink",
                   "content": "attic",
                   "fontFamily": "$font-display",
                   "fontSize": 28,
@@ -5047,19 +5047,20 @@
                   "type": "text",
                   "id": "eC5AJ",
                   "name": "Welcome Headline",
-                  "fill": "$paper",
+                  "fill": "$ink",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
                   "content": "Save links and PDFs",
                   "lineHeight": 0.98,
                   "fontFamily": "$font-display",
-                  "fontSize": 52
+                  "fontSize": 52,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
                   "id": "ILOEZ",
                   "name": "Welcome Description",
-                  "fill": "#C9C4BC",
+                  "fill": "$muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
                   "content": "Attic saves searchable copies of links and PDFs. Send an item to Kindle when you want to read it there.",
@@ -5102,7 +5103,8 @@
                   "fill": "$ink",
                   "content": "Connect to Attic",
                   "fontFamily": "$font-display",
-                  "fontSize": 38
+                  "fontSize": 38,
+                  "fontWeight": "normal"
                 },
                 {
                   "type": "text",
@@ -5542,7 +5544,8 @@
                           "fill": "$ink",
                           "content": "Library",
                           "fontFamily": "$font-display",
-                          "fontSize": 34
+                          "fontSize": 34,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -5686,7 +5689,8 @@
                           "fill": "$ink",
                           "content": "Source",
                           "fontFamily": "$font-body",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "icon",
@@ -5723,7 +5727,8 @@
                           "fill": "$ink",
                           "content": "Tags",
                           "fontFamily": "$font-body",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "icon",
@@ -5760,7 +5765,8 @@
                           "fill": "$ink",
                           "content": "Saved date",
                           "fontFamily": "$font-body",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "icon",
@@ -5797,7 +5803,8 @@
                           "fill": "$ink",
                           "content": "Capture status",
                           "fontFamily": "$font-body",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "icon",
@@ -11268,6 +11275,2503 @@
           "icon": "archive",
           "library": "lucide",
           "fill": "$accent"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "xCllj",
+      "x": 0,
+      "y": 4004,
+      "name": "Attic Marketing Website",
+      "clip": true,
+      "width": 1440,
+      "height": 4300,
+      "fill": "$surface",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "Y2f24",
+          "name": "Marketing Navigation",
+          "width": "fill_container",
+          "height": 76,
+          "fill": "$paper",
+          "stroke": "$line",
+          "strokeWidth": {
+            "bottom": 1
+          },
+          "padding": [
+            0,
+            56
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "BBq8A",
+              "name": "Attic Wordmark",
+              "gap": 10,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "kUH64",
+                  "name": "Archive Mark",
+                  "width": 22,
+                  "height": 22,
+                  "icon": "archive",
+                  "library": "lucide",
+                  "fill": "$accent"
+                },
+                {
+                  "type": "text",
+                  "id": "E2UPxZ",
+                  "name": "Attic",
+                  "fill": "$ink",
+                  "content": "attic",
+                  "fontFamily": "$font-display",
+                  "fontSize": 28,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wHWNM",
+              "name": "Navigation Links",
+              "gap": 30,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "t23mJ",
+                  "name": "How it works",
+                  "fill": "$muted",
+                  "content": "How it works",
+                  "fontFamily": "$font-body",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "x1Z3l",
+                  "name": "Features",
+                  "fill": "$muted",
+                  "content": "Features",
+                  "fontFamily": "$font-body",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "EbMhy",
+                  "name": "Self-hosting",
+                  "fill": "$muted",
+                  "content": "Self-hosting",
+                  "fontFamily": "$font-body",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "LmlQQ",
+                  "name": "Get Attic Button",
+                  "height": 40,
+                  "fill": "$ink",
+                  "cornerRadius": 3,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "b5bmLz",
+                      "name": "Get Attic Label",
+                      "fill": "$paper",
+                      "content": "Get Attic",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "e31AUv",
+                      "name": "Arrow Up Right",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "arrow-up-right",
+                      "library": "lucide",
+                      "fill": "$paper"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "d2IclF",
+          "name": "Hero",
+          "width": "fill_container",
+          "height": 770,
+          "children": [
+            {
+              "type": "frame",
+              "id": "bbfua",
+              "name": "Hero Copy",
+              "width": 610,
+              "height": "fill_container",
+              "fill": "$accent-soft",
+              "layout": "vertical",
+              "padding": [
+                72,
+                64
+              ],
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QgtSo",
+                  "name": "Hero Message",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 28,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "KTh7X",
+                      "name": "Private Archive Eyebrow",
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "o6wOYL",
+                          "name": "Status Dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "s5JcA",
+                          "name": "Eyebrow Text",
+                          "fill": "$muted",
+                          "content": "YOUR PRIVATE READING ARCHIVE",
+                          "fontFamily": "$font-body",
+                          "fontSize": 11,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.4
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "lhfq2",
+                      "name": "Hero Headline",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The web changes.\nWhat you save\nshouldn’t.",
+                      "lineHeight": 0.98,
+                      "fontFamily": "$font-display",
+                      "fontSize": 68,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GYBvu",
+                      "name": "Hero Description",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Attic preserves searchable copies of articles and PDFs, so your reading library stays yours—clean, durable, and ready for Kindle.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "$font-body",
+                      "fontSize": 17,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QA9C9",
+                  "name": "Hero Actions",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "X8hCrR",
+                      "name": "Start Your Archive Button",
+                      "width": 230,
+                      "height": 52,
+                      "fill": "$accent",
+                      "cornerRadius": 3,
+                      "gap": 10,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Nj32v",
+                          "name": "Start Your Archive Label",
+                          "fill": "$ink",
+                          "content": "Start your archive",
+                          "fontFamily": "$font-body",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "mwnHw",
+                          "name": "Arrow Right",
+                          "width": 17,
+                          "height": 17,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$ink"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "FpdgG",
+                      "name": "Hero Footnote",
+                      "fill": "$muted",
+                      "content": "Self-hosted • No tracking • Your data",
+                      "fontFamily": "$font-body",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rRJkS",
+              "name": "Hero Product Stage",
+              "clip": true,
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "#F0ECE5",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "V2uXZ",
+                  "x": 470,
+                  "y": 20,
+                  "name": "Orange Halo",
+                  "fill": "#E8751222",
+                  "width": 340,
+                  "height": 340
+                },
+                {
+                  "type": "frame",
+                  "id": "NaQSS",
+                  "x": 66,
+                  "y": 72,
+                  "name": "Search Product Preview",
+                  "width": 700,
+                  "height": 610,
+                  "fill": "$paper",
+                  "cornerRadius": 6,
+                  "stroke": "$line",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#17151218",
+                    "offset": {
+                      "x": 0,
+                      "y": 18
+                    },
+                    "blur": 44
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LPPRD",
+                      "name": "Preview Top Bar",
+                      "width": "fill_container",
+                      "height": 58,
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "padding": [
+                        0,
+                        20
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "H9IeX",
+                          "name": "Preview Brand",
+                          "gap": 7,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "q76PKA",
+                              "name": "Preview Archive",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "archive",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            },
+                            {
+                              "type": "text",
+                              "id": "w4gMv5",
+                              "name": "Preview Attic",
+                              "fill": "$ink",
+                              "content": "attic",
+                              "fontFamily": "$font-display",
+                              "fontSize": 19,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "h21og",
+                          "name": "Preview Save Control",
+                          "width": 32,
+                          "height": 32,
+                          "fill": "$accent-soft",
+                          "cornerRadius": 3,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "JQPZI",
+                              "name": "Preview Plus",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "plus",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mggA5",
+                      "name": "Preview Body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 22,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "kGsh7",
+                          "name": "Preview Library Title",
+                          "fill": "$ink",
+                          "content": "Your library",
+                          "fontFamily": "$font-display",
+                          "fontSize": 34,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MJpVz",
+                          "name": "Preview Search",
+                          "width": "fill_container",
+                          "height": 50,
+                          "fill": "$surface",
+                          "cornerRadius": 3,
+                          "stroke": "$line",
+                          "strokeWidth": 1,
+                          "gap": 10,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "WZwj0",
+                              "name": "Search Icon",
+                              "width": 17,
+                              "height": 17,
+                              "icon": "search",
+                              "library": "lucide",
+                              "fill": "$muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "SGJ9Y",
+                              "name": "Search Query",
+                              "fill": "$ink",
+                              "content": "systems that last",
+                              "fontFamily": "$font-body",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rclwK",
+                          "name": "Preview Saved Items",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "uli6D",
+                              "name": "The unreasonable effectiveness of simple systems",
+                              "width": "fill_container",
+                              "height": 112,
+                              "stroke": "$line",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "padding": [
+                                16,
+                                4
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "d3s0Em",
+                                  "name": "Item Copy",
+                                  "width": 430,
+                                  "layout": "vertical",
+                                  "gap": 7,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "TshH0",
+                                      "name": "Item Source",
+                                      "fill": "$accent",
+                                      "content": "THE MARGINALIAN",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700",
+                                      "letterSpacing": 1.1
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "e3BE2E",
+                                      "name": "Item Title",
+                                      "fill": "$ink",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "The unreasonable effectiveness of simple systems",
+                                      "fontFamily": "$font-display",
+                                      "fontSize": 21,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "H7vGe",
+                                  "name": "Item Meta",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "alignItems": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "xHIpN",
+                                      "name": "Item Type",
+                                      "fill": "$muted",
+                                      "content": "ARTICLE",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "DN2p8",
+                                      "name": "Item Date",
+                                      "fill": "$muted",
+                                      "content": "Today",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "hPcMC",
+                              "name": "The quiet infrastructure behind great products",
+                              "width": "fill_container",
+                              "height": 112,
+                              "stroke": "$line",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "padding": [
+                                16,
+                                4
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "T36lIw",
+                                  "name": "Item Copy",
+                                  "width": 430,
+                                  "layout": "vertical",
+                                  "gap": 7,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "nbBgJ",
+                                      "name": "Item Source",
+                                      "fill": "$accent",
+                                      "content": "STRATECHERY",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700",
+                                      "letterSpacing": 1.1
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Y4MXz5",
+                                      "name": "Item Title",
+                                      "fill": "$ink",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "The quiet infrastructure behind great products",
+                                      "fontFamily": "$font-display",
+                                      "fontSize": 21,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "H3l0eE",
+                                  "name": "Item Meta",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "alignItems": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "B26BS",
+                                      "name": "Item Type",
+                                      "fill": "$muted",
+                                      "content": "ARTICLE",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "M6y7Sv",
+                                      "name": "Item Date",
+                                      "fill": "$muted",
+                                      "content": "Yesterday",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "dtMAP",
+                              "name": "A philosophy of software design",
+                              "width": "fill_container",
+                              "height": 112,
+                              "stroke": "$line",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "padding": [
+                                16,
+                                4
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "S69wV2",
+                                  "name": "Item Copy",
+                                  "width": 430,
+                                  "layout": "vertical",
+                                  "gap": 7,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "pRTuL",
+                                      "name": "Item Source",
+                                      "fill": "$accent",
+                                      "content": "PAPER",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700",
+                                      "letterSpacing": 1.1
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Bo8S5",
+                                      "name": "Item Title",
+                                      "fill": "$ink",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "A philosophy of software design",
+                                      "fontFamily": "$font-display",
+                                      "fontSize": 21,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "QMKYB",
+                                  "name": "Item Meta",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "alignItems": "end",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "pwZDQ",
+                                      "name": "Item Type",
+                                      "fill": "$muted",
+                                      "content": "PDF",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 9,
+                                      "fontWeight": "700"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "S2UKAh",
+                                      "name": "Item Date",
+                                      "fill": "$muted",
+                                      "content": "May 18",
+                                      "fontFamily": "$font-body",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "B45xUE",
+          "name": "Product Promise Strip",
+          "width": "fill_container",
+          "height": 230,
+          "fill": "$paper",
+          "stroke": "$line",
+          "strokeWidth": {
+            "bottom": 1
+          },
+          "gap": 56,
+          "padding": [
+            46,
+            64
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "XKMNx",
+              "name": "Promise Copy",
+              "width": 520,
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "B7dfD",
+                  "name": "Promise Eyebrow",
+                  "fill": "$accent",
+                  "content": "BUILT FOR THE LONG READ",
+                  "fontFamily": "$font-body",
+                  "fontSize": 10,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.5
+                },
+                {
+                  "type": "text",
+                  "id": "bltOV",
+                  "name": "Promise Statement",
+                  "fill": "$ink",
+                  "content": "A library, not another feed.",
+                  "fontFamily": "$font-display",
+                  "fontSize": 36,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "FCBhc",
+                  "name": "Promise Body",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Save once. Search the full text later. Keep the original even when the source disappears.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-body",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "K6kwgb",
+              "name": "Promise Principles",
+              "width": "fill_container",
+              "height": "fill_container",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uK3lc",
+                  "name": "Full-text search",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "left": 1
+                  },
+                  "layout": "vertical",
+                  "padding": [
+                    12,
+                    20
+                  ],
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "fiofe",
+                      "name": "Principle Number",
+                      "fill": "$accent",
+                      "content": "01",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c17vMZ",
+                      "name": "Principle Label",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Full-text search",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 23,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vliul",
+                  "name": "Durable copies",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "left": 1
+                  },
+                  "layout": "vertical",
+                  "padding": [
+                    12,
+                    20
+                  ],
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wX5Qq",
+                      "name": "Principle Number",
+                      "fill": "$accent",
+                      "content": "02",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "buVEE",
+                      "name": "Principle Label",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Durable copies",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 23,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "IklaO",
+                  "name": "One-click Kindle",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "left": 1
+                  },
+                  "layout": "vertical",
+                  "padding": [
+                    12,
+                    20
+                  ],
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "RmURG",
+                      "name": "Principle Number",
+                      "fill": "$accent",
+                      "content": "03",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "tE9fr",
+                      "name": "Principle Label",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "One-click Kindle",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 23,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "TH7wl",
+          "name": "Features",
+          "width": "fill_container",
+          "height": 970,
+          "fill": "$surface",
+          "layout": "vertical",
+          "gap": 46,
+          "padding": [
+            84,
+            64
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "T1c6E",
+              "name": "Feature Header",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "end",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "NPGE8",
+                  "name": "Feature Heading Group",
+                  "width": 700,
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "FOwiO",
+                      "name": "Feature Kicker",
+                      "fill": "$accent",
+                      "content": "A QUIET TOOL FOR SERIOUS READING",
+                      "fontFamily": "$font-body",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "sJBG1",
+                      "name": "Features Headline",
+                      "fill": "$ink",
+                      "content": "Everything worth keeping,\nin one dependable place.",
+                      "lineHeight": 1.05,
+                      "fontFamily": "$font-display",
+                      "fontSize": 52,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "g18N7",
+                  "name": "Features Note",
+                  "fill": "$muted",
+                  "content": "Links, PDFs, notes, and captured text—\norganized without the noise.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-body",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lwdNC",
+              "name": "Feature Grid",
+              "width": "fill_container",
+              "height": "fill_container",
+              "gap": 18,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "cz3Ur",
+                  "name": "Search what the page said",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "$paper",
+                  "stroke": "$line",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": 28,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qq3Be",
+                      "name": "Feature Card Top",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 22,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "bcHrd",
+                          "name": "Feature Icon Box",
+                          "width": 46,
+                          "height": 46,
+                          "fill": "$accent-soft",
+                          "cornerRadius": 3,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "nfr30",
+                              "name": "Feature Icon",
+                              "width": 21,
+                              "height": 21,
+                              "icon": "search",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "QisJE",
+                          "name": "Feature Number",
+                          "fill": "$muted",
+                          "content": "01",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.3
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sN9S4",
+                      "name": "Feature Card Copy",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Udt6g",
+                          "name": "Feature Title",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Search what the page said",
+                          "lineHeight": 1.05,
+                          "fontFamily": "$font-display",
+                          "fontSize": 32,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "G69YOi",
+                          "name": "Feature Description",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Attic indexes the complete saved text, not just titles and tags.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-body",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hQjmE",
+                  "name": "Keep a readable copy",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "$accent-soft",
+                  "stroke": "$ink",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": 28,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "CUoYZ",
+                      "name": "Feature Card Top",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 22,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "a6lr1Q",
+                          "name": "Feature Icon Box",
+                          "width": 46,
+                          "height": 46,
+                          "fill": "$paper",
+                          "cornerRadius": 3,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "iQdxH",
+                              "name": "Feature Icon",
+                              "width": 21,
+                              "height": 21,
+                              "icon": "file-text",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "M2HSGd",
+                          "name": "Feature Number",
+                          "fill": "$muted",
+                          "content": "02",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.3
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YhBWE",
+                      "name": "Feature Card Copy",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "P5FwFo",
+                          "name": "Feature Title",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Keep a readable copy",
+                          "lineHeight": 1.05,
+                          "fontFamily": "$font-display",
+                          "fontSize": 32,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "W51UOs",
+                          "name": "Feature Description",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Captured articles stay clean and legible, even when the original changes.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-body",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bwYDu",
+                  "name": "Send it to Kindle",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "$paper",
+                  "stroke": "$line",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": 28,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "c8Elm",
+                      "name": "Feature Card Top",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 22,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "pxxC2",
+                          "name": "Feature Icon Box",
+                          "width": 46,
+                          "height": 46,
+                          "fill": "$accent-soft",
+                          "cornerRadius": 3,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "ippsB",
+                              "name": "Feature Icon",
+                              "width": 21,
+                              "height": 21,
+                              "icon": "send",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "qf1vk",
+                          "name": "Feature Number",
+                          "fill": "$muted",
+                          "content": "03",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.3
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zUhAg",
+                      "name": "Feature Card Copy",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "y0SXq",
+                          "name": "Feature Title",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Send it to Kindle",
+                          "lineHeight": 1.05,
+                          "fontFamily": "$font-display",
+                          "fontSize": 32,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "CtrDM",
+                          "name": "Feature Description",
+                          "fill": "$muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Move long reads to your Kindle when a browser is the wrong place to focus.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-body",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "DyUfR",
+          "name": "How It Works",
+          "width": "fill_container",
+          "height": 760,
+          "fill": "$accent-soft",
+          "gap": 64,
+          "padding": [
+            78,
+            64
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "T4k0wV",
+              "name": "Workflow Copy",
+              "width": 500,
+              "height": "fill_container",
+              "layout": "vertical",
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QgGqS",
+                  "name": "Workflow Header",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "VsKEx",
+                      "name": "Workflow Kicker",
+                      "fill": "$accent",
+                      "content": "FROM OPEN TAB TO LASTING REFERENCE",
+                      "fontFamily": "$font-body",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "tFfRW",
+                      "name": "Workflow Headline",
+                      "fill": "$ink",
+                      "content": "Save now.\nFind it years later.",
+                      "lineHeight": 1.02,
+                      "fontFamily": "$font-display",
+                      "fontSize": 54,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ulMoe",
+                      "name": "Workflow Description",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Attic turns fleeting pages into a private collection you can actually use.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "$font-body",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uF2X8",
+                  "name": "Workflow Steps",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YfdmV",
+                      "name": "Capture",
+                      "width": "fill_container",
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "gap": 18,
+                      "padding": [
+                        20,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "AIVjk",
+                          "name": "Step Number",
+                          "fill": "$accent",
+                          "content": "01",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "R0zs3j",
+                          "name": "Step Copy",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "g0wCS",
+                              "name": "Step Title",
+                              "fill": "$ink",
+                              "content": "Capture",
+                              "fontFamily": "$font-display",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "kTNgn",
+                              "name": "Step Description",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Save from the browser extension or mobile share sheet.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-body",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rJYKg",
+                      "name": "Preserve",
+                      "width": "fill_container",
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "gap": 18,
+                      "padding": [
+                        20,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XI8FC",
+                          "name": "Step Number",
+                          "fill": "$accent",
+                          "content": "02",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RanJ7",
+                          "name": "Step Copy",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "rhaBo",
+                              "name": "Step Title",
+                              "fill": "$ink",
+                              "content": "Preserve",
+                              "fontFamily": "$font-display",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "jw5mt",
+                              "name": "Step Description",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Attic stores a clean, searchable copy on your server.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-body",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ANGHZ",
+                      "name": "Read",
+                      "width": "fill_container",
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "gap": 18,
+                      "padding": [
+                        20,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H0nriZ",
+                          "name": "Step Number",
+                          "fill": "$accent",
+                          "content": "03",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "cGFEC",
+                          "name": "Step Copy",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "A8imIs",
+                              "name": "Step Title",
+                              "fill": "$ink",
+                              "content": "Read",
+                              "fontFamily": "$font-display",
+                              "fontSize": 22,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "v5C1yQ",
+                              "name": "Step Description",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Open the original capture or send it straight to Kindle.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-body",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "H093er",
+              "name": "Capture Demonstration",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$accent-soft",
+              "cornerRadius": 4,
+              "stroke": "$line",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": 38,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "YATKw",
+                  "name": "Browser Bar",
+                  "width": "fill_container",
+                  "height": 46,
+                  "fill": "$paper",
+                  "cornerRadius": [
+                    3,
+                    3,
+                    0,
+                    0
+                  ],
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "top": 1,
+                    "right": 1,
+                    "left": 1
+                  },
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "Tc0Gs",
+                      "name": "Browser Dot",
+                      "fill": "$accent",
+                      "width": 7,
+                      "height": 7
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "qF4pG",
+                      "name": "Browser Dot",
+                      "fill": "#D8D2C9",
+                      "width": 7,
+                      "height": 7
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "wI6Wl",
+                      "name": "Browser Dot",
+                      "fill": "#D8D2C9",
+                      "width": 7,
+                      "height": 7
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w120Fj",
+                      "name": "Address Field",
+                      "width": "fill_container",
+                      "height": 26,
+                      "fill": "$surface",
+                      "cornerRadius": 3,
+                      "stroke": "$line",
+                      "strokeWidth": 1,
+                      "padding": [
+                        0,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L1v1K",
+                          "name": "Address",
+                          "fill": "$muted",
+                          "content": "thebrowser.com/a-philosophy-of-software-design",
+                          "fontFamily": "$font-body",
+                          "fontSize": 9,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "l9Psp",
+                  "name": "Extension Save Card",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "$paper",
+                  "cornerRadius": [
+                    0,
+                    0,
+                    4,
+                    4
+                  ],
+                  "stroke": "$line",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 24,
+                  "padding": 30,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ZNbQn",
+                      "name": "Save Card Header",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Bc9gc",
+                          "name": "Save Card Brand",
+                          "gap": 7,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "XCUQc",
+                              "name": "Save Archive Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "archive",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            },
+                            {
+                              "type": "text",
+                              "id": "kBGLN",
+                              "name": "Save Attic",
+                              "fill": "$ink",
+                              "content": "Save to attic",
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon",
+                          "id": "Nl4aW",
+                          "name": "Close Icon",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "x",
+                          "library": "lucide",
+                          "fill": "$muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YQCDp",
+                      "name": "Page Being Saved",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "N4xIO",
+                          "name": "Saved Site",
+                          "fill": "$accent",
+                          "content": "THE BROWSER",
+                          "fontFamily": "$font-body",
+                          "fontSize": 9,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.2
+                        },
+                        {
+                          "type": "text",
+                          "id": "EZ2Vp",
+                          "name": "Saved Page Title",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "A philosophy of software design",
+                          "lineHeight": 1.05,
+                          "fontFamily": "$font-display",
+                          "fontSize": 32,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SQy3k",
+                          "name": "Saved URL",
+                          "fill": "$muted",
+                          "content": "thebrowser.com/notes/software-design",
+                          "fontFamily": "$font-body",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DXAif",
+                      "name": "Saving Complete",
+                      "width": "fill_container",
+                      "height": 54,
+                      "fill": "$success-soft",
+                      "cornerRadius": 3,
+                      "gap": 10,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "d5dh7",
+                          "name": "Saved Check",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "circle-check",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "oUGpL",
+                          "name": "Saved Label",
+                          "fill": "$success",
+                          "content": "Saved and indexed",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "wdQw7",
+          "name": "Reading Everywhere",
+          "width": "fill_container",
+          "height": 720,
+          "fill": "$paper",
+          "gap": 80,
+          "padding": [
+            70,
+            64
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "C5T8xN",
+              "name": "Reader Product Stage",
+              "clip": true,
+              "width": 700,
+              "height": "fill_container",
+              "fill": "#F0ECE5",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "cP5gW",
+                  "x": 0,
+                  "y": 0,
+                  "name": "Editorial Accent Line",
+                  "fill": "$accent",
+                  "width": 10,
+                  "height": 580
+                },
+                {
+                  "type": "frame",
+                  "id": "v90GNC",
+                  "x": 160,
+                  "y": 42,
+                  "name": "Mobile Reader Preview",
+                  "clip": true,
+                  "width": 380,
+                  "height": 510,
+                  "fill": "$surface",
+                  "cornerRadius": 18,
+                  "stroke": "#D8D2C9",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#17151218",
+                    "offset": {
+                      "x": 0,
+                      "y": 18
+                    },
+                    "blur": 38
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VZ4ST",
+                      "name": "Mobile Reader Top",
+                      "width": "fill_container",
+                      "height": 58,
+                      "padding": [
+                        0,
+                        18
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "LRtSc",
+                          "name": "Reader Back",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "arrow-left",
+                          "library": "lucide",
+                          "fill": "$ink"
+                        },
+                        {
+                          "type": "text",
+                          "id": "D6rUxS",
+                          "name": "Reader Mode",
+                          "fill": "$muted",
+                          "content": "READER",
+                          "fontFamily": "$font-body",
+                          "fontSize": 9,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.4
+                        },
+                        {
+                          "type": "icon",
+                          "id": "jB48n",
+                          "name": "Reader Menu",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "ellipsis",
+                          "library": "lucide",
+                          "fill": "$ink"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x27RmZ",
+                      "name": "Captured Article",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "$paper",
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 17,
+                      "padding": [
+                        28,
+                        26
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p2yiZ",
+                          "name": "Article Section",
+                          "fill": "$accent",
+                          "content": "CRAFT / SYSTEMS",
+                          "fontFamily": "$font-body",
+                          "fontSize": 9,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.2
+                        },
+                        {
+                          "type": "text",
+                          "id": "DWNx2",
+                          "name": "Article Headline",
+                          "fill": "$ink",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The unreasonable effectiveness of simple systems",
+                          "lineHeight": 1.04,
+                          "fontFamily": "$font-display",
+                          "fontSize": 29,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ntH3O",
+                          "name": "Article Byline",
+                          "fill": "$muted",
+                          "content": "Maya Chen  ·  12 min read",
+                          "fontFamily": "$font-body",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "l0mHt",
+                          "name": "Article Divider",
+                          "fill": "$line",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "L6wiag",
+                          "name": "Article Paragraph",
+                          "fill": "#3C3833",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Complexity compounds quietly. The best systems preserve a small number of legible ideas, making them easier to trust and change over time.\n\nA useful principle follows: preserve the source, then make it findable.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-display",
+                          "fontSize": 15,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lg9yJ",
+              "name": "Reading Copy",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 26,
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "H4qgyq",
+                  "name": "Reading Headline Group",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "k295K",
+                      "name": "Reading Kicker",
+                      "fill": "$accent",
+                      "content": "READ WHERE YOU THINK BEST",
+                      "fontFamily": "$font-body",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "VewfL",
+                      "name": "Reading Headline",
+                      "fill": "$ink",
+                      "content": "A calm reading view.\nOr your Kindle.",
+                      "lineHeight": 1.04,
+                      "fontFamily": "$font-display",
+                      "fontSize": 50,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "IWsGl",
+                      "name": "Reading Description",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Attic strips away clutter without losing the source. Read a clean capture in the app, compare it with the original, or send it to Kindle in a click.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$font-body",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WQU44",
+                  "name": "Reading Benefits",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 13,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "MiZOJ",
+                      "name": "Original and captured versions stay linked",
+                      "gap": 11,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "HEwwO",
+                          "name": "Benefit Check",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Lxyjt",
+                          "name": "Benefit Label",
+                          "fill": "$ink",
+                          "content": "Original and captured versions stay linked",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "s16Cm",
+                      "name": "PDFs live beside saved articles",
+                      "gap": 11,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "lTs3c",
+                          "name": "Benefit Check",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pe8kW",
+                          "name": "Benefit Label",
+                          "fill": "$ink",
+                          "content": "PDFs live beside saved articles",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "G3YeN",
+                      "name": "Kindle delivery status is always visible",
+                      "gap": 11,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "BasqJ",
+                          "name": "Benefit Check",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "t9V8S",
+                          "name": "Benefit Label",
+                          "fill": "$ink",
+                          "content": "Kindle delivery status is always visible",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a0PEHu",
+                  "name": "Kindle Action",
+                  "width": 230,
+                  "height": 48,
+                  "cornerRadius": 3,
+                  "stroke": "$ink",
+                  "strokeWidth": 1,
+                  "gap": 9,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "L9UHn",
+                      "name": "Send Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "send",
+                      "library": "lucide",
+                      "fill": "$ink"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dDPj0",
+                      "name": "Kindle Action Label",
+                      "fill": "$ink",
+                      "content": "Send to Kindle",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "V0ZWM8",
+          "name": "Self Hosting and Final CTA",
+          "width": "fill_container",
+          "height": 610,
+          "children": [
+            {
+              "type": "frame",
+              "id": "tfUT1",
+              "name": "Self Hosted Promise",
+              "width": 650,
+              "height": "fill_container",
+              "fill": "$accent-soft",
+              "layout": "vertical",
+              "padding": [
+                62,
+                64
+              ],
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "icCMb",
+                  "name": "Self Hosted Copy",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 18,
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "N1wtgH",
+                      "name": "Server Icon",
+                      "width": 28,
+                      "height": 28,
+                      "icon": "server",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NvTuT",
+                      "name": "Self Hosted Kicker",
+                      "fill": "$muted",
+                      "content": "SELF-HOSTED BY DESIGN",
+                      "fontFamily": "$font-body",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "mH6ko",
+                      "name": "Self Hosted Headline",
+                      "fill": "$ink",
+                      "content": "Your reading history\nisn’t a business model.",
+                      "lineHeight": 1.05,
+                      "fontFamily": "$font-display",
+                      "fontSize": 43,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "W9eQ5r",
+                      "name": "Self Hosted Body",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Run Attic on infrastructure you control. No ads, no recommendation engine, and no one watching what you save.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$font-body",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "s52gfp",
+                  "name": "Installation Command",
+                  "width": "fill_container",
+                  "height": 62,
+                  "fill": "#24211D",
+                  "cornerRadius": 3,
+                  "gap": 12,
+                  "padding": [
+                    0,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "OiGDz",
+                      "name": "Terminal Prompt",
+                      "fill": "$accent",
+                      "content": "$",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wNk0d",
+                      "name": "Install Command Text",
+                      "fill": "#D8D2C9",
+                      "content": "docker compose up -d",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "AjHvr",
+                      "name": "Copy Command",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "copy",
+                      "library": "lucide",
+                      "fill": "#8F8A82"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OIuDi",
+              "name": "Final Call to Action",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$accent",
+              "layout": "vertical",
+              "padding": [
+                62,
+                64
+              ],
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Oio7B",
+                  "name": "Final CTA Copy",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 18,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "kdo5Y",
+                      "name": "Final CTA Kicker",
+                      "fill": "#FFF0E2",
+                      "content": "MAKE A HOME FOR WHAT YOU READ",
+                      "fontFamily": "$font-body",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 1.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "OpjOn",
+                      "name": "Final CTA Headline",
+                      "fill": "$paper",
+                      "content": "Stop losing the things\nworth remembering.",
+                      "lineHeight": 1.02,
+                      "fontFamily": "$font-display",
+                      "fontSize": 50,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "p6o02k",
+                      "name": "Final CTA Description",
+                      "fill": "#FFF0E2",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Build a private, searchable archive of the web you care about.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "$font-body",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "R0LIaX",
+                  "name": "Get Started Button",
+                  "width": 220,
+                  "height": 54,
+                  "fill": "$paper",
+                  "cornerRadius": 3,
+                  "gap": 10,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Q1crvp",
+                      "name": "Get Started Label",
+                      "fill": "$ink",
+                      "content": "Get started",
+                      "fontFamily": "$font-body",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "E6OqN",
+                      "name": "Get Started Arrow",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "arrow-right",
+                      "library": "lucide",
+                      "fill": "$ink"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "IzotO",
+          "name": "Marketing Footer",
+          "width": "fill_container",
+          "height": 164,
+          "fill": "$paper",
+          "stroke": "$line",
+          "strokeWidth": {
+            "top": 1
+          },
+          "padding": [
+            0,
+            64
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "kMvsK",
+              "name": "Footer Brand",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "viuOO",
+                  "name": "Footer Wordmark",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "GPeks",
+                      "name": "Footer Archive",
+                      "width": 18,
+                      "height": 18,
+                      "icon": "archive",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "e6sxcD",
+                      "name": "Footer Attic",
+                      "fill": "$ink",
+                      "content": "attic",
+                      "fontFamily": "$font-display",
+                      "fontSize": 24,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "ZmHb7",
+                  "name": "Footer Tagline",
+                  "fill": "$muted",
+                  "content": "A private archive for the web worth keeping.",
+                  "fontFamily": "$font-body",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "b2H85Q",
+              "name": "Footer Links",
+              "gap": 26,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "h2ZgV",
+                  "name": "Footer Documentation",
+                  "fill": "$muted",
+                  "content": "Documentation",
+                  "fontFamily": "$font-body",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "cynCC",
+                  "name": "Footer GitHub",
+                  "fill": "$muted",
+                  "content": "GitHub",
+                  "fontFamily": "$font-body",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "avvMm",
+                  "name": "Footer Privacy",
+                  "fill": "$muted",
+                  "content": "Privacy",
+                  "fontFamily": "$font-body",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "I99THz",
+              "name": "Copyright",
+              "fill": "$muted",
+              "content": "© 2025 Attic",
+              "fontFamily": "$font-body",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            }
+          ]
         }
       ]
     }
