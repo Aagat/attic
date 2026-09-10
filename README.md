@@ -1,3 +1,5 @@
+[![Attic — A home for what you read](docs/assets/attic-banner.png)](https://aagat.github.io/attic/)
+
 # Attic
 
 Attic is where I store things that I might need later. Save web bookmarks and PDFs,

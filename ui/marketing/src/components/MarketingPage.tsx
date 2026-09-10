@@ -27,7 +27,7 @@ const steps = [
 ];
 
 export function MarketingPage() {
-  return <div id="top" className="mx-auto max-w-[1600px]">
+  return <div id="top" className="w-full">
     <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:bg-[var(--paper)] focus:p-4">Skip to content</a>
     <header className="flex min-h-[76px] flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] bg-[var(--paper)] px-6 py-4 md:px-14">
       <Brand />
