@@ -8,7 +8,10 @@
     "preview": "pnpm --filter @attic/ui preview",
     "test:ui": "pnpm --filter @attic/ui test",
     "build:preview": "VITE_UI_PREVIEW=true pnpm build",
-    "build:embed": "pnpm build && node ui/embed.mjs"
+    "build:embed": "pnpm build && node ui/embed.mjs",
+    "dev:marketing": "pnpm --filter @attic/ui exec vite --config vite.marketing.config.ts",
+    "build:marketing": "pnpm --filter @attic/ui exec tsc -p marketing/tsconfig.json && pnpm --filter @attic/ui exec vite build --config vite.marketing.config.ts",
+    "preview:marketing": "pnpm --filter @attic/ui exec vite preview --config vite.marketing.config.ts"
   },
   "devDependencies": {
     "prettier": "^3.9.6"

@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #FCFAF7;
+  --paper: #FFFFFF;
+  --ink: #171512;
+  --muted: #6B665F;
+  --line: #E5E0D8;
+  --accent: #E87512;
+  --accent-soft: #FFF0E2;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { font-family: "Inter", sans-serif; color: var(--ink); background: var(--surface); }
+  .font-display { font-family: "Newsreader", Georgia, serif; }
+  a:focus-visible { outline: 2px solid var(--ink); outline-offset: 5px; }
+  section[id] { scroll-margin-top: 24px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+}
