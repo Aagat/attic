@@ -1,89 +1,100 @@
-# Attic V1 migrations
+# PostgreSQL migrations
 
-This directory contains the PostgreSQL 14+ schema for the Attic
-implementation. It is intentionally extension-free and contains no search
-engine tables, indexes, or outbox. `content_documents.plain_text` and the
-normalized metadata are sufficient for a later full rebuild of a search index.
+PostgreSQL 14+ stores Attic's canonical saved items, document jobs, capture
+metadata and durable work queues. The schema needs no PostgreSQL extensions.
+Capture and PDF bytes live in the artifact volume; Meilisearch holds a rebuildable
+search projection. `saved_items.version`, `indexed_version` and `search_deletions`
+track pending index work in PostgreSQL.
 
 ## Version and runner contract
 
 - Files use a zero-padded numeric prefix: `NNNN_name.up.sql` and
   `NNNN_name.down.sql`.
-- The migration runner sorts by the numeric prefix and records applied version
-  numbers in its own `schema_migrations` table. That bookkeeping table is not
-  part of this domain migration.
-- The runner must execute each file as one transaction and must stop startup on
-  any error. It must not mark a version applied until the transaction commits.
-- Before running an up or down migration, the runner takes the fixed PostgreSQL
-  transaction advisory lock `pg_advisory_xact_lock(874611204)`. This uses a
-  built-in PostgreSQL primitive and requires no extension. A process crash
-  releases the lock automatically.
-- Concurrent startup is therefore serialized. The runner must run the lock and
-  migration bookkeeping on the same database connection and transaction.
-- `SET LOCAL TIME ZONE 'UTC'` is used by the migrations. All temporal columns
-  are `timestamptz`; PostgreSQL stores those instants in UTC and the application
-  must read/write UTC instants.
+- `internal/postgres/migrations.go` discovers and applies only **up** migrations,
+  in numeric order, recording version and name in `schema_migrations`.
+- Each migration runs in its own transaction. A version is recorded in that
+  transaction, so a failure cannot mark a partially applied file as complete.
+- Each transaction, including creation of the bookkeeping table, takes
+  `pg_advisory_xact_lock(874611204)` on the same database connection. Concurrent
+  startup is serialized; PostgreSQL releases the lock if the process exits.
+- Startup rejects unknown applied versions, mismatched names and gaps in the
+  applied history. An older binary cannot start against newer migrations it
+  does not contain, even if the SQL changes appear backward-compatible.
+- Temporal columns use `timestamptz`; application timestamps use UTC.
 
-## Schema choices
+Down files are supplied for reviewed, manual rollback; there is no automatic
+down-migration command. A manual rollback must coordinate application shutdown,
+SQL changes, migration bookkeeping and artifact storage. Prefer restoring a
+matching database and volume backup when reverting an incompatible release.
 
-Migration `0002` expands the AI-attempt error-category check without rewriting
-or dropping attempt rows. Its down migration preserves rows and maps only the
-new categories to the conservative V1 `ai_invalid_response` category.
+## Migration history
 
-`jobs` is the durable state machine. `status` and `stage` use text checks rather
-than PostgreSQL enums so future input/output adapters can add values through a
-normal migration without changing an enum type. The constraints enforce that
-only `processing` has a stage and that active processing/delivery has a lease.
+| Version | Change |
+| --- | --- |
+| 0001 | Document jobs, immutable approved content, artifact metadata, idempotency, AI/delivery attempts and deletion tasks. |
+| 0002 | Additional safe AI-attempt error categories. |
+| 0003 | The `pdf_quality_failed` job failure category. |
+| 0004 | Durable email destination, pending/retry state and reusable Message-ID lookup. |
+| 0005 | Saved items, capture history, browser bookmark sources, deletion tombstones and search synchronization; adopts existing URL jobs. |
+| 0006 | Prefer an available existing document over a failed newer attempt during adoption. |
+| 0007 | Distinguish server and browser capture sources. |
+| 0008 | Reading editions associate jobs with saved items and target languages. |
+| 0009 | Merge existing suggested tags into editable tags, preserving chosen tags and their order. |
+| 0010 | Store owner-reviewed reading drafts for new document jobs. |
 
-IDs are opaque `text` values with bounded lengths. UUID strings are valid, but
-the schema does not require an extension or a UUID generation strategy. The
-application owns ID generation and correlation IDs.
+## Saved items and reading documents
 
-The source and output records have a stable `*_kind` plus JSON source payload or
-profile. V1 accepts URL/PDF, while future file, EPUB, HTML, or other adapters
-can be added without making the job table URL-only. `submitted_url` remains a
-required projection for URL jobs.
+A saved item survives capture, PDF or delivery failure. Captures are append-only
+versions; reading editions link separate document jobs to the same item. The
+selected job is referenced by `saved_items.job_id`. Changing the selected edition
+or saving a reading edit does not overwrite earlier captures or PDFs.
 
-`content_documents` has one immutable document per job. A database trigger
-rejects updates; job deletion still removes the document through its foreign
-key. `artifacts` uses a generic output kind/profile and stores only a
-storage-relative path, safe filename, media type, byte size, checksum, and
-availability state. Absolute host paths and secrets are not represented.
+The diagram shows the main foreign-key relationships; queue, attempt and browser
+synchronization tables are omitted for clarity.
 
-`ai_attempts` and `delivery_attempts` contain operational metadata only. AI
-attempts use the provider-safe result statuses `succeeded`,
-`malformed_response`, `rejected`, and `failed`. Their error check permits the
-AI timeout/cancellation, availability, authentication, model, rate-limit,
-provider-rejection, response-size, and invalid-response codes, plus the safe
-page-decision categories recorded for rejected pages. A successful AI attempt
-must have no error code; every other result must have one. These rows never
-store prompts, article content, screenshots, raw model responses, SMTP
-payloads, or credentials. `deletion_tasks` retains the relative artifact path
-so a failed filesystem deletion can be retried even after the job and artifact
-rows have been removed.
+```mermaid
+erDiagram
+    saved_items ||--o{ saved_captures : preserves
+    saved_items ||--o{ reading_editions : groups
+    jobs |o--o{ saved_items : "selected by job_id"
+    jobs ||--o| reading_editions : "belongs to an edition"
+    jobs ||--o| reading_edits : "has reviewed input"
+    jobs ||--o| content_documents : "has approved output"
+    jobs ||--o{ artifacts : produces
+```
 
-## Deletion and down-migration semantics
+`reading_editions.language` is empty for the original edition or contains a
+supported translation language. `reading_edits.draft` stores the sanitized,
+owner-reviewed article used to generate that job's PDF without AI rewriting.
 
-The application should insert a deletion task before deleting job-owned rows.
-The `job_id` and `artifact_id` foreign keys use `ON DELETE SET NULL`, preserving
-the task and its path. Job-owned idempotency, content, artifact, AI, and
-delivery rows use `ON DELETE CASCADE` as required by V1 deletion semantics.
+`content_documents` has at most one immutable document per job. A trigger rejects
+updates; deletion still follows the job's foreign key. `artifacts` stores a
+relative path, safe filename, media type, size, checksum and availability state,
+with a unique output kind/profile per job. Capture artifact metadata is stored
+in `saved_captures.artifact`; its bytes also live in the artifact volume.
 
-The down migration is intentionally destructive and should be restricted to a
-planned rollback or data reset. It drops database records only; the operator
-must handle the persistent artifact volume separately and explicitly.
+IDs are opaque bounded `text` values generated by the application. Job stages,
+statuses and failure categories use text checks rather than PostgreSQL enums.
+Active processing and delivery require leases. Explicit email requests save the
+destination at enqueue time; bookmarking does not enqueue email. Safe SMTP
+retries reuse the attempt's stable Message-ID.
 
-## Indexes
+`ai_attempts` and `delivery_attempts` record safe operational outcomes, not prompts,
+article bodies, screenshots, model responses, SMTP payloads or credentials.
 
-- `jobs_created_keyset_idx` supports reverse-creation list pagination with an
-  opaque `(created_at, id)` cursor.
-- `jobs_claim_idx` and `jobs_lease_expiry_idx` support queued work, abandoned
-  lease reclamation, and bounded worker claims.
-- `content_documents_created_keyset_idx` supports a later full catalog/index
-  rebuild without adding a search-specific schema now.
-- Attempt and deletion indexes support job inspection and retry workers.
+## Deletion and indexes
 
-Migration 0004 adds a durable email queue on completed jobs. Only PDF completions
-with email enabled enter it. The recipient is saved at enqueue time. Attempts use
-a shared Message-ID across safe retries; the former global uniqueness index is
-replaced with a lookup index. Rollback refuses to discard duplicate retry history.
+Explicit item removal handles captures and associated document jobs, records a
+URL tombstone to prevent routine browser reimport, and queues search deletion.
+`deletion_tasks` retains relative file paths after job/artifact rows disappear:
+its foreign keys use `ON DELETE SET NULL`. Job-owned content and attempt rows use
+`ON DELETE CASCADE`. Filesystem cleanup can therefore retry independently.
+
+Down migrations can discard data or refuse lossy rollback; review each file.
+For example, 0002 maps newer error categories to an older safe category, while
+0004 refuses to discard duplicate retry history. SQL rollback does not remove
+files from the artifact volume.
+
+Indexes support job pagination and lease claims, capture queues and history,
+reading-edition lookup, and attempt/cleanup workers. The external search index is
+rebuilt from saved-item metadata and text; see [search setup](../docs/search.md).

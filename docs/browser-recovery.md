@@ -30,7 +30,7 @@ The owner can take control, tap the page, scroll and type into its focused field
 Takeover cancels AI work; subsequent human input is not sent to the model.
 A readable, stable page at the original address is saved automatically. After a
 navigation to another address, the owner checks the visible URL and explicitly
-chooses **Save page**. Challenges and error pages cannot be saved as successful
+chooses **Save this page**. Challenges and error pages cannot be saved as successful
 captures. Closing the dialog closes the browser, preserving its private profile.
 
 One browser can be active at a time, for at most 15 minutes. This bounds memory

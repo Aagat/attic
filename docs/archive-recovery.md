@@ -1,6 +1,8 @@
 # Archive recovery
 
-Attic first tries the submitted page. When recovery is needed, it now prefers a
+For ordinary web URLs, capture first tries the submitted page; PDF preparation
+can reuse a preserved copy before fetching it. X/Twitter has a separate
+[mirror and embed path](browser-recovery.md). Archive recovery prefers a
 matching snapshot discovered through the Wayback APIs before trying archive.today
 HTML lookup pages:
 

@@ -7,9 +7,10 @@ saves the item and requests delivery.
 
 ## Run the personal archive
 
-Configure `.env` using `.env.example`, including the database, owner access key,
-AI provider and a random `MEILI_MASTER_KEY`. For the development database and private
-search index, run:
+Copy `.env.example` to `.env` and follow the [development configuration](#development-deployment)
+below, including `VALIDATION_DB_PASSWORD` and the matching `DATABASE_URL`. Set
+the owner access key, AI provider and a random `MEILI_MASTER_KEY`. To start the
+development database, application and private search index, run:
 
 ```sh
 docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml -f compose.search.yaml up -d --build
@@ -27,9 +28,10 @@ prevents routine browser reconciliation from reimporting it. HTML import is avai
 for bookmark exports from other browsers. PDF uploads preserve their original bytes;
 image-only PDFs remain searchable by filename and annotations, without OCR.
 
-The item details expose captures and missing resources, annotations, suggested tags,
-and separate capture/index/PDF/delivery status. A failed optional classification can
-be retried. A successful capture remains available if a later capture fails.
+The reader exposes capture versions, annotations, tags, and processing status.
+AI-suggested tags are added to the editable tags; the API also retains the original
+suggestions and missing-resource details. Failed classification can be retried
+through the item enrichment API. A successful capture remains available if a later capture fails.
 
 Use the pencil beside the reader title to rename a saved item; browser bookmark
 sync preserves that edit. In the reader sidebar, choose a language and **Translate**
@@ -40,6 +42,11 @@ preserved capture. Translation uses the configured AI provider, passes normal
 article approval and PDF checks, and does not request email. **Send to Kindle**
 uses the selected edition. Uploaded PDFs retain their original bytes and cannot
 be translated through this article workflow.
+
+Choose **Edit reading version** in the reader sidebar to change the cleaned
+article, then **Save and generate PDF**. Attic sanitizes the edited HTML and
+queues a new PDF without AI rewriting. Earlier captures and PDFs remain stored;
+concurrent edits are rejected if the reading revision has changed.
 
 **Export archive** downloads a portable ZIP of saved records, capture versions, PDFs,
 approved reading content and browser deletion records. **Restore archive** merges it
@@ -62,6 +69,38 @@ with a persistence check covering both adapters.
 preview adapter. `internal/httpapi/frontend.go` serves the built application;
 `internal/httpapi/web` contains the browser connection guide.
 
+`cmd/attic` wires these modules into one Go process. Workers claim durable work
+from PostgreSQL; there is no separate message broker. Capture, classification,
+indexing, PDF preparation and email delivery have independent outcomes.
+
+```mermaid
+flowchart LR
+    Clients["React app / PWA, extension, API clients"] --> API["HTTP API"]
+    subgraph Attic["Attic Go process"]
+        API --> Library["Saved-item library"]
+        API --> Archive["Document archive"]
+        Workers["Capture, enrichment, index, PDF and email workers"]
+    end
+    Library <--> DB[(PostgreSQL)]
+    Archive <--> DB
+    Workers <--> DB
+    Library <--> Files["Artifact volume: captures and PDFs"]
+    Archive <--> Files
+    Workers <--> Files
+    Workers --> Sources["Chromium and public source recovery"]
+    Workers --> AI["Configured AI provider"]
+    Workers --> PDF["Pandoc, XeLaTeX and Poppler"]
+    Workers --> Search[(Meilisearch)]
+    API --> Search
+    Workers --> SMTP["SMTP relay"]
+```
+
+PostgreSQL and the artifact volume are canonical; Meilisearch is rebuildable.
+Bookmarking queues preservation without email. PDF preparation first uses saved
+content when available; sending requests delivery of the selected reading edition.
+See the [schema relationships](migrations/README.md#saved-items-and-reading-documents)
+and [browser recovery](docs/browser-recovery.md) for those boundaries in more detail.
+
 ## Email delivery
 
 Enable `SMTP_ENABLED=true` to deliver explicit **Send to Kindle** requests to
@@ -74,10 +113,10 @@ add the sender to your Amazon approved personal document email list.
 The PDF stays available in the library. Bookmarking and importing do not email anything. Delivery requests save the intended
 recipient and reuse existing PDFs, or queue document preparation when necessary. Temporary
 failures retry up to three times with backoff. Rejections and unconfirmed delivery
-show **Retry email**, which sends the saved PDF without rerunning AI or formatting.
+show **Retry delivery**, which sends the saved PDF without rerunning AI or formatting.
 A lost acknowledgement or expired delivery lease is not automatically retried:
 the relay may already have accepted it. Manual retry can therefore send a duplicate.
-“Emailed” means the relay accepted the email, not that the device downloaded it.
+“Email Sent” means the relay accepted the email, not that the device downloaded it.
 
 The delivery module owns SMTP, MIME attachments, deadlines and safe outcome
 classification. The PostgreSQL adapter owns atomic queue claims, attempt history
@@ -119,11 +158,10 @@ come from your configured Attic server; select one to open its reader, or press
 Enter for the full library search. This uses [Chromium’s omnibox keyword mode](https://developer.chrome.com/docs/extensions/reference/api/omnibox)
 and the extension’s existing server connection; normal address-bar typing is not sent.
 
-Download `/attic-chromium.zip` from your running server, extract it, then use
-**Load unpacked** in `chrome://extensions` (Developer mode enabled). Connect
-with your server address and Attic access key in the extension's Options,
-then pin **Save to Attic**. The toolbar saves the current article; the link
-context menu saves a linked article. Both queue the normal processing pipeline.
+Connect with your server address and Attic access key in the extension's Options,
+then pin **Save to Attic**. Current-page saves upload a browser snapshot when
+possible; linked pages and bookmark imports use server capture. Both preserve a
+saved item, and only **Send to Kindle** requests email.
 See [installation and permissions](internal/httpapi/extension/README.md).
 
 ## Prerequisites
@@ -212,14 +250,19 @@ docker compose -p attic-validation -f compose.yaml -f compose.dev.yaml run --rm 
 ```
 
 Before starting, configure the ignored `.env` with the normal AI and bearer
-settings, `PUBLIC_BASE_URL=http://127.0.0.1:18080`, a random
+settings, `PUBLIC_BASE_URL` set to the address you will use to reach Attic, a random
 `VALIDATION_DB_PASSWORD`, and a matching
 `DATABASE_URL=postgres://attic:<password>@validation-db:5432/attic?sslmode=disable`.
 Use a URL-safe password, such as a randomly generated hexadecimal string.
 PostgreSQL is reachable only on the Compose network and retains its data in
 `attic-validation-postgres`. This local override is separate from the supported
 external-PostgreSQL deployment. Use the same two Compose files and project name
-for logs, updates, and shutdown. 
+for logs, updates, and shutdown.
+
+The base file fixes the artifact volume name to `attic-data`, so changing the
+Compose project name does not isolate artifacts or stored browser/auth profiles.
+Use a volume override for a fully separate deployment. Include `compose.search.yaml`
+and `MEILI_MASTER_KEY` when you also want search, as in the quick start.
 
 A successful readiness response verifies local dependencies; it does not prove
 AI access. If `check-ai` fails because the provider account has no credit,
@@ -238,9 +281,8 @@ $EDITOR .env
 docker build --file Dockerfile --tag attic:latest .
 ```
 
-The multistage build downloads Go modules in the builder, compiles a static
-Linux binary, and copies the command, internal packages, and
-migrations into the image. The runtime stage places the migration SQL at
+The multistage build bundles the React UI, embeds it in a static Go binary,
+and copies the binary and migrations into the runtime image. The runtime stage places the migration SQL at
 `/app/migrations` and removes its write permissions; the migration runner
 consumes that directory. The build context excludes credentials, local data, and tests.
 
@@ -328,6 +370,14 @@ key, or sign in through `/api/v1/session` for the browser session cookie.
 | `PUT /api/v1/items/{id}` | Edit title, notes and tags. |
 | `DELETE /api/v1/items/{id}` | Explicitly remove the item and its derived content. |
 | `POST /api/v1/items/{id}/send` | Prepare or reuse its document and request Kindle delivery. |
+| `POST /api/v1/items/{id}/generate` | Prepare a PDF without email. |
+| `POST /api/v1/items/{id}/translate` | Select or prepare `{language}`; an empty language selects the original. |
+| `GET /api/v1/items/{id}/reading` | Read approved content for the selected edition. |
+| `GET /api/v1/items/{id}/editor` | Get editable HTML and its revision. |
+| `PUT /api/v1/items/{id}/editor` | Save `{html,revision}` and queue a new PDF; stale revisions return 409. |
+| `POST /api/v1/items/{id}/capture` | Upload browser MHTML in multipart `snapshot`, with `url` and `title`. |
+| `GET /api/v1/items/{id}/recovery` | Inspect the interactive recovery browser. |
+| `POST /api/v1/items/{id}/recovery` | Start, control, save or close browser recovery. |
 | `POST /api/v1/items/{id}/recapture` | Preserve a new saved-page version. |
 | `POST /api/v1/items/{id}/enrich` | Retry AI classification. |
 | `GET /api/v1/items/{id}/captures/{captureID}` | Open a static saved page. |
@@ -365,9 +415,9 @@ clearing site data also requires signing in again. API clients use the same bear
 Use HTTPS when exposing the service outside your trusted private network.
 
 The in-app preview renders one page at a time without relying on a browser's
-embedded PDF plugin. Its canvas is capped at approximately four megapixels;
-closing the reader destroys its PDF worker and canvas. Download/share still use
-the original PDF. The preview is visual; use the downloaded PDF for text selection
+embedded PDF plugin. Pages render to a canvas at a fixed scale, with display zoom controlled by the
+reader. Leaving the reader cancels rendering and releases the PDF worker.
+Downloads use the original PDF. The preview is visual; use the downloaded PDF for text selection
 and the PDF viewer's other advanced features.
 
 PDF.js and its worker are bundled from the `pdfjs-dist` dependency during the
@@ -411,13 +461,11 @@ References: [Chrome share targets](https://developer.chrome.com/docs/capabilitie
 
 ## Automatic source recovery
 
-If the original page is paywalled, denies access, cannot be fetched, has
-insufficient article content, or cannot produce a valid PDF, Attic tries existing
-public archive copies before failing. It tries Archive.today's `archive.ph`
-endpoint, its `archive.is` mirror, and the latest available matching Wayback
-snapshot. No new snapshot is submitted. Discovery uses the
-[Wayback availability API](https://archive.org/help/wayback_api.php) and
-[Archive.today's documented newest-snapshot links](https://archive.ph/faq).
+If a page cannot be preserved or approved for a PDF, Attic can try existing
+public archive copies. Discovery prefers a matching Wayback snapshot, using
+Availability then CDX when necessary, before the `archive.ph` and `archive.is`
+HTML fallbacks. No new public snapshot is submitted. See
+[archive recovery](docs/archive-recovery.md) for matching rules and limits.
 
 Bookmark capture and PDF preparation share source ordering, lazy discovery and
 a limit of three distinct archive attempts. X links use validated mirror content
@@ -426,8 +474,9 @@ PDF preparation renders static sources offline before mandatory article approval
 
 Recovery runs automatically within the same job. Original and fallback source
 attempts share an eight-minute deadline, in addition to existing
-browser, AI and formatter limits. Every source must pass AI approval and PDF
-verification. The AI receives both the requested URL and retrieved URL, and must
+browser, AI and formatter limits. Sources used for generated PDFs must pass AI
+approval and PDF verification; bookmark capture has separate preservation checks.
+Owner-reviewed reading edits bypass AI rewriting but still pass PDF checks. The AI receives both the requested URL and retrieved URL, and must
 reject archive search pages, challenges and unrelated articles. Snapshot URLs
 from Wayback must match the requested host, path and query. The original link
 stays available in the reader, with an additional archived-source link when an
@@ -435,7 +484,8 @@ archive supplies the PDF. PDF source metadata records the retrieved snapshot.
 
 Recovery attempts log the job ID, archive provider and failure category without
 page bodies. AI calls remain durably recorded. Source lists reset for each job;
-submitted archive URLs are not recursively archived. Authentication, storage,
+replay URLs with an explicit original URL can recover through that original,
+while nested archive targets are rejected. Authentication, storage,
 and cancellation failures stop recovery. Existing durable retries still handle
 transient service failures. If all sources fail, the original failure category
 is retained. Archive availability is not guaranteed; inaccessible sources do not
@@ -443,7 +493,7 @@ cause the pipeline to invent content or publish a partial article.
 
 ## Automatic PDF checks
 
-Every new PDF is inspected with Poppler before it can become a stored, ready
+Every generated PDF is inspected with Poppler before it can become a stored, ready
 artifact. Checks cover title/author/source metadata, configured page geometry,
 text outside page bounds, blank pages, missing images by count, and preservation
 of substantive headings, paragraphs, code blocks and table cells. Comparison
@@ -453,7 +503,8 @@ they do not establish that extraction preserved everything on the original site,
 identify image substitutions, or replace visual review of typography.
 
 A failed check withholds the artifact and produces `pdf_quality_failed`, shown
-as **Needs attention** in the library. Inspection has a 30-second deadline and
+with a PDF-generation failure message in the reader. Uploaded PDFs preserve their original bytes and
+do not go through article-formatting quality checks. Inspection has a 30-second deadline and
 bounded subprocess output. Existing PDFs are not checked retroactively.
 The container includes the required `pdfinfo`, `pdftotext`, and `pdfimages` tools.
 
@@ -501,16 +552,17 @@ docker compose -f compose.yaml run --rm attic check-ai
 
 ## Backup and restore
 
-Back up PostgreSQL and the artifact volume from a consistent maintenance
-point. The database contains authoritative job/content/artifact metadata; the
-volume contains persisted artifact bytes (including PDF bytes when the PDF
-stage is available).
+Back up PostgreSQL and `/data` from the same maintenance point while Attic is
+stopped. The database contains saved items, capture metadata, reading editions,
+jobs and attempt history. The volume contains captures, PDFs, browser profiles
+and subscription credentials. Keep this full backup private. Portable ZIP export
+serves a different purpose and excludes credentials and operational history.
 
 For command-line PostgreSQL tools, do not expand the credential-bearing
 `DATABASE_URL` into process arguments. Provision or mount an operator-managed
 `.pgpass` file with owner-only permissions (`0600`) and use libpq connection
 environment variables instead. For example, provision
-`secrets/attic.pgpass` out of band with this shape, replacing the final field
+`~/.config/attic/pgpass` out of band with this shape, replacing the final field
 without committing it:
 
 ```text
@@ -530,46 +582,52 @@ export PGHOST=db.example.invalid
 export PGPORT=5432
 export PGDATABASE=attic
 export PGUSER=attic
-export PGPASSFILE="$PWD/secrets/attic.pgpass"
+export PGPASSFILE="$HOME/.config/attic/pgpass"
 test -f "$PGPASSFILE"
 test "$(stat -c '%a' "$PGPASSFILE")" = 600
 
-mkdir -p backups
-pg_dump --format=custom --file=backups/attic-$(date +%Y%m%d-%H%M%S).dump
+export ATTIC_BACKUP_DIR="$HOME/attic-backups"
+mkdir -p "$ATTIC_BACKUP_DIR"
+chmod 700 "$ATTIC_BACKUP_DIR"
+docker compose -f compose.yaml stop attic
+pg_dump --format=custom --file="$ATTIC_BACKUP_DIR/attic-$(date +%Y%m%d-%H%M%S).dump"
 ```
 
 Example artifact-volume backup (replace the archive name as needed):
 
 ```sh
-mkdir -p backups
 docker run --rm \
   -v attic-data:/data:ro \
-  -v "$PWD/backups:/backup" \
+  -v "$ATTIC_BACKUP_DIR:/backup" \
   alpine:3.22.1 \
-  tar -C /data -czf /backup/attic-artifacts.tar.gz .
+  tar -C /data -czf /backup/attic-data.tar.gz .
+docker compose -f compose.yaml start attic
 ```
 
 To restore, stop Attic, restore the PostgreSQL dump and the artifact volume
 from the same backup point, then start the container again:
 
 ```sh
-docker compose -f compose.yaml down
-pg_restore --clean --if-exists --dbname="$PGDATABASE" backups/attic-YYYYMMDD-HHMMSS.dump
+docker compose -f compose.yaml stop attic
+pg_restore --clean --if-exists --dbname="$PGDATABASE" "$ATTIC_BACKUP_DIR/attic-YYYYMMDD-HHMMSS.dump"
 docker run --rm \
   -v attic-data:/data \
-  -v "$PWD/backups:/backup" \
+  -v "$ATTIC_BACKUP_DIR:/backup" \
   alpine:3.22.1 \
-  tar -C /data -xzf /backup/attic-artifacts.tar.gz
+  tar -C /data -xzf /backup/attic-data.tar.gz
 docker compose -f compose.yaml up -d
 ```
 
-After restore, validate checksums and readiness, and verify artifact retrieval
+Use the same Compose project and overrides as your deployment for these commands.
+After restore, request `POST /api/v1/items/reindex` to rebuild the search projection.
+Validate checksums and readiness, and verify artifact retrieval
 when an artifact is available. Do not restore only one side of the
 database/artifact pair unless you intentionally accept missing artifacts.
 
 ## Upgrade and rollback
 
-1. Take a PostgreSQL and artifact-volume backup.
+1. Take a PostgreSQL and `/data` backup and retain the running image, for example
+   `docker tag attic:latest attic:previous`, before rebuilding `attic:latest`.
 2. Build or pull the new image under a new immutable tag.
 3. Review its migration and compatibility notes.
 4. Replace the image and run `docker compose up -d`.
@@ -578,13 +636,13 @@ database/artifact pair unless you intentionally accept missing artifacts.
 
 The migration runner keeps migrations ordered, transaction-safe where
 PostgreSQL permits, and protected by a startup lock. Do not run an older binary
-against a schema it does not support. If the new migration is
-backward-compatible, a binary-only rollback is:
+against a schema it does not support: startup rejects migration versions absent
+from that binary. A binary-only rollback is suitable when the applied migration
+set is still supported by the previous image:
 
 ```sh
-docker tag attic:foundation attic:foundation.previous
-# Retag/build the previously verified image as attic:foundation, then:
-docker compose -f compose.yaml up -d
+docker tag attic:previous attic:latest
+docker compose -f compose.yaml up -d --no-build
 ```
 
 If the schema is not backward-compatible, stop the service and restore both
@@ -631,7 +689,7 @@ An explicit host integration check uses installed Chromium and public
 ATTIC_CHROMIUM_INTEGRATION=1 go test ./internal/acquisition -run TestChromiumRendererIntegration
 ```
 
-## Runtime limits and later processing stages
+## Runtime limits
 
 The Compose example gives the process a bounded `/tmp` tmpfs and persistent
 `/data`. Durable jobs, PostgreSQL persistence, filesystem artifacts, migration
@@ -677,8 +735,8 @@ delivery and reuses an existing or already processing document.
 
 ## Development checks
 
-Use Go 1.23+ and the pnpm version pinned in `package.json`. After installing
-frontend dependencies, run:
+Use Go 1.23+, Node.js 22 (the Docker build uses 22.22.0), and the pnpm version
+pinned in `package.json`. Run `pnpm install --frozen-lockfile`, then:
 
 ```sh
 go test ./...
