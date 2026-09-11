@@ -7,6 +7,9 @@ preserve page snapshots, search the whole collection, and send reading documents
 to Kindle Scribe. Bookmarking archives without emailing; **Send to Kindle** also
 saves the item and requests delivery.
 
+Linux x86-64 packages are built automatically for version tags. See
+[binary installation](docs/binary-install.md) and [release CI](docs/releases.md).
+
 ## Run the personal archive
 
 Copy `.env.example` to `.env` and follow the [development configuration](#development-deployment)

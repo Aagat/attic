@@ -16,3 +16,4 @@ node_modules/
 !/internal/httpapi/frontend/README.txt
 
 /ui/dist-marketing/
+/dist/
