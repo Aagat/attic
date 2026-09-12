@@ -21,7 +21,7 @@ func (s *Store) ClaimDelivery(ctx context.Context, duration time.Duration) (*del
 	}
 
 	var id, destination string
-	err = tx.QueryRowContext(ctx, `SELECT id, delivery_destination FROM jobs WHERE status='ready' AND delivery_pending
+	err = tx.QueryRowContext(ctx, `SELECT id, delivery_destination FROM jobs WHERE status='ready' AND delivery_pending AND NOT delivery_paused
  AND next_attempt_at <= $1 ORDER BY next_attempt_at, created_at FOR UPDATE SKIP LOCKED LIMIT 1`, now).Scan(&id, &destination)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, tx.Commit()

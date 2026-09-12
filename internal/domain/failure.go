@@ -18,7 +18,7 @@ func (category FailureCategory) message() string {
 	case FailureAIUnavailable:
 		return "The AI provider is temporarily unavailable"
 	case FailureAIAuthFailed:
-		return "The AI provider rejected the configured credentials"
+		return "The AI connection is missing or its credentials were rejected"
 	case FailureAIModelUnsupported:
 		return "The configured AI model is unsupported"
 	case FailureAIInvalidResponse:
@@ -53,5 +53,45 @@ func (category FailureCategory) message() string {
 		return "The job could not be completed"
 	default:
 		return ""
+	}
+}
+
+// NextAction is fixed public guidance. It never contains upstream error text.
+func (category FailureCategory) NextAction() string {
+	switch category {
+	case FailureAIAuthFailed:
+		return "Open Settings, connect or reconnect ChatGPT, then check AI compatibility and retry approval."
+	case FailureAIModelUnsupported:
+		return "Check the configured model and account permissions, then run the Settings compatibility check."
+	case FailureAIUnavailable:
+		return "Check provider availability or account quota, then retry approval."
+	case FailureUnsupportedContent, FailureInsufficientContent:
+		return "Open a specific article URL or upload your own PDF. The saved copy remains available."
+	case FailureFormatFailed, FailurePDFQualityFailed:
+		return "Run the PDF/browser check in Settings, then retry document preparation."
+	case FailureDeliveryRejected:
+		return "Check SMTP settings and approved sender, then explicitly retry delivery of the saved PDF."
+	case FailureDeliveryTimeout:
+		return "Check the recipient inbox before retrying: the relay may already have accepted the email."
+	case FailureFetchFailed, FailureAccessDenied, FailurePaywallDetected, FailureRenderTimeout, FailureBlockedTarget:
+		return "Check the source URL or save a browser capture; retry capture only when needed."
+	default:
+		return "Retry the failed stage; use the diagnostic ID when reporting a persistent failure."
+	}
+}
+func (category FailureCategory) StageName() string {
+	switch category {
+	case FailureAIAuthFailed, FailureAIUnavailable, FailureAIModelUnsupported, FailureAIInvalidResponse, FailureUnsupportedContent, FailureInsufficientContent:
+		return "AI approval"
+	case FailureFormatFailed:
+		return "PDF formatting"
+	case FailurePDFQualityFailed:
+		return "PDF validation"
+	case FailureDeliveryRejected, FailureDeliveryTimeout:
+		return "SMTP submission"
+	case FailureStorageFailed:
+		return "Artifact storage"
+	default:
+		return "Capture"
 	}
 }

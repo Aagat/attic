@@ -138,8 +138,8 @@ func TestSubscriptionProviderDoesNotRequireAPIKey(t *testing.T) {
 		t.Fatal("unknown provider accepted")
 	}
 	values["AI_PROVIDER"] = "api"
-	if _, err = LoadFrom(func(key string) string { return values[key] }); err == nil {
-		t.Fatal("API credentials no longer required")
+	if _, err = LoadFrom(func(key string) string { return values[key] }); err != nil {
+		t.Fatal("unconfigured API prevents canonical use")
 	}
 }
 
@@ -151,5 +151,17 @@ func TestKindleScribeProfile(t *testing.T) {
 	}
 	if _, ok := cfg.Profiles["kindle-scribe"]; !ok || cfg.DefaultProfile != "kindle-scribe" {
 		t.Fatal("Scribe profile not activated")
+	}
+}
+
+func TestFreshInstallDefaultsToBrowserChatGPTSetup(t *testing.T) {
+	values := map[string]string{"BEARER_TOKEN": "owner", "DATABASE_URL": "postgres://db/attic"}
+	cfg, err := LoadFrom(func(k string) string { return values[k] })
+	if err != nil || cfg.AI.Provider != "chatgpt" {
+		t.Fatalf("fresh setup unavailable: %v", err)
+	}
+	values["BEARER_TOKEN"] = "replace-with-a-long-random-owner-token"
+	if _, err := LoadFrom(func(k string) string { return values[k] }); err == nil {
+		t.Fatal("public example owner token accepted")
 	}
 }

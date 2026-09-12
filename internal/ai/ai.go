@@ -208,6 +208,7 @@ func CodeOf(err error) Code {
 
 // Client is safe for concurrent use after construction.
 type Client struct {
+	unconfigured        bool
 	subscription        *subscriptionTransport
 	baseURL             string
 	apiKey              string
@@ -369,6 +370,10 @@ func (c *Client) Analyze(parent context.Context, request AnalyzeRequest) (Approv
 }
 
 func (c *Client) call(ctx context.Context, body []byte, number int) (content string, attempt Attempt, callErr error) {
+	if c.unconfigured {
+		return "", Attempt{Number: number, CreatedAt: time.Now().UTC(), Status: AttemptFailed, ErrorCode: CodeAIAuthFailed}, &Error{Code: CodeAIAuthFailed, Message: "AI is not configured; open Settings for setup instructions"}
+	}
+
 	if c.subscription != nil {
 		return c.subscriptionCall(ctx, body, number)
 	}
@@ -944,4 +949,16 @@ func contentField(fields map[string]json.RawMessage) (string, bool, bool) {
 		return "", false, true
 	}
 	return found, foundCount == 1, false
+}
+
+// NewUnconfiguredClient preserves canonical workflows without making network
+// requests. The normal provider constructors remain strict about credentials.
+func NewUnconfiguredClient(config Config) (*Client, error) {
+	config.BaseURL = "https://api.openai.com/v1"
+	config.APIKey = "unconfigured"
+	c, err := NewClient(config)
+	if err == nil {
+		c.unconfigured = true
+	}
+	return c, err
 }

@@ -1,0 +1,5 @@
+# Load deploy/apparmor/attic-browser on an AppArmor 4 host first.
+services:
+  attic:
+    security_opt:
+      - apparmor=attic-browser

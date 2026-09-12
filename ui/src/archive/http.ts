@@ -2,6 +2,12 @@ import type { Archive, LibraryPage, RecoverySession } from "./contract";
 import { ArchiveError } from "./contract";
 import type { Item } from "../model";
 interface WireItem {
+  diagnostics?: {
+    stage: string;
+    reason: string;
+    next_action: string;
+    id: string;
+  }[];
   id: string;
   kind: string;
   url: string;
@@ -41,6 +47,7 @@ const captures: Record<string, Item["capture"]> = {
   capturing: "Preserving",
 };
 const deliveries: Record<string, Item["delivery"]> = {
+  paused: "Not requested",
   accepted: "Email Sent",
   sent: "Email Sent",
   failed: "Delivery failed",
@@ -57,6 +64,7 @@ function item(w: WireItem): Item {
     source = new URL(w.url).hostname;
   } catch {}
   return {
+    diagnostics: w.diagnostics,
     id: w.id,
     title: w.title || w.url || "Untitled document",
     url: w.url,
@@ -365,6 +373,12 @@ export function createHTTPArchive(
         i.title.replace(/[^\p{L}\p{N} ._-]/gu, "_") + ".pdf",
         { type: "application/pdf" },
       );
+    },
+    setup<T>(path = "", method = "GET", body?: unknown) {
+      return request<T>("/setup" + path, {
+        method,
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
     },
     async status() {
       const r = await request<{

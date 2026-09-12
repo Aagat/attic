@@ -152,3 +152,29 @@ func TestSMTPRequiresConfiguredTLSAndPrivateCredentials(t *testing.T) {
 		t.Fatal("accepted header injection")
 	}
 }
+
+func TestConnectionCheckNeverSendsMail(t *testing.T) {
+	cfg, messages := catchSMTP(t, "", false)
+	sender, _ := NewSMTP(cfg)
+	if err := sender.TestConnection(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-messages:
+		t.Fatal("connection check sent a message")
+	default:
+	}
+}
+func TestExplicitTestEmailResults(t *testing.T) {
+	for _, tc := range []struct {
+		reject string
+		drop   bool
+		want   string
+	}{{"", false, "accepted"}, {"550", false, "rejected"}, {"", true, "uncertain"}} {
+		cfg, _ := catchSMTP(t, tc.reject, tc.drop)
+		sender, _ := NewSMTP(cfg)
+		if got := sender.SendTest(context.Background()); got.Outcome != tc.want {
+			t.Fatalf("test message result: %+v", got)
+		}
+	}
+}

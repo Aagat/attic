@@ -58,7 +58,10 @@ RUN apk add --no-cache ca-certificates chromium fontconfig font-noto font-noto-c
     && mkdir -p /data/artifacts \
     && chown -R attic:attic /data
 
-RUN apk add --no-cache poppler-utils xvfb
+RUN apk add --no-cache poppler-utils xvfb \
+    && test -x /usr/bin/pandoc && test -x /usr/bin/xelatex \
+    && test -x /usr/bin/pdftotext && test -x /usr/bin/pdfinfo \
+    && fc-match -f "%{family}" "Latin Modern Roman" | grep -q "Latin Modern"
 
 COPY --from=build --chown=attic:attic /out/attic /usr/local/bin/attic
 # The migration runner consumes a directory. Keep that directory in the

@@ -183,3 +183,43 @@ test("browser recovery shares authenticated requests and passes cancellation", a
   expect(requests[1].init?.method).toBe("POST");
   expect(JSON.parse(requests[1].init?.body as string)).toEqual(action);
 });
+
+test("setup never retries a failed email submission and uses explicit recipient", async () => {
+  let calls = 0;
+  const archive = createHTTPArchive(async (_url, options) => {
+    calls++;
+    expect(JSON.parse(String(options?.body))).toEqual({
+      destination: "reader@kindle.test",
+    });
+    return new Response("{}", { status: 503 });
+  });
+  await expect(
+    archive.setup("/mail/send-test", "POST", {
+      destination: "reader@kindle.test",
+    }),
+  ).rejects.toThrow();
+  expect(calls).toBe(1);
+});
+test("stored article rejection retains its real stage and diagnostic after reload", async () => {
+  const diagnostic = {
+    stage: "AI approval",
+    reason: "The page is not a supported article",
+    next_action: "Open a specific article URL",
+    id: "job-fixture",
+  };
+  const transport = async () =>
+    new Response(
+      JSON.stringify({
+        id: "saved",
+        kind: "bookmark",
+        pdf_status: "failed",
+        delivery_status: "not_requested",
+        diagnostics: [diagnostic],
+      }),
+    );
+  for (let i = 0; i < 2; i++) {
+    const saved = await createHTTPArchive(transport).get("saved");
+    expect(saved.diagnostics).toEqual([diagnostic]);
+    expect(saved.delivery).toBe("Not requested");
+  }
+});

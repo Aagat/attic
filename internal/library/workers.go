@@ -271,3 +271,10 @@ func (l *Library) CleanupOnce(ctx context.Context) error {
 func (l *Library) RunCleanup(ctx context.Context) error {
 	return loop(ctx, func() error { return l.CleanupOnce(ctx) })
 }
+
+// IndexProgress counts uncommitted projections and deletion tombstones. The
+// index adapter acknowledges changes only after Meilisearch tasks complete.
+func (l *Library) IndexProgress(ctx context.Context) (pending, failed int, err error) {
+	err = l.db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM saved_items WHERE indexed_version<version)+(SELECT count(*) FROM search_deletions),(SELECT count(*) FROM saved_items WHERE index_error)`).Scan(&pending, &failed)
+	return pending, failed, safe(err)
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -27,6 +28,7 @@ import (
 	"attic/internal/processing"
 	"attic/internal/recovery"
 	"attic/internal/search"
+	"attic/internal/setup"
 	"attic/internal/subscription"
 	"path/filepath"
 )
@@ -47,6 +49,15 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "check-runtime" {
+		result := setup.Runtime(context.Background())
+		json.NewEncoder(os.Stdout).Encode(result)
+		if result["pdf"] != "Attic PDF template and quality validation passed" || result["browser"] != "Sandboxed browser launch passed" || result["fonts"] != "Latin Modern available" {
+			return errors.New("runtime verification failed; see safe diagnostics above")
+		}
+		return nil
+	}
+
 	if len(os.Args) == 2 && os.Args[1] == "login-chatgpt" {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
@@ -65,7 +76,7 @@ func run() error {
 	}
 	if len(os.Args) > 1 {
 		if len(os.Args) != 2 || os.Args[1] != "check-ai" {
-			return errors.New("usage: attic [check-ai|login-chatgpt]")
+			return errors.New("usage: attic [check-ai|login-chatgpt|check-runtime]")
 		}
 		return runAICheck(cfg)
 	}
@@ -74,6 +85,16 @@ func run() error {
 
 func runServer(cfg config.Config) error {
 
+	managed := false
+	for _, key := range []string{"SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_SENDER", "SMTP_DESTINATION"} {
+		if os.Getenv(key) != "" {
+			managed = true
+		}
+	}
+	mail, err := setup.NewMail(filepath.Join(cfg.ArtifactRoot, "..", "auth", "mail.json"), cfg.SMTP, managed)
+	if err != nil {
+		return err
+	}
 	destination := ""
 	if cfg.SMTP.Enabled {
 		destination = cfg.SMTP.Destination
@@ -128,11 +149,16 @@ func runServer(cfg config.Config) error {
 	}
 	pdf := formatter.PDF{MaxBytes: cfg.PDF.MaxBytes, Timeout: cfg.PDF.Timeout, PandocPath: "/usr/bin/pandoc",
 		MarginMM: cfg.PDF.MarginMM, BodyFontPT: cfg.PDF.BodyFontPT, LineHeight: cfg.PDF.LineHeight}
-	saved, err := library.Open(context.Background(), library.Options{DatabaseURL: cfg.DatabaseURL, ArtifactRoot: cfg.ArtifactRoot, Profile: cfg.DefaultProfile, Destination: destination})
+	saved, err := library.Open(context.Background(), library.Options{DatabaseURL: cfg.DatabaseURL, ArtifactRoot: cfg.ArtifactRoot, Profile: cfg.DefaultProfile, Destination: destination, DeliveryDestination: mail.Destination})
 	if err != nil {
 		return err
 	}
 	defer saved.Close()
+	mail.BeforeEnable = func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return saved.PausePendingDelivery(ctx)
+	}
 	recoveryBrowser := recovery.New(func(ctx context.Context, raw string) (recovery.Browser, error) {
 		return acquisition.OpenBrowserSession(ctx, cfg.Browser.Executable, filepath.Join(cfg.ArtifactRoot, "..", "browser-profiles"), raw)
 	}, aiClient, saved.SaveRecoveredPage)
@@ -160,7 +186,16 @@ func runServer(cfg config.Config) error {
 			return err
 		}
 	}
-	server := httpapi.NewServerWithOptions(archive, readiness, cfg.BearerToken, httpapi.Options{Library: saved, Search: index, Recovery: recoveryBrowser})
+	auth := subscription.NewStore(cfg.AI.AuthFile)
+	login := subscription.NewSessions(auth)
+	defer login.Cancel()
+	controls := &httpapi.Setup{Mail: mail, Auth: auth, Login: login, Provider: cfg.AI.Provider, Runtime: setup.Runtime, CheckAI: func(ctx context.Context) string {
+		if err := checkAI(ctx, cfg); err != nil {
+			return err.Error()
+		}
+		return "Compatible: credentials, model, image input and article response protocol passed"
+	}}
+	server := httpapi.NewServerWithOptions(archive, readiness, cfg.BearerToken, httpapi.Options{Setup: controls, Library: saved, Search: index, Recovery: recoveryBrowser})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -189,23 +224,24 @@ func runServer(cfg config.Config) error {
 	}()
 
 	mailDone := make(chan error, 1)
-	if cfg.SMTP.Enabled {
-		sender, err := delivery.NewSMTP(cfg.SMTP)
-		if err != nil {
-			return err
-		}
-		mailWorker := delivery.Worker{Queue: store, Artifacts: artifacts, Sender: sender, Timeout: cfg.SMTP.Timeout}
-		go func() {
-			err := mailWorker.Run(ctx)
-			if err != nil && ctx.Err() == nil {
-				log.Printf("email worker stopped: %v", err)
-				stop()
+	// Poll only while configured; enabling settings does not create delivery requests.
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		mailWorker := delivery.Worker{Queue: store, Artifacts: artifacts, Sender: mail, Timeout: 30 * time.Second}
+		for {
+			select {
+			case <-ctx.Done():
+				mailDone <- ctx.Err()
+				return
+			case <-ticker.C:
+				if mail.Destination() != "" {
+					_, _ = mailWorker.RunOnce(ctx)
+				}
 			}
-			mailDone <- err
-		}()
-	} else {
-		mailDone <- nil
-	}
+		}
+	}()
+
 	defer func() { waitForWorker(mailDone) }()
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddress,
@@ -242,13 +278,20 @@ func runServer(cfg config.Config) error {
 
 const compatibilityImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
-func runAICheck(cfg config.Config) error {
+func runAICheck(cfg config.Config) error { return checkAI(context.Background(), cfg) }
+func checkAI(ctx context.Context, cfg config.Config) error {
+	if cfg.AI.Provider != "chatgpt" && cfg.AI.APIKey == "" {
+		return errors.New("AI API credentials are not configured. Set AI_API_KEY in deployment configuration or select AI_PROVIDER=chatgpt and connect in Settings.")
+	}
+	if cfg.AI.Provider == "chatgpt" && subscription.NewStore(cfg.AI.AuthFile).Status() == "not_connected" {
+		return errors.New("ChatGPT is not connected. Open Settings and choose Connect ChatGPT.")
+	}
 	client, err := newAnalyzer(cfg.AI)
 	if err != nil {
 		return fmt.Errorf("AI compatibility check configuration failed: %s", ai.CodeOf(err))
 	}
 	fixtureText := strings.Repeat("This is a synthetic Attic compatibility article containing ordinary prose for protocol validation. ", 12)
-	_, attempts, analyzeErr := client.Analyze(context.Background(), ai.AnalyzeRequest{
+	_, attempts, analyzeErr := client.Analyze(ctx, ai.AnalyzeRequest{
 		SourceURL:         "https://example.invalid/attic-compatibility-fixture",
 		CandidateText:     fixtureText,
 		CandidateHTML:     "<article><h1>Attic compatibility fixture</h1><p>" + fixtureText + "</p></article>",
@@ -262,7 +305,16 @@ func runAICheck(cfg config.Config) error {
 		if code == "" {
 			code = ai.CodeAIUnavailable
 		}
-		return fmt.Errorf("AI compatibility check failed: %s", code)
+		switch code {
+		case ai.CodeAIAuthFailed:
+			return errors.New("AI credentials expired, were revoked or were rejected. Reconnect in Settings and retry.")
+		case ai.CodeAIModelUnsupported, ai.CodeAIProviderRejected:
+			return errors.New("The provider rejected the model or account permissions. Check model access and run this check again.")
+		case ai.CodeAIRateLimited:
+			return errors.New("The provider reported a rate or quota limit. Check account usage and retry later.")
+		default:
+			return fmt.Errorf("AI compatibility check failed (%s). Check provider availability and retry.", code)
+		}
 	}
 	if len(attempts) == 0 {
 		return errors.New("AI compatibility check failed: no provider attempt was recorded")
@@ -289,6 +341,9 @@ func newAnalyzer(cfg config.AIConfig) (*ai.Client, error) {
 	options := ai.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, ReasoningEffort: cfg.ReasoningEffort, OmitReasoningEffort: cfg.OmitReasoningEffort, OmitResponseFormat: cfg.OmitResponseFormat, Timeout: cfg.Timeout}
 	if cfg.Provider == "chatgpt" {
 		return ai.NewSubscriptionClient(options, subscription.NewStore(cfg.AuthFile))
+	}
+	if cfg.APIKey == "" {
+		return ai.NewUnconfiguredClient(options)
 	}
 	return ai.NewClient(options)
 }

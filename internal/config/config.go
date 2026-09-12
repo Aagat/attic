@@ -106,7 +106,7 @@ func LoadFrom(get func(string) string) (Config, error) {
 		DefaultProfile: valueOr(get("PDF_PROFILE"), "a5"),
 		Profiles:       map[string]struct{}{valueOr(get("PDF_PROFILE"), "a5"): {}},
 		AI: AIConfig{
-			Provider:            valueOr(get("AI_PROVIDER"), "api"),
+			Provider:            valueOr(get("AI_PROVIDER"), defaultProvider(get)),
 			AuthFile:            valueOr(get("CHATGPT_AUTH_FILE"), "/data/auth/chatgpt.json"),
 			BaseURL:             get("AI_BASE_URL"),
 			APIKey:              get("AI_API_KEY"),
@@ -260,12 +260,16 @@ func (c Config) Validate() error {
 		}
 	}
 	require("BEARER_TOKEN", c.BearerToken)
+	if strings.HasPrefix(c.BearerToken, "replace-") {
+		fields = append(fields, "BEARER_TOKEN")
+	}
 	require("DATABASE_URL", c.DatabaseURL)
 	require("MIGRATIONS_DIR", c.MigrationsDir)
 	switch c.AI.Provider {
 	case "api", "":
-		require("AI_BASE_URL", c.AI.BaseURL)
-		require("AI_API_KEY", c.AI.APIKey)
+		if c.AI.APIKey != "" {
+			require("AI_BASE_URL", c.AI.BaseURL)
+		}
 	case "chatgpt":
 		require("CHATGPT_AUTH_FILE", c.AI.AuthFile)
 	default:
@@ -363,4 +367,11 @@ func uniqueStrings(values []string) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+func defaultProvider(get func(string) string) string {
+	if get("AI_API_KEY") != "" {
+		return "api"
+	}
+	return "chatgpt"
 }

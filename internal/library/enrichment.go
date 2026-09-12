@@ -49,7 +49,7 @@ func (l *Library) EnrichOnce(ctx context.Context, e Enricher) error {
 	if enrichErr != nil {
 		status = "failed"
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET tags=CASE WHEN $4='failed' THEN tags ELSE $6::jsonb END,classification=CASE WHEN $4='failed' THEN classification ELSE $2 END,suggested_tags=CASE WHEN $4='failed' THEN suggested_tags ELSE $3::jsonb END,enrichment_status=$4,version=version+1 WHERE id=$1 AND version=$5`, id, enrichment.Classification, jsonValue(enrichment.Tags), status, version, jsonValue(tags))
+	_, err = tx.ExecContext(ctx, `UPDATE saved_items SET tags=CASE WHEN $4='failed' THEN tags ELSE $6::jsonb END,classification=CASE WHEN $4='failed' THEN classification ELSE $2 END,suggested_tags=CASE WHEN $4='failed' THEN suggested_tags ELSE $3::jsonb END,enrichment_status=$4,enrichment_error=$7,version=version+1 WHERE id=$1 AND version=$5`, id, enrichment.Classification, jsonValue(enrichment.Tags), status, version, jsonValue(tags), string(ai.CodeOf(enrichErr)))
 	if err != nil {
 		return safe(err)
 	}

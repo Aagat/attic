@@ -763,6 +763,22 @@ function ReaderItem({ item }: { item: Item }) {
             {!isPdf && (
               <section>
                 <SectionLabel>Reading PDF</SectionLabel>
+                {item.diagnostics?.map((d) => (
+                  <div
+                    key={d.stage}
+                    role="alert"
+                    className="mt-3 rounded border border-[var(--line)] p-3"
+                  >
+                    <strong>
+                      {d.stage}: {d.reason}
+                    </strong>
+                    <p>{d.next_action}</p>
+                    <a href="/settings" className="underline">
+                      Open Settings
+                    </a>
+                    <p className="text-xs">Diagnostic: {d.id}</p>
+                  </div>
+                ))}
                 {!archive.preview &&
                   (item.readingAvailable || item.versions.length > 0) && (
                     <Button
@@ -798,7 +814,8 @@ function ReaderItem({ item }: { item: Item }) {
                   )}
                   {item.pdfStatus === "failed" && !hasPdf && (
                     <p role="alert" className="mt-2 text-[var(--danger)]">
-                      PDF generation failed. You can try again.
+                      {item.diagnostics?.[0]?.reason ||
+                        "Document preparation failed."}
                     </p>
                   )}
                   {!hasPdf && (

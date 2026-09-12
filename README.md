@@ -10,6 +10,8 @@ saves the item and requests delivery.
 Linux x86-64 packages are built automatically for version tags. See
 [binary installation](docs/binary-install.md) and [release CI](docs/releases.md).
 
+See the [Settings setup and deployment guide](docs/setup-deployment.md) for browser ChatGPT login, private SMTP configuration, runtime diagnostics and migration-aware recovery.
+
 ## Run the personal archive
 
 Copy `.env.example` to `.env` and follow the [development configuration](#development-deployment)
@@ -212,7 +214,7 @@ AI_MODEL=gpt-5.6-luna
 model available to your subscription. To use the existing API-key provider,
 set `AI_PROVIDER=api` and configure those API fields.
 
-Build the image and start the native device login command:
+Connect in Settings to complete device login in the browser. The CLI alternative remains available:
 
 ```sh
 docker compose -f compose.yaml build attic
@@ -269,8 +271,7 @@ Compose project name does not isolate artifacts or stored browser/auth profiles.
 Use a volume override for a fully separate deployment. Include `compose.search.yaml`
 and `MEILI_MASTER_KEY` when you also want search, as in the quick start.
 
-A successful readiness response verifies local dependencies; it does not prove
-AI access. If `check-ai` fails because the provider account has no credit,
+A successful readiness response verifies PostgreSQL, migrations and writable storage; it does not prove browser/PDF, search, mail or AI capability. Use the separate Settings checks. If `check-ai` fails because the provider account has no credit,
 fund the account or update the AI credentials before attempting an article.
 After changing `.env`, rerun `up -d` to recreate the application with the new
 configuration. A successful article must reach `ready` and yield a PDF through

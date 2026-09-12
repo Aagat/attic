@@ -36,6 +36,7 @@ const (
 // Options controls transport limits and the clock used by the authentication
 // limiter. Zero values select conservative production defaults.
 type Options struct {
+	Setup    *Setup
 	Recovery *recovery.Manager
 	Library  *library.Library
 	Search   search.Index
@@ -48,6 +49,7 @@ type Options struct {
 }
 
 type Server struct {
+	setup              *Setup
 	recovery           *recovery.Manager
 	library            *library.Library
 	search             search.Index
@@ -85,7 +87,7 @@ func NewServerWithOptions(archive application.JobArchive, readiness application.
 		options.MaxRequestURIBytes = defaultMaxRequestURIBytes
 	}
 	return &Server{
-		library: options.Library, search: options.Search, recovery: options.Recovery,
+		setup: options.Setup, library: options.Library, search: options.Search, recovery: options.Recovery,
 		sessions:           make(map[[32]byte]time.Time),
 		archive:            archive,
 		readiness:          readiness,
@@ -133,6 +135,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.authFailures.clear(remoteIP)
 	if r.URL.Path == "/api/v1/session" {
 		s.handleSession(w, r, correlationID)
+		return
+	}
+	if s.serveSetup(w, r, correlationID) {
 		return
 	}
 	if s.serveRecovery(w, r, correlationID) {
@@ -492,8 +497,10 @@ func jobDetailJSON(job application.JobDetail) map[string]any {
 	}
 	if job.Failure != nil {
 		result["failure"] = map[string]string{
+			"stage":          domain.FailureCategory(job.Failure.Category).StageName(),
+			"next_action":    domain.FailureCategory(job.Failure.Category).NextAction(),
 			"category":       job.Failure.Category,
-			"message":        job.Failure.Message,
+			"message":        domain.FailureCategory(job.Failure.Category).Message(),
 			"correlation_id": job.Failure.CorrelationID,
 		}
 	}

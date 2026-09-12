@@ -38,28 +38,36 @@ type SaveRequest struct {
 	Action string   `json:"action"`
 	Source *Source  `json:"source,omitempty"`
 }
+type Diagnostic struct {
+	Stage      string `json:"stage"`
+	Reason     string `json:"reason"`
+	NextAction string `json:"next_action"`
+	ID         string `json:"id"`
+}
 type Item struct {
-	TextAvailable    bool      `json:"text_available"`
-	ID               string    `json:"id"`
-	Kind             string    `json:"kind"`
-	URL              string    `json:"url"`
-	Title            string    `json:"title"`
-	Notes            string    `json:"notes"`
-	Tags             []string  `json:"tags"`
-	Folders          []string  `json:"folders"`
-	SavedAt          time.Time `json:"saved_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	Classification   string    `json:"classification"`
-	SuggestedTags    []string  `json:"suggested_tags"`
-	EnrichmentStatus string    `json:"enrichment_status"`
-	CaptureStatus    string    `json:"capture_status"`
-	IndexStatus      string    `json:"index_status"`
-	JobID            string    `json:"job_id,omitempty"`
-	PDFStatus        string    `json:"pdf_status"`
-	DeliveryStatus   string    `json:"delivery_status"`
-	HasPDF           bool      `json:"has_pdf"`
-	Text             string    `json:"-"`
-	Version          int64     `json:"-"`
+	Diagnostics                      []Diagnostic `json:"diagnostics"`
+	failureCategory, enrichmentError string
+	TextAvailable                    bool      `json:"text_available"`
+	ID                               string    `json:"id"`
+	Kind                             string    `json:"kind"`
+	URL                              string    `json:"url"`
+	Title                            string    `json:"title"`
+	Notes                            string    `json:"notes"`
+	Tags                             []string  `json:"tags"`
+	Folders                          []string  `json:"folders"`
+	SavedAt                          time.Time `json:"saved_at"`
+	UpdatedAt                        time.Time `json:"updated_at"`
+	Classification                   string    `json:"classification"`
+	SuggestedTags                    []string  `json:"suggested_tags"`
+	EnrichmentStatus                 string    `json:"enrichment_status"`
+	CaptureStatus                    string    `json:"capture_status"`
+	IndexStatus                      string    `json:"index_status"`
+	JobID                            string    `json:"job_id,omitempty"`
+	PDFStatus                        string    `json:"pdf_status"`
+	DeliveryStatus                   string    `json:"delivery_status"`
+	HasPDF                           bool      `json:"has_pdf"`
+	Text                             string    `json:"-"`
+	Version                          int64     `json:"-"`
 }
 type Capture struct {
 	Source    string          `json:"source"`
@@ -78,8 +86,12 @@ type Detail struct {
 	Item
 	Captures []Capture `json:"captures"`
 }
-type Options struct{ DatabaseURL, ArtifactRoot, Profile, Destination string }
+type Options struct {
+	DatabaseURL, ArtifactRoot, Profile, Destination string
+	DeliveryDestination                             func() string
+}
 type Library struct {
+	deliveryDestination  func() string
 	db                   *sql.DB
 	files                *filesystem.Store
 	profile, destination string
@@ -102,7 +114,7 @@ func Open(ctx context.Context, o Options) (*Library, error) {
 		db.Close()
 		return nil, ErrStorage
 	}
-	return &Library{db: db, files: files, profile: o.Profile, destination: o.Destination, root: o.ArtifactRoot}, nil
+	return &Library{deliveryDestination: o.DeliveryDestination, db: db, files: files, profile: o.Profile, destination: o.Destination, root: o.ArtifactRoot}, nil
 }
 func (l *Library) Close() error { return l.db.Close() }
 func opaque() string {
@@ -239,19 +251,38 @@ func (l *Library) Save(ctx context.Context, r SaveRequest, key string) (Item, bo
 
 const itemSelect = `SELECT i.id,i.kind,COALESCE(i.url,''),i.title,i.notes,i.tags,i.folders,i.saved_at,i.updated_at,i.classification,i.suggested_tags,i.enrichment_status,i.capture_status,
  CASE WHEN i.indexed_version=i.version THEN 'indexed' WHEN i.index_error THEN 'retrying' ELSE 'pending' END,COALESCE(i.job_id,''),COALESCE(j.status,'not_requested'),
- CASE WHEN j.status='delivered' THEN 'accepted' WHEN j.status='delivery_failed' THEN 'failed' WHEN j.delivery_pending OR (j.delivery_destination IS NOT NULL AND j.status IN ('queued','processing','failed')) THEN 'pending' ELSE 'not_requested' END,
- EXISTS(SELECT 1 FROM artifacts a WHERE a.job_id=i.job_id AND a.availability='available'),i.text_content,i.version FROM saved_items i LEFT JOIN jobs j ON j.id=i.job_id `
+ CASE WHEN j.delivery_paused THEN 'paused' WHEN j.status='delivered' THEN 'accepted' WHEN j.status='delivery_failed' THEN 'failed' WHEN j.delivery_pending OR (j.delivery_destination IS NOT NULL AND j.status IN ('queued','processing','failed')) THEN 'pending' ELSE 'not_requested' END,
+ EXISTS(SELECT 1 FROM artifacts a WHERE a.job_id=i.job_id AND a.availability='available'),i.text_content,i.version,COALESCE(j.failure_category,''),i.enrichment_error FROM saved_items i LEFT JOIN jobs j ON j.id=i.job_id `
 
 type scanner interface{ Scan(...any) error }
 
 func scanItem(row scanner) (Item, error) {
 	var i Item
 	var tags, folders, suggested []byte
-	err := row.Scan(&i.ID, &i.Kind, &i.URL, &i.Title, &i.Notes, &tags, &folders, &i.SavedAt, &i.UpdatedAt, &i.Classification, &suggested, &i.EnrichmentStatus, &i.CaptureStatus, &i.IndexStatus, &i.JobID, &i.PDFStatus, &i.DeliveryStatus, &i.HasPDF, &i.Text, &i.Version)
+	err := row.Scan(&i.ID, &i.Kind, &i.URL, &i.Title, &i.Notes, &tags, &folders, &i.SavedAt, &i.UpdatedAt, &i.Classification, &suggested, &i.EnrichmentStatus, &i.CaptureStatus, &i.IndexStatus, &i.JobID, &i.PDFStatus, &i.DeliveryStatus, &i.HasPDF, &i.Text, &i.Version, &i.failureCategory, &i.enrichmentError)
 	json.Unmarshal(tags, &i.Tags)
 	json.Unmarshal(folders, &i.Folders)
 	json.Unmarshal(suggested, &i.SuggestedTags)
 	i.TextAvailable = strings.TrimSpace(i.Text) != ""
+	i.Diagnostics = []Diagnostic{}
+	if i.failureCategory != "" {
+		c := domain.FailureCategory(i.failureCategory).Normalized()
+		i.Diagnostics = append(i.Diagnostics, Diagnostic{c.StageName(), c.Message(), c.NextAction(), i.JobID})
+	}
+	if i.EnrichmentStatus == "failed" {
+		c := domain.FailureCategory(i.enrichmentError).Normalized()
+		i.Diagnostics = append(i.Diagnostics, Diagnostic{"AI enrichment", c.Message(), c.NextAction(), i.ID})
+	}
+	if i.DeliveryStatus == "paused" {
+		i.Diagnostics = append(i.Diagnostics, Diagnostic{"SMTP submission", "Delivery is paused after mail setup", "Choose Send to Kindle to explicitly resume delivery of this document.", i.JobID})
+	}
+	if i.CaptureStatus == "failed" {
+		i.Diagnostics = append(i.Diagnostics, Diagnostic{"Capture", "Page capture failed", "Retry capture or save the article from the browser extension.", i.ID})
+	}
+	if i.IndexStatus == "retrying" {
+		i.Diagnostics = append(i.Diagnostics, Diagnostic{"Search indexing", "Search index update failed", "Check search in Settings. Canonical content is still available; indexing retries automatically.", i.ID})
+	}
+
 	return i, safe(err)
 }
 func (l *Library) Get(ctx context.Context, id string) (Detail, error) {
@@ -351,10 +382,10 @@ func (l *Library) Recapture(ctx context.Context, id string) error {
 
 // Send deduplicates retries of the same user action, then reuses an existing PDF.
 func (l *Library) Send(ctx context.Context, id, key string) error {
-	if l.destination == "" {
+	if l.currentDestination() == "" {
 		return ErrSMTPDisabled
 	}
-	return l.prepare(ctx, id, key, l.destination, "", nil)
+	return l.prepare(ctx, id, key, l.currentDestination(), "", nil)
 }
 
 // GeneratePDF prepares a reading document without requesting email delivery.
@@ -432,7 +463,7 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 	}
 	if hasPDF {
 		if destination != "" {
-			_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, destination)
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET status='ready',delivery_pending=true,delivery_paused=false,delivery_destination=$2,delivery_retry_count=0,next_attempt_at=now(),failure_category=NULL,failure_message=NULL,version=version+1 WHERE id=$1 AND status NOT IN ('processing','delivering')`, jobID, destination)
 		}
 	} else {
 		var active bool
@@ -457,7 +488,7 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 			}
 		} else if destination != "" {
 			// A Kindle request may join PDF generation already in progress.
-			_, err = tx.ExecContext(ctx, `UPDATE jobs SET delivery_destination=$2 WHERE id=$1`, jobID, destination)
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET delivery_destination=$2,delivery_paused=false WHERE id=$1`, jobID, destination)
 		}
 	}
 	if err != nil {
@@ -471,4 +502,18 @@ func (l *Library) prepare(ctx context.Context, id, key, destination, expectedJob
 }
 
 // KindleConfigured reports whether explicit deliveries have a destination.
-func (l *Library) KindleConfigured() bool { return l.destination != "" }
+func (l *Library) KindleConfigured() bool { return l.currentDestination() != "" }
+
+func (l *Library) currentDestination() string {
+	if l.deliveryDestination != nil {
+		return l.deliveryDestination()
+	}
+	return l.destination
+}
+
+// PausePendingDelivery requires a new explicit Send action for previously queued
+// delivery when owner configuration is enabled. Canonical PDFs remain available.
+func (l *Library) PausePendingDelivery(ctx context.Context) error {
+	_, err := l.db.ExecContext(ctx, `UPDATE jobs SET delivery_paused=true WHERE delivery_destination IS NOT NULL AND status IN ('queued','processing','ready','failed')`)
+	return safe(err)
+}

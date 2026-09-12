@@ -1,0 +1,39 @@
+name: OCI runtime
+on:
+  pull_request:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build runtime
+        run: docker build -t attic:verification .
+      - name: Load scoped browser profile
+        run: sudo apparmor_parser -r deploy/apparmor/attic-browser
+      - name: Verify actual PDF template and sandboxed Chromium
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt apparmor=attic-browser \
+            --cap-add SYS_ADMIN --cap-add SYS_CHROOT \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+            --shm-size=256m attic:verification check-runtime
+      - name: Publish versioned image after verification
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          image="ghcr.io/${REPOSITORY,,}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag attic:verification "$image:$VERSION"
+          docker push "$image:$VERSION"

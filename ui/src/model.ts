@@ -19,6 +19,12 @@ export type Delivery =
 export interface Item {
   outputLanguage?: string;
   readingAvailable?: boolean;
+  diagnostics?: {
+    stage: string;
+    reason: string;
+    next_action: string;
+    id: string;
+  }[];
   jobId?: string;
   hasPdf?: boolean;
   pdfStatus?: string;

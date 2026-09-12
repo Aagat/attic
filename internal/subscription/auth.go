@@ -25,7 +25,7 @@ const (
 	maxTokenBytes = 128 << 10
 )
 
-var ErrLoginRequired = errors.New("ChatGPT login required; run attic login-chatgpt")
+var ErrLoginRequired = errors.New("ChatGPT login required; connect in Settings or run attic login-chatgpt")
 var ErrUnavailable = errors.New("ChatGPT authentication service unavailable")
 var ErrStorage = errors.New("ChatGPT credentials could not be read or saved securely")
 
@@ -242,7 +242,7 @@ func (s *Store) post(ctx context.Context, path, contentType, body string, result
 func (s *Store) Login(ctx context.Context, show func(string, string)) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	return s.locked(ctx, func() error {
+	return func() error {
 		var device struct {
 			ID       string          `json:"device_auth_id"`
 			Code     string          `json:"user_code"`
@@ -294,7 +294,12 @@ func (s *Store) Login(ctx context.Context, show func(string, string)) error {
 			if err != nil {
 				return err
 			}
-			return s.save(c)
+			return s.locked(ctx, func() error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return s.save(c)
+			})
 		}
-	})
+	}()
 }

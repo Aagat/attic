@@ -199,6 +199,9 @@ export function createPreviewArchive(): Archive {
       if (!file) throw new Error("Upload a PDF to try the reader.");
       return file;
     },
+    async setup<T>(): Promise<T> {
+      throw new Error("Setup controls require a connected Attic server");
+    },
     async status() {
       await ensure();
       return {

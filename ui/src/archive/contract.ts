@@ -36,6 +36,7 @@ export interface RecoveryAction {
   delta_y?: number;
 }
 export interface Archive {
+  setup<T>(path?: string, method?: string, body?: unknown): Promise<T>;
   recovery(
     id: string,
     action?: RecoveryAction,

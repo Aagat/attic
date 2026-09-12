@@ -97,39 +97,11 @@ func (s *SMTP) Send(ctx context.Context, claim *Claim, pdf io.Reader) Result {
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(c.Host, strconv.Itoa(c.Port)))
+	client, closeClient, err := s.connect(ctx)
 	if err != nil {
 		return classify(err, false)
 	}
-	defer conn.Close()
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
-	defer stop()
-	deadline, _ := ctx.Deadline()
-	conn.SetDeadline(deadline)
-	tlsConfig := &tls.Config{ServerName: c.Host, MinVersion: tls.VersionTLS12}
-	var transport net.Conn = conn
-	if c.TLSMode == "implicit_tls" {
-		secure := tls.Client(conn, tlsConfig)
-		if err := secure.HandshakeContext(ctx); err != nil {
-			return Result{Outcome: "rejected"}
-		}
-		transport = secure
-	}
-	client, err := smtp.NewClient(transport, c.Host)
-	if err != nil {
-		return classify(err, false)
-	}
-	defer client.Close()
-	if c.TLSMode == "starttls" {
-		if err := client.StartTLS(tlsConfig); err != nil {
-			return Result{Outcome: "rejected"}
-		}
-	}
-	if c.Username != "" {
-		if err := client.Auth(smtp.PlainAuth("", c.Username, c.Password, c.Host)); err != nil {
-			return classify(err, false)
-		}
-	}
+	defer closeClient()
 	if err := client.Mail(c.Sender); err != nil {
 		return classify(err, false)
 	}
@@ -226,4 +198,95 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return total, nil
+}
+
+// TestConnection performs TLS and authentication only: never MAIL, RCPT or DATA.
+func (s *SMTP) TestConnection(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
+	defer cancel()
+	_, closeClient, err := s.connect(ctx)
+	defer closeClient()
+	if err != nil {
+		return errors.New("SMTP connection, TLS verification or authentication failed; check host, port, certificate and app password")
+	}
+	return nil
+}
+func (s *SMTP) connect(ctx context.Context) (*smtp.Client, func(), error) {
+	c := s.config
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(c.Host, strconv.Itoa(c.Port)))
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	ok := false
+	defer func() {
+		if !ok {
+			conn.Close()
+		}
+	}()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer func() {
+		if !ok {
+			stop()
+		}
+	}()
+
+	deadline, _ := ctx.Deadline()
+	conn.SetDeadline(deadline)
+	tlsConfig := &tls.Config{ServerName: c.Host, MinVersion: tls.VersionTLS12}
+	var transport net.Conn = conn
+	if c.TLSMode == "implicit_tls" {
+		secure := tls.Client(conn, tlsConfig)
+		if err := secure.HandshakeContext(ctx); err != nil {
+			return nil, func() {}, &textproto.Error{Code: 550, Msg: "TLS verification failed"}
+		}
+		transport = secure
+	}
+	client, err := smtp.NewClient(transport, c.Host)
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	if c.TLSMode == "starttls" {
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return nil, func() {}, &textproto.Error{Code: 550, Msg: "TLS verification failed"}
+		}
+	}
+	if c.Username != "" {
+		if err := client.Auth(smtp.PlainAuth("", c.Username, c.Password, c.Host)); err != nil {
+			return nil, func() {}, err
+		}
+	}
+	ok = true
+	return client, func() { stop(); client.Close(); conn.Close() }, nil
+}
+
+// SendTest submits one plain text setup message, without a delivery worker or
+// automatic retry. A missing DATA acknowledgement is explicitly uncertain.
+func (s *SMTP) SendTest(ctx context.Context) Result {
+	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
+	defer cancel()
+	client, closeClient, err := s.connect(ctx)
+	defer closeClient()
+	if err != nil {
+		return classify(err, false)
+	}
+	if err = client.Mail(s.config.Sender); err != nil {
+		return classify(err, false)
+	}
+	if err = client.Rcpt(s.config.Destination); err != nil {
+		return classify(err, false)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return classify(err, false)
+	}
+	_, err = fmt.Fprintf(w, "From: %s\r\nTo: %s\r\nSubject: Attic SMTP test\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nThis is an explicitly requested Attic SMTP test. SMTP acceptance does not confirm Kindle receipt. Use Send to Kindle on a saved PDF to test document delivery.\r\n", s.config.Sender, s.config.Destination)
+	if err != nil {
+		return classify(err, true)
+	}
+	if err = w.Close(); err != nil {
+		return classify(err, true)
+	}
+	return Result{Outcome: "accepted", Code: "250"}
 }

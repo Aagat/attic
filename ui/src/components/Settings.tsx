@@ -15,6 +15,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { Badge, Brand, Button, SectionLabel, input } from "./primitives";
 import { safeUrl } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
+import { SetupControls } from "./SetupControls";
 export function SettingsPage() {
   const { archive, refresh, openUpload, logout, notify } = useArchive();
   const { data: status, error } = useArchiveQuery("status", () =>
@@ -90,9 +91,10 @@ export function SettingsPage() {
             Search ·{" "}
             {status ? (status.search ? "Configured" : "Not configured") : "…"}
           </p>
-          <p className="text-[var(--muted)]">Managed on the server</p>
+          <p className="text-[var(--muted)]">See setup controls below</p>
         </div>
       </section>
+      {!archive.preview && <SetupControls />}
       <h2 className="font-display mt-9 mb-6 text-2xl">Import and backup</h2>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -171,8 +173,9 @@ export function SettingsPage() {
       <section className="mt-8 border border-[var(--line)] bg-[var(--paper)] p-6">
         <h2 className="font-display text-2xl">Chromium extension</h2>
         <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-          Save pages and search your library from the address bar: type <kbd>a</kbd>,
-          press Tab, then enter your search. Suggestions come from your Attic server.
+          Save pages and search your library from the address bar: type{" "}
+          <kbd>a</kbd>, press Tab, then enter your search. Suggestions come from
+          your Attic server.
         </p>
         <a
           href="/attic-chromium.zip"
@@ -182,10 +185,11 @@ export function SettingsPage() {
           <Download size={16} /> Download Chromium extension
         </a>
         <p className="mt-4 text-xs leading-6 text-[var(--muted)]">
-          Unzip the download, open <code>chrome://extensions</code>, enable Developer
-          mode, then choose Load unpacked and select the attic folder. Connect your
-          server and access key in the extension’s settings. To update, replace the
-          files in your existing extension folder and click Reload.
+          Unzip the download, open <code>chrome://extensions</code>, enable
+          Developer mode, then choose Load unpacked and select the attic folder.
+          Connect your server and access key in the extension’s settings. To
+          update, replace the files in your existing extension folder and click
+          Reload.
         </p>
       </section>
       <section className="mt-8 flex items-center justify-between gap-5 border-y border-[var(--line)] py-6">
@@ -274,8 +278,11 @@ export function SetupPage() {
             </p>
             <ol className="mt-6 list-decimal space-y-4 pl-5 text-sm leading-6">
               <li>
-                <a href="/attic-chromium.zip" download className="underline">Download the Chromium extension</a>,
-                unzip it, then use Load unpacked at <code>chrome://extensions</code>
+                <a href="/attic-chromium.zip" download className="underline">
+                  Download the Chromium extension
+                </a>
+                , unzip it, then use Load unpacked at{" "}
+                <code>chrome://extensions</code>
                 with Developer mode enabled.
               </li>
               <li>

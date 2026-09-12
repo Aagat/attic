@@ -98,3 +98,12 @@ files from the artifact volume.
 Indexes support job pagination and lease claims, capture queues and history,
 reading-edition lookup, and attempt/cleanup workers. The external search index is
 rebuilt from saved-item metadata and text; see [search setup](../docs/search.md).
+
+### Setup diagnostics (0011)
+
+Adds `saved_items.enrichment_error` for safe durable provider failure codes and
+`jobs.delivery_paused` for explicit resumption of deliveries after browser mail
+setup. It does not remove artifacts or change article eligibility. Include this
+migration in the same release as the Settings API; older schemas cannot serve the
+new item projection. Back up database, files and private settings together before
+upgrade. See [setup recovery](../docs/setup-deployment.md#recovery-and-upgrades).
