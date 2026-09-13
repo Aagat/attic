@@ -20,6 +20,10 @@ test("real Settings preserve mail intent and report runtime readiness", async ({
     (await (await request.get("http://mailpit:8025/api/v1/messages")).json())
       .total;
   const before = await count();
+  await expect(page.getByLabel("SMTP host")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Manage delivery", exact: true })
+    .click();
   if (setup.mail.managed) {
     await expect(page.getByLabel("SMTP host")).toBeDisabled();
     expect(
@@ -35,7 +39,7 @@ test("real Settings preserve mail intent and report runtime readiness", async ({
     await page
       .getByRole("button", { name: "Save mail settings", exact: true })
       .click();
-    await expect(page.getByRole("status").first()).toContainText(
+    await expect(page.getByRole("dialog").getByRole("status")).toContainText(
       "No email was sent",
     );
     await page.reload();
@@ -48,7 +52,7 @@ test("real Settings preserve mail intent and report runtime readiness", async ({
   await page
     .getByRole("button", { name: "Test connection (no mail)", exact: true })
     .click();
-  await expect(page.getByRole("status").first()).toContainText(
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
     "No email was sent",
   );
   expect(await count()).toBe(before);
@@ -67,10 +71,12 @@ test("real Settings preserve mail intent and report runtime readiness", async ({
       exact: true,
     })
     .click();
-  await expect(page.getByRole("status").first()).toContainText(
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
     "Device receipt is not confirmed",
   );
   await expect.poll(count).toBe(before + 1);
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "View runtime", exact: true }).click();
   await page
     .getByRole("button", { name: "Check runtime", exact: true })
     .click();

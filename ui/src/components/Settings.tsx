@@ -12,15 +12,17 @@ import {
   Send,
 } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Badge, Brand, Button, SectionLabel, input } from "./primitives";
+import { Badge, Brand, Button, Modal, SectionLabel, input } from "./primitives";
 import { safeUrl } from "../model";
 import { useArchive, useArchiveQuery } from "../state";
+import { SettingsCard } from "./SettingsCard";
 import { SetupControls } from "./SetupControls";
 export function SettingsPage() {
   const { archive, refresh, openUpload, logout, notify } = useArchive();
   const { data: status, error } = useArchiveQuery("status", () =>
     archive.status(),
   );
+  const [details, setDetails] = useState<"storage" | "extension" | null>(null);
   const [busy, setBusy] = useState(false),
     [result, setResult] = useState("");
   const importer = useRef<HTMLInputElement>(null),
@@ -67,7 +69,7 @@ export function SettingsPage() {
         Manage storage, imports, backups, and required connections.
       </p>
       {error && <p role="alert">{error}</p>}
-      <section className="mt-6 grid gap-7 border border-[var(--line)] bg-[var(--paper)] p-6 md:grid-cols-[220px_1fr_230px]">
+      <section className="mt-6 flex flex-wrap items-center justify-between gap-6 border border-[var(--line)] bg-[var(--paper)] p-6">
         <div>
           <SectionLabel>Stored files</SectionLabel>
           <p className="font-display mt-3 text-4xl">
@@ -75,25 +77,26 @@ export function SettingsPage() {
               ? `${(status.storageBytes / 1024 / 1024).toFixed(1)} MB`
               : "…"}
           </p>
-          <p className="mt-2 text-xs">{status?.total ?? "…"} saved items</p>
-        </div>
-        <p className="self-center text-xs leading-6 text-[var(--muted)]">
-          Nothing is pruned automatically. Remove saved content explicitly from
-          its item page. Storage shown includes preserved files.
-        </p>
-        <div className="space-y-4 text-xs">
-          <SectionLabel>Connections</SectionLabel>
-          <p>
-            Kindle delivery ·{" "}
-            {status ? (status.kindle ? "Configured" : "Not configured") : "…"}
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            {status?.total ?? "…"} saved items
           </p>
-          <p>
-            Search ·{" "}
-            {status ? (status.search ? "Configured" : "Not configured") : "…"}
-          </p>
-          <p className="text-[var(--muted)]">See setup controls below</p>
         </div>
+        <Button onClick={() => setDetails("storage")}>Storage details</Button>
       </section>
+      <Modal
+        open={details === "storage"}
+        onOpenChange={(open) => {
+          if (!open) setDetails(null);
+        }}
+        title="Stored files"
+        description="Storage includes your preserved pages and reading documents."
+      >
+        <p className="text-sm leading-7 text-[var(--muted)]">
+          Nothing is pruned automatically. Remove saved content explicitly from
+          its item page. Export an archive to keep a copy of your records and
+          preserved files.
+        </p>
+      </Modal>
       {!archive.preview && <SetupControls />}
       <h2 className="font-display mt-9 mb-6 text-2xl">Import and backup</h2>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -129,24 +132,16 @@ export function SettingsPage() {
             action: () => restore.current?.click(),
           },
         ].map(({ title, body, label, icon: Icon, action }, index) => (
-          <section
+          <SettingsCard
             key={title}
-            className="flex min-h-[230px] flex-col items-start border border-[var(--line)] bg-[var(--paper)] p-5"
-          >
-            <Icon size={20} />
-            <h3 className="font-display mt-4 text-2xl">{title}</h3>
-            <p className="mb-6 mt-3 text-xs leading-6 text-[var(--muted)]">
-              {body}
-            </p>
-            <Button
-              primary={index === 0}
-              className="mt-auto"
-              disabled={busy}
-              onClick={action}
-            >
-              {label}
-            </Button>
-          </section>
+            title={title}
+            body={body}
+            label={label}
+            icon={Icon}
+            action={action}
+            disabled={busy}
+            primary={index === 0}
+          />
         ))}
       </div>
       <input
@@ -170,39 +165,67 @@ export function SettingsPage() {
           {busy ? "Processing archive…" : result}
         </p>
       )}
-      <section className="mt-8 border border-[var(--line)] bg-[var(--paper)] p-6">
-        <h2 className="font-display text-2xl">Chromium extension</h2>
-        <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-          Save pages and search your library from the address bar: type{" "}
-          <kbd>a</kbd>, press Tab, then enter your search. Suggestions come from
-          your Attic server.
-        </p>
-        <a
-          href="/attic-chromium.zip"
-          download
-          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded border border-[var(--line)] px-4 text-sm"
-        >
-          <Download size={16} /> Download Chromium extension
-        </a>
-        <p className="mt-4 text-xs leading-6 text-[var(--muted)]">
-          Unzip the download, open <code>chrome://extensions</code>, enable
-          Developer mode, then choose Load unpacked and select the attic folder.
-          Connect your server and access key in the extension’s settings. To
-          update, replace the files in your existing extension folder and click
-          Reload.
-        </p>
-      </section>
-      <section className="mt-8 flex items-center justify-between gap-5 border-y border-[var(--line)] py-6">
-        <div>
-          <h2 className="font-display text-2xl">Save from anywhere</h2>
-          <p className="mt-2 text-xs">
-            Your browser, your phone, your everyday tools.
+      <h2 className="font-display mt-9 mb-6 text-2xl">Save from anywhere</h2>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SettingsCard
+          title="Chromium extension"
+          body="Save pages and search Attic from your browser."
+          label="Set up extension"
+          icon={Monitor}
+          action={() => setDetails("extension")}
+        />
+        <section className="flex min-h-[230px] flex-col items-start border border-[var(--line)] bg-[var(--paper)] p-5">
+          <Smartphone size={20} aria-hidden="true" />
+          <h3 className="font-display mt-4 text-2xl">Sharing</h3>
+          <p className="mb-6 mt-3 text-xs leading-6 text-[var(--muted)]">
+            Keep Attic close on your phone and in your everyday tools.
+          </p>
+          <Link
+            to="/setup"
+            className="mt-auto inline-flex min-h-11 items-center rounded border border-[var(--line)] px-3.5 py-2 text-[13px] font-medium hover:bg-[var(--surface)]"
+          >
+            Set up sharing
+          </Link>
+        </section>
+      </div>
+      <Modal
+        open={details === "extension"}
+        onOpenChange={(open) => {
+          if (!open) setDetails(null);
+        }}
+        title="Chromium extension"
+        description="Save pages and search your library from the address bar."
+      >
+        <div className="space-y-5 text-sm leading-7 text-[var(--muted)]">
+          <p>
+            Type <kbd>a</kbd>, press Tab, then enter your search. Suggestions
+            come from your Attic server.
+          </p>
+          <a
+            href="/attic-chromium.zip"
+            download
+            className="inline-flex min-h-11 items-center gap-2 rounded border border-[var(--line)] px-4 text-sm text-[var(--ink)]"
+          >
+            <Download size={16} /> Download Chromium extension
+          </a>
+          <ol className="list-decimal space-y-3 pl-5">
+            <li>
+              Unzip the download and open <code>chrome://extensions</code>.
+            </li>
+            <li>
+              Enable Developer mode, choose Load unpacked, and select the attic
+              folder.
+            </li>
+            <li>
+              Connect your server and access key in the extension’s settings.
+            </li>
+          </ol>
+          <p>
+            To update, replace the files in your existing extension folder and
+            click Reload.
           </p>
         </div>
-        <Link to="/setup" className="underline text-xs">
-          Set up sharing
-        </Link>
-      </section>
+      </Modal>
       {!archive.preview && (
         <Button
           className="mt-8"

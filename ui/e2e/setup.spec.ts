@@ -70,12 +70,43 @@ test("Settings connects ChatGPT after reload and requires explicit mail actions"
     await route.fulfill({ json: data });
   });
   await page.goto("/settings");
+  await expect(page.getByLabel("SMTP host")).toHaveCount(0);
+  await expect(page.getByText("Authorization: idle")).toHaveCount(0);
+  await expect(page.getByText("0 saved items", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath("settings.png"),
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "Set up extension", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Chromium extension", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Enable Developer mode", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .getByRole("button", { name: "Manage ChatGPT", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "ChatGPT", exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Connect ChatGPT", exact: true })
     .click();
   await expect(page.getByText("SAFE-CODE", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("SAFE-CODE", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await expect(page.getByText("SAFE-CODE", { exact: true })).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Manage delivery", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Kindle delivery", exact: true }),
+  ).toBeVisible();
   await page.getByLabel("SMTP host").fill("smtp.example.test");
   await page.getByLabel("Sender email").fill("owner@example.test");
   await page.getByLabel("Kindle recipient").fill("reader@kindle.test");
@@ -91,17 +122,22 @@ test("Settings connects ChatGPT after reload and requires explicit mail actions"
   await page
     .getByRole("button", { name: "Test connection (no mail)", exact: true })
     .click();
-  await expect(page.getByRole("status").first()).toContainText(
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
     "No email was sent",
   );
   expect(sends).toBe(0);
   await page
     .getByRole("button", { name: "Send test email to reader@kindle.test" })
     .click();
-  await expect(page.getByRole("status").first()).toContainText(
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
     "Device receipt is not confirmed",
   );
   expect(sends).toBe(1);
+  expect(
+    await page
+      .getByRole("dialog")
+      .evaluate((e) => e.scrollWidth <= e.clientWidth),
+  ).toBe(true);
   await page.screenshot({
     path: test.info().outputPath("setup.png"),
     fullPage: true,
