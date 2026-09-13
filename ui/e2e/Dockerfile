@@ -5,5 +5,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY ui/package.json ./ui/package.json
 RUN pnpm install --frozen-lockfile
 COPY ui ./ui
+COPY internal/httpapi/frontend.go ./internal/httpapi/frontend.go
 WORKDIR /src/ui
 CMD ["pnpm", "exec", "playwright", "test", "--config=e2e/playwright.config.ts"]

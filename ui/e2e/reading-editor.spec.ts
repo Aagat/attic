@@ -1,9 +1,32 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { readFileSync } from "node:fs";
+
+// Service-worker fetches bypass Playwright routes, including the mocked session.
+test.use({ serviceWorkers: "block" });
 
 test("reading edits preserve structure, undo removals, and save without email", async ({
   page,
+  isMobile,
 }) => {
+  const point = async (locator: Locator) => {
+    await locator.scrollIntoViewIfNeeded();
+    const box = (await locator.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    return {
+      x:
+        Math.max(0, box.x) +
+        (Math.min(viewport.width, box.x + box.width) - Math.max(0, box.x)) / 2,
+      y:
+        Math.max(80, box.y) +
+        (Math.min(viewport.height, box.y + box.height) - Math.max(80, box.y)) /
+          2,
+    };
+  };
+  const select = async (locator: Locator) => {
+    const { x, y } = await point(locator);
+    if (isMobile) await page.touchscreen.tap(x, y);
+    else await page.mouse.click(x, y);
+  };
   const frontend = readFileSync(
     new URL("../../internal/httpapi/frontend.go", import.meta.url),
     "utf8",
@@ -78,7 +101,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
       .evaluate((frame) => frame.clientHeight);
   await expect.poll(frameHeight).toBeGreaterThan(1000);
   const fullHeight = await frameHeight();
-  await editor.locator("p").last().click();
+  await select(editor.locator("p").last());
   await page
     .getByRole("button", { name: "Hide selected", exact: true })
     .click();
@@ -93,7 +116,8 @@ test("reading edits preserve structure, undo removals, and save without email", 
       }),
     )
     .toBe(true);
-  await editor.locator("strong").hover();
+  const hoverPoint = await point(editor.locator("strong"));
+  await page.mouse.move(hoverPoint.x, hoverPoint.y);
   await expect(editor.locator("strong")).toHaveAttribute(
     "data-attic-hover",
     "",
@@ -107,7 +131,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
   await expect(editor.locator("[data-attic-overlay]")).toContainText(
     "Bold text",
   );
-  await editor.getByText("bold words").click();
+  await select(editor.getByText("bold words"));
   await expect(editor.locator("strong")).toHaveCSS("outline-style", "solid");
   await expect(editor.locator("strong")).toHaveCSS("outline-width", "2px");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -136,7 +160,7 @@ test("reading edits preserve structure, undo removals, and save without email", 
     "data-attic-selected",
     "",
   );
-  await editor.getByText("bold words").click();
+  await select(editor.getByText("bold words"));
   await page
     .getByRole("button", { name: "Select parent", exact: true })
     .click();
@@ -150,17 +174,17 @@ test("reading edits preserve structure, undo removals, and save without email", 
     .getByRole("button", { name: "Edit reading version", exact: true })
     .click();
   await expect(editor.locator("strong")).toHaveText("bold words");
-  await editor.getByText("Newsletter signup").click();
+  await select(editor.getByText("Newsletter signup"));
   await page
     .getByRole("button", { name: "Hide selected", exact: true })
     .click();
   await expect(editor.getByText("Newsletter signup")).toHaveCount(0);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await editor.getByText("Newsletter signup").click();
+  await select(editor.getByText("Newsletter signup"));
   await page
     .getByRole("button", { name: "Hide selected", exact: true })
     .click();
-  await editor.getByText("bold words").click();
+  await select(editor.getByText("bold words"));
   await page.getByRole("button", { name: "Edit text", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Selected text" })

@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+test.use({ serviceWorkers: "block" });
+
 test("Settings connects ChatGPT after reload and requires explicit mail actions", async ({
   page,
 }) => {

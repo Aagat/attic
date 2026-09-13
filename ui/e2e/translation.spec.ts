@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+test.use({ serviceWorkers: "block" });
+
 test("reader shows preparation, translated text, and the preserved original", async ({
   page,
 }) => {
@@ -43,7 +45,9 @@ test("reader shows preparation, translated text, and the preserved original", as
     if (path.includes("/captures/"))
       return route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<p>Original español</p>",
+        // Match captured documents, which declare their encoding in-document.
+        // WebKit's opaque sandbox can ignore the mocked response charset.
+        body: '<!doctype html><meta charset="utf-8"><p>Original español</p>',
       });
     return route.fulfill({ json: path === "/api/v1/session" ? {} : item });
   });

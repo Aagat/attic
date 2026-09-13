@@ -139,12 +139,33 @@ image, read-only root and sandbox capabilities before publishing. A real public 
 capture remains an opt-in integration (`ATTIC_CHROMIUM_INTEGRATION=1`); no provider
 or external email is part of default tests.
 
-This task has not deployed anything or accessed production credentials. The active
-Docker context was remote and was not used for builds or mutations. A local Linux
-Docker daemon, PostgreSQL integration database and `/usr/bin/chromium` were not
-available, so clean image execution, AppArmor loading, database upgrade/persistence
-and full browser suites remain operator/CI validation gates. No published image or
-successful clean deployment is claimed here.
+Local Linux deployment acceptance was completed on 2026-09-13. The existing
+`attic-validation` application on port 18080 was replaced with
+`attic:setup-validated` (image ID
+`sha256:5d496190e069e79ad9aa898163ab95062606fbfa13a79f83529eb3fc24865d77`).
+Its environment, PostgreSQL, data volume, search service and local Mailpit relay
+were preserved; the application now runs with the Compose 2 GiB limit. The local
+ignored `.env` records the selected image. Protected consistent backups are under
+`data/backups/setup-20260913-021650` and `data/backups/predeploy-20260913-022358`;
+`attic:before-setup` retains the prior local image. A final schema-11 snapshot
+before the Safari editor fix is under `data/backups/preeditor-20260913-024433`;
+its matching prior image is `attic:before-editor`. Copy backups to protected durable
+storage according to the operator's backup policy.
+
+An isolated restore migrated schema 10 to 11 and preserved all 36 artifact file
+checksums across application recreation. Recovery was rehearsed by restoring the
+schema-10 backup and starting the prior image. On the replaced instance, all 11
+available PDF downloads matched backup checksums, readiness and actual browser/PDF
+runtime checks passed, and reindex reached zero pending/failed operations with a
+successful known-title search. Real browser checks covered owner login, session
+reload, saved-library access, managed SMTP and a no-mail connection test.
+
+Docker on this host reports no AppArmor support. The sandboxed runtime passed with
+the existing capability policy, but this does not validate loading the AppArmor 4
+profile on another host. Real OAuth/provider authorization, external SMTP, actual
+Kindle receipt, GHCR publication and GitHub CI execution were not exercised. Test
+emails went only to isolated local Mailpit fixtures. No shared search state was
+deleted.
 
 For the homeserver: keep the existing dedicated database, scoped Meilisearch key,
 state volume, proxy and approved sandbox profile. The existing SMTP environment
@@ -152,26 +173,58 @@ remains authoritative; remove the entire managed SMTP group only if intentionall
 moving it to Settings, and include `auth/mail.json` in protected state backups.
 Upgrade the image/binary and bundled migrations together after backup. Connect or
 reconnect from Settings instead of docker exec. Check AI and runtime explicitly;
-only the owner should opt into an actual email or provider test. Kindle receipt,
-physical storage remount and migration rollback still require their own evidence.
+only the owner should opt into an actual email or provider test. Kindle receipt and
+physical storage remount still require their own evidence; backup-based database
+and image recovery was rehearsed on an isolated restore as described above.
 
-### Recorded local checks
+### Recorded local checks (2026-09-13)
 
-- `go test ./...` and `go vet ./...`: passed. Database, real Chromium and LaTeX
-  integration cases are opt-in and were skipped without their dependencies.
-- `go test -race ./internal/subscription ./internal/setup ./internal/delivery
-  ./internal/httpapi`: passed for the settings/concurrency implementation.
-- `pnpm build:embed` and `pnpm build:preview`: passed.
-- Preview UI suite: 92 passed, one Safari-specific test skipped. An initial run
-  accidentally used the production build without a server; it was stopped and
-  rerun with the required preview build.
-- Production Settings tests (`pnpm build:embed`, then
-  `pnpm --filter @attic/ui exec playwright test --config playwright.setup.config.ts`)
-  passed on desktop Chromium, mobile Chromium and Safari. They use mocked HTTP only: device-login reload, SMTP save, no-mail connection test
-  and explicit recipient-confirmed test send.
-- Extension/omnibox Node fixtures passed. `node --test tests/*.test.mjs` also
-  attempts two existing tests pinned to `/usr/bin/chromium`; those failed to launch
-  on macOS. They are not application assertion failures.
+- `go test ./...`, `go vet ./...`, and race tests for subscription, setup, delivery
+  and HTTP API passed.
+- PostgreSQL and library integration suites passed with both test database URL
+  variables pointing to a disposable PostgreSQL 16 instance. The first invocation
+  preceded database readiness; the readiness-confirmed rerun passed.
+- Real Chromium acquisition/capture integrations passed with
+  `ATTIC_CHROMIUM_INTEGRATION=1`, including a public-page render.
+- The built Linux image passed `check-runtime` with networking disabled,
+  read-only root, non-root user, sandbox capabilities, 2 GiB memory, 256 process
+  limit and 256 MiB temporary storage. This exercises real PDF generation and
+  validation as well as sandboxed DOM/screenshot rendering.
+- Production/embedded and preview builds passed. Production Settings tests passed
+  on desktop Chromium, mobile Chromium and Safari (3 tests). The preview suite
+  passed 92 tests with its existing Safari offline skip. WebKit ran in the
+  Playwright image because its required host libraries are absent.
+- All 33 Node extension/omnibox/popup/post-expansion tests passed on Linux.
+- Final real-server archive/Settings acceptance passed all 8 tests on Chromium
+  and Safari; editor/setup/translation regressions passed all 6 tests in focused
+  runs. Archive coverage includes upload, viewing, metadata edits, search, local
+  delivery, export, removal, restore, imports, pagination and logout.
+- Real Settings tests passed on Chromium and Safari against both deployment-owned
+  and browser-owned mail, with local Mailpit message counts proving that saving
+  and connection testing send no mail. A mismatched recipient was rejected;
+  explicit test submission produced one message. Runtime checks and reloads used
+  the real backend, without HTTP mocks. Browser-owned settings were tested with
+  persistent state across recreation.
 
-The Settings tests do not prove successful real OAuth, SMTP delivery, Kindle
-receipt, image compatibility, AppArmor behavior or database migration recovery.
+To repeat the browser-owned setup tests without production state or credentials:
+
+```sh
+docker compose -p attic-settings-check -f compose.ui-e2e.yaml -f compose.setup-e2e.yaml build
+docker compose -p attic-settings-check -f compose.ui-e2e.yaml -f compose.setup-e2e.yaml up -d attic
+docker compose -p attic-settings-check -f compose.ui-e2e.yaml -f compose.setup-e2e.yaml run --rm tests
+```
+
+The test runner includes the server CSP fixture used by reading-editor tests.
+The archive test waits for server-confirmed deletion after the undo window and
+uses an exact import-batch tag for pagination, avoiding fuzzy-search matches from
+other batches. The Settings OAuth test remains mocked; it does not prove real
+provider authorization or Kindle receipt.
+
+Safari selection in the script-disabled reading-editor iframe was also broken.
+Selection and hover now use a parent-owned interaction surface and DOM hit testing,
+while the saved document retains `sandbox="allow-same-origin"` without script
+permission. Desktop mouse and mobile touch regressions cover hide/undo, text edits
+and saving. This avoids WebKit's restriction on parent-installed event handlers in
+scriptless frames ([WebKit issue 218086](https://bugs.webkit.org/show_bug.cgi?id=218086)).
+Mocked browser tests block service workers so requests reach their fixtures; the
+original-layout fixture declares UTF-8 in-document, matching real captures.

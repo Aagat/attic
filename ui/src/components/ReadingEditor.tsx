@@ -170,46 +170,42 @@ export function ReadingEditor({
       element.children.length === 0 && !["IMG", "HR"].includes(element.tagName),
     );
   }
-  function bind() {
+  // Safari suppresses event listeners in script-disabled frames, even when
+  // installed by the parent. Hit-test from a parent-owned interaction surface
+  // so saved content keeps its scriptless sandbox in every browser.
+  function hit(clientX: number, clientY: number) {
+    const f = frame.current;
+    if (!f?.contentDocument) return null;
+    const rect = f.getBoundingClientRect();
+    return (
+      f.contentDocument
+        .elementFromPoint(clientX - rect.left, clientY - rect.top)
+        ?.closest(selectable) ?? null
+    );
+  }
+  function hover(clientX: number, clientY: number) {
     const doc = frame.current?.contentDocument;
-    if (!doc) return;
-    resizeFrame(frame.current!);
-    doc.addEventListener("pointermove", (event) => {
-      const element = (event.target as Element).closest(selectable);
-      if (!element || element === doc.body) {
-        clearHover();
-        return;
-      }
-      if (element !== hovered.current) {
-        clearHover();
-        hovered.current = element;
-        element.setAttribute("data-attic-hover", "");
-      }
-      let overlay = doc.querySelector<HTMLElement>("[data-attic-overlay]");
-      if (!overlay) {
-        overlay = doc.createElement("div");
-        overlay.setAttribute("data-attic-overlay", "");
-        doc.body.append(overlay);
-      }
-      const rect = element.getBoundingClientRect();
-      overlay.textContent = `${label(element)} · ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
-      overlay.style.left = `${Math.max(8, Math.min(event.clientX + 12, doc.documentElement.clientWidth - overlay.offsetWidth - 8))}px`;
-      overlay.style.top = `${Math.max(8, Math.min(event.clientY + 16, doc.documentElement.clientHeight - overlay.offsetHeight - 8))}px`;
-    });
-    doc.addEventListener("pointerleave", clearHover);
-    doc.addEventListener("scroll", clearHover, true);
-    doc.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        clearHover();
-        clearSelection();
-      }
-    });
-    doc.addEventListener("click", (event) => {
-      event.preventDefault();
-      select((event.target as Element).closest(selectable));
-    });
-    doc.addEventListener("submit", (event) => event.preventDefault());
+    const element = hit(clientX, clientY);
+    if (!doc || !element || element === doc.body) {
+      clearHover();
+      return;
+    }
+    if (element !== hovered.current) {
+      clearHover();
+      hovered.current = element;
+      element.setAttribute("data-attic-hover", "");
+    }
+    let overlay = doc.querySelector<HTMLElement>("[data-attic-overlay]");
+    if (!overlay) {
+      overlay = doc.createElement("div");
+      overlay.setAttribute("data-attic-overlay", "");
+      doc.body.append(overlay);
+    }
+    const rect = element.getBoundingClientRect();
+    const frameRect = frame.current!.getBoundingClientRect();
+    overlay.textContent = `${label(element)} · ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+    overlay.style.left = `${Math.max(8, Math.min(clientX - frameRect.left + 12, doc.documentElement.clientWidth - overlay.offsetWidth - 8))}px`;
+    overlay.style.top = `${Math.max(8, clientY - frameRect.top + 16)}px`;
   }
   return (
     <section aria-label="Edit reading version" className="relative">
@@ -257,14 +253,38 @@ export function ReadingEditor({
       {!source && !error && <p role="status">Opening reading version…</p>}
       {source && (
         <>
-          <iframe
-            ref={frame}
-            title="Reading editor"
-            sandbox="allow-same-origin"
-            srcDoc={source}
-            onLoad={bind}
-            className={`min-h-[80dvh] w-full border-0 bg-white ${busy ? "pointer-events-none" : ""}`}
-          />
+          <div className="relative">
+            <iframe
+              ref={frame}
+              title="Reading editor"
+              sandbox="allow-same-origin"
+              srcDoc={source}
+              onLoad={() => frame.current && resizeFrame(frame.current)}
+              className="pointer-events-none block min-h-[80dvh] w-full border-0 bg-white"
+            />
+            <div
+              role="group"
+              aria-label="Reading content selection"
+              tabIndex={0}
+              className={`absolute inset-0 outline-none ${busy ? "pointer-events-none" : ""}`}
+              onPointerMove={(event) => {
+                if (event.pointerType !== "touch")
+                  hover(event.clientX, event.clientY);
+              }}
+              onPointerLeave={clearHover}
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                select(hit(event.clientX, event.clientY));
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  clearHover();
+                  clearSelection();
+                }
+              }}
+            />
+          </div>
           {selection &&
             createPortal(
               <div

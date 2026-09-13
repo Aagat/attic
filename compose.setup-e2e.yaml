@@ -1,0 +1,26 @@
+# Browser-owned SMTP against isolated Mailpit, with persistent application state.
+# docker compose -p attic-setup-e2e -f compose.ui-e2e.yaml -f compose.setup-e2e.yaml up -d --build attic
+# docker compose -p attic-setup-e2e -f compose.ui-e2e.yaml -f compose.setup-e2e.yaml run --rm tests
+services:
+  attic:
+    environment:
+      SMTP_ENABLED: "false"
+      SMTP_HOST: ""
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_SENDER: ""
+      SMTP_DESTINATION: ""
+    volumes:
+      - setup-data:/data
+  tests:
+    command:
+      [
+        pnpm,
+        exec,
+        playwright,
+        test,
+        --config=e2e/playwright.config.ts,
+        setup-live.spec.ts,
+      ]
+volumes:
+  setup-data:

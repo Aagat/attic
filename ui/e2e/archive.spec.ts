@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { samplePdf } from "./pdf";
+// Keep server/session assertions independent of service-worker navigation races.
+// Offline shell behavior is covered separately by the preview PWA tests.
+test.use({ serviceWorkers: "block" });
 const key = "attic-e2e-owner-key";
 test("real archive: session, upload, edit, search, delivery, backup, restore and logout", async ({
   page,
@@ -89,9 +92,18 @@ test("real archive: session, upload, edit, search, delivery, backup, restore and
   await page.getByRole("button", { name: "Item details", exact: true }).click();
   await page.getByRole("button", { name: "Remove item", exact: true }).click();
   await page
-    .getByRole("button", { name: "Remove permanently", exact: true })
+    .getByRole("dialog", { name: "Remove this item?" })
+    .getByRole("button", { name: "Remove item", exact: true })
     .click();
   await expect(page).toHaveURL(/\/$/);
+  // Removal is deferred during the undo window. Restore only after the real
+  // server confirms deletion, otherwise the pending removal can delete it again.
+  const itemID = new URL(itemURL).pathname.split("/").pop();
+  await expect
+    .poll(async () =>
+      (await page.request.get(`/api/v1/items/${itemID}`)).status(),
+    )
+    .toBe(404);
   await page.goto("/settings");
   await page
     .getByLabel("Restore archive", { exact: true })
@@ -156,13 +168,14 @@ test("HTML imports merge and server pagination reaches all matching records", as
 }, info) => {
   test.setTimeout(180000);
   const prefix = `Import ${info.project.name} ${Date.now()}`;
+  const batchTag = `batch-${info.project.name}-${Date.now()}`;
   await page.goto("/settings");
   await page.getByLabel("Access key").fill(key);
   await page.getByRole("button", { name: "Connect to Attic" }).click();
   const html = Array.from(
     { length: 18 },
     (_, i) =>
-      `<DT><A HREF="https://example.invalid/${encodeURIComponent(prefix)}/${i}">${prefix} record ${i}</A>`,
+      `<DT><A HREF="https://example.invalid/${encodeURIComponent(prefix)}/${i}" TAGS="${batchTag}">${prefix} record ${i}</A>`,
   ).join("");
   const file = {
     name: "bookmarks.html",
@@ -175,7 +188,9 @@ test("HTML imports merge and server pagination reaches all matching records", as
   await expect(page.getByText(/18 imported/)).toBeVisible();
   await page.getByLabel("Import HTML bookmarks").setInputFiles(file);
   await expect(page.getByText(/18 merged/)).toBeVisible();
-  await page.goto("/?q=" + encodeURIComponent(prefix));
+  // Full-text search tolerates typos and drops unmatched terms. Scope this
+  // pagination fixture with an exact tag so earlier batches cannot match it.
+  await page.goto("/?q=" + encodeURIComponent(prefix) + "&tag=" + batchTag);
   await expect(page.getByText("18 results", { exact: true })).toBeVisible({
     timeout: 150000,
   });
